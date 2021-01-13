@@ -1,0 +1,459 @@
+---
+title: "Unsupervised multi-modal data analysis reveals features underlying spatial heterogeneity and immune responses in non-small cell lung cancer: results"
+author: "Luc van Bochove"
+date: "12/22/2020"
+output: 
+  pdf_document:
+    keep_md: yes
+
+sansfont: Calibri Light
+header-includes:
+   - \usepackage{subfig}
+   
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
+
+# SET WORKING DIRECTORY TO FOLDER "Code"
+
+setwd("C:/... /Code")
+
+
+source('functions.R')
+
+for (type in c("CRC","LUAD","LUSC","SKCM","JIA","SHARMA","PBMC")){
+  data <- getData(type)
+  assign(type,data)
+  rm(type,data)}
+
+if ("processed_data.RData" %in% dir("Data/Processed")){
+  load("./Data/Processed/processed_data.Rdata")
+    }else{
+    RNA.jia <- processRNAseq(JIA$counts)
+    RNA.sharma <- processRNAseq(SHARMA$counts)
+    RNA.comb.jiasharma <- processRNAseq(cbind(JIA$counts,SHARMA$counts))
+    
+    RNA.crc <- processRNAseq(CRC$counts,group="CRC")
+    RNA.luad <- processRNAseq(LUAD$counts,group="LUAD")
+    RNA.lusc <- processRNAseq(LUSC$counts,group="LUSC")
+    RNA.skcm <- processRNAseq(SKCM$counts,group="SKCM")
+    
+    RNA.nsclc <- rbind(RNA.luad,RNA.lusc)
+    RNA.nsclc$group <- "NSCLC"
+    
+    RNA.pbmc <- processRNAseq(PBMC$counts,group="PBMC")
+    
+    
+    processed_RNA = list()
+    rm(processRNAseq)
+    for (RNA in ls()[grepl("RNA",ls())]){
+      processed_RNA[[RNA]] <- get(RNA)}
+    
+    FEAT.jia <- processFeatures(JIA,"Jia")
+    FEAT.sharma <- processFeatures(SHARMA,"Sharma")
+    FEAT.comb.jiasharma <- rbind(FEAT.jia,FEAT.sharma)
+    
+    FEAT.crc <- processFeatures(CRC,"CRC")
+    FEAT.luad <- processFeatures(LUAD,"LUAD")
+    FEAT.lusc <- processFeatures(LUSC,"LUSC")
+    FEAT.skcm <- processFeatures(SKCM,"SKCM")
+    FEAT.nsclc <- rbind(FEAT.luad,FEAT.lusc)
+    FEAT.nsclc$group <- "NSCLC"
+    
+    FEAT.pbmc <- processFeatures(PBMC,"PBMC")
+    
+    
+    processed_features = list()
+    for (feature in ls()[grepl("FEAT",ls())]){
+      processed_features[[feature]] <- get(feature)}
+
+    save(list=c("processed_features","processed_RNA"), file="./Data/Processed/processed_data.RData")
+    }
+
+if ("MOFA_data.RData" %in% dir("Models")){
+  load("./Models/MOFA_data.Rdata")
+  
+    }else{
+      for (feature in ls()[grepl("FEAT",ls())]){
+        runMOFA(feature)}
+      rm(processRNAseq)
+      for (feature in ls()[grepl("RNA",ls())]){
+        runMOFA(feature)}
+      
+      # Load models from directory: ./Models/
+      features = list()
+      for (feature in dir("Models")[grepl("FEAT",dir("Models"))]){
+        features[str_sub(feature,1,-6)] <- load_model(paste0("./Models/",feature))}
+      
+      RNA = list()
+      for (feature in dir("Models")[grepl("RNA",dir("Models"))]){
+        RNA[str_sub(feature,1,-6)] <- load_model(paste0("./Models/",feature))}
+      
+      save(list=c("features","RNA"), file="./Models/MOFA_data.RData")
+      }
+
+if ("GSEA_results.RData" %in% dir("Data/Processed")){
+  load("./Data/Processed/GSEA_results.RData")
+    }else{
+      
+    load("./Models/MOFA_data.Rdata")
+    load("./Data/Hallmark.RData")
+    load("./Data/MSigDB_v7.0_C5_human.RData")
+    
+    GO_results = list()
+    Hallmark_results = list()
+    for (model in ls(RNA)){
+      GO_results[[model]] <- getGSEAdata(RNA[[model]],"GO")
+    
+      Hallmark_results[[model]] <- getGSEAdata(RNA[[model]],"Hallmark")}
+    
+    save(list=c("GO_results","Hallmark_results"), file="./Data/Processed/GSEA_results.RData")
+    }
+
+if ("results_MOFA_bootstrap.RData" %in% dir("Data/Processed")){
+  load("./Data/Processed/results_MOFA_bootstrap.RData")
+  }else{
+    ## Perform bootstrap and save models in "./Models/Bootstrap/"
+    # lapply(seq(100),function(x) {Bootstrap_MOFA("FEAT.comb.jiasharma",x)})
+    # lapply(seq(100),function(x) {Bootstrap_MOFA("FEAT.nsclc",x)})
+    
+    
+    ## Load models from directory and save in single file
+    results_jiasharma <- as.data.frame(do.call(rbind,lapply(seq(100),function(x){getWeightsBootstrap("FEAT.comb.jiasharma",x)})))
+    
+    results_nsclc <-  as.data.frame(do.call(rbind,lapply(seq(100),function(x){getWeightsBootstrap("FEAT.nsclc",x)})))
+    
+    results_bootstrap <- list("jiasharma"=results_jiasharma,"nsclc"=results_nsclc)
+    
+    save(results_bootstrap,file="./Data/Processed/results_MOFA_bootstrap.RData")
+  }
+
+jiasharma <- results_bootstrap[[1]]
+nsclc <- results_bootstrap[[2]]
+
+jiasharma[!grepl("Variance",colnames(jiasharma))] <- jiasharma[!grepl("Variance",colnames(jiasharma))]*-1
+nsclc[!grepl("Variance",colnames(nsclc))] <- nsclc[!grepl("Variance",colnames(nsclc))]*-1
+
+
+```
+
+# Heatmaps of RNA-sequencing data
+
+## Jia Sharma
+
+```{r Overview of RNA seq-data: Jia sharma, echo=FALSE, fig.cap="Heatmap depicting the RNA data of Jia and Sharma", message=FALSE, warning=FALSE, out.width="50%",fig.ncol = 1, fig.align = "center", fig.subcap = c(" "), cache=TRUE}
+generateHeatmap(processed_RNA$RNA.jia,"RNA Jia")
+generateHeatmap(processed_RNA$RNA.sharma,"RNA Sharma")
+
+```
+
+\newpage
+
+## TCGA
+```{r Overview of RNA seq-data: TCGA data, echo=FALSE, message=FALSE, warning=FALSE, out.width="50%", fig.cap="Heatmap depicting the RNA data of TCGA", fig.align = "center", fig.ncol = 2,  fig.subcap = c(" "),cache=TRUE}
+generateHeatmap(processed_RNA$RNA.crc,"RNA CRC")
+generateHeatmap(processed_RNA$RNA.luad,"RNA LUAD")
+generateHeatmap(processed_RNA$RNA.lusc,"RNA LUSC")
+generateHeatmap(processed_RNA$RNA.skcm,"RNA SKCM")
+
+```
+
+
+\newpage
+
+# Heatmaps of Processed Features
+
+## Jia
+```{r Overview of Jia feature data, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Heatmaps depicting the Feature data of Jia dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.jia$view)){
+  generateHeatmap(processed_features$FEAT.jia[processed_features$FEAT.jia$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+## Sharma
+```{r Overview of Sharma feature data, echo=FALSE, warning=FALSE, out.width="50%", fig.cap="Heatmaps depicting the Feature data of Sharma dataset", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.sharma$view)){
+  generateHeatmap(processed_features$FEAT.sharma[processed_features$FEAT.sharma$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+## LUAD
+
+```{r Overview of LUAD feature data, echo=FALSE, warning=FALSE, fig.cap="Heatmaps depicting the Feature data of LUAD dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.luad$view)){
+
+  generateHeatmap(processed_features$FEAT.luad[processed_features$FEAT.luad$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+## LUSC
+
+```{r Overview of LUSC feature data, echo=FALSE, warning=FALSE,  fig.cap="Heatmaps depicting the Feature data of LUSC dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.lusc$view)){
+
+  generateHeatmap(processed_features$FEAT.lusc[processed_features$FEAT.lusc$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage 
+
+## CRC
+```{r Overview of CRC feature data, echo=FALSE, warning=FALSE, fig.cap="Heatmaps depicting the Feature data of CRC dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.crc$view)){
+
+  generateHeatmap(processed_features$FEAT.crc[processed_features$FEAT.crc$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+## SKCM
+
+```{r Overview of SKCM feature data, echo=FALSE, warning=FALSE, fig.cap="Heatmaps depicting the Feature data of SKCM dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.skcm$view)){
+
+  generateHeatmap(processed_features$FEAT.skcm[processed_features$FEAT.skcm$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+
+## PBMC
+
+```{r Overview of PBMC feature data, echo=FALSE, warning=FALSE, fig.cap="Heatmaps depicting the Feature data of PBMC dataset", out.width="50%", fig.ncol = 2, fig.align = "center", fig.subcap = c(" "," "," ")}
+for (feature in unique(processed_features$FEAT.pbmc$view)){
+
+  generateHeatmap(processed_features$FEAT.pbmc[processed_features$FEAT.pbmc$view==feature,],feature,row_names=T)}
+
+```
+
+\newpage
+
+# MOFA results
+
+## Results of the Jia and Sharma dataset analysis
+
+### Jia
+```{r MOFA results Jia, echo=FALSE, warning=FALSE, out.width="30%", fig.cap="Heatmap depicting the MOFA results of Jia dataset", fig.align = "center", fig.subcap = c(" "), fig.ncol = 2}
+
+plotResults(RNA$RNA.jia)
+
+plotResults(features$FEAT.jia)
+```
+
+\newpage
+
+### Sharma
+```{r MOFA results Sharma, echo=FALSE, warning=FALSE, out.width="30%", fig.cap="Heatmap depicting the MOFA results of Sharma dataset", fig.align = "center" , fig.subcap = c(" "," "," "," "," "," "," "," "," "), fig.ncol = 2}
+
+plotResults(RNA$RNA.sharma)
+
+plotResults(features$FEAT.sharma)
+
+```
+
+\newpage
+### Jia-Sharma combined
+```{r MOFA results Jia-Sharma combined, echo=FALSE, warning=FALSE, out.width="30%", fig.cap="Heatmap depicting the MOFA results of RNA-seq analysis of the Jia-Sharma dataset", fig.subcap = c(" "), fig.ncol = 3, fig.align = "center"}
+
+plotResults(RNA$RNA.comb.jiasharma)
+
+
+plotResults(features$FEAT.comb.jiasharma)
+
+```
+
+\newpage
+### LUAD
+```{r MOFA results LUAD, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of LUAD dataset", fig.subcap = c(" "), fig.ncol = 2, fig.align = "center"}
+
+plotResults(RNA$RNA.luad)
+
+plotResults(features$FEAT.luad)
+
+```
+
+\newpage
+### LUSC
+```{r MOFA results LUSC, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of LUSC dataset" , fig.subcap = c(" "), fig.ncol = 2, fig.align = "center"}
+
+plotResults(RNA$RNA.lusc)
+
+plotResults(features$FEAT.lusc)
+
+```
+
+\newpage
+### NSCLC
+```{r MOFA results TCGA, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of NSCLC dataset", fig.subcap = c(" "), fig.ncol = 3, fig.align = "center"}
+
+plotResults(RNA$RNA.nsclc)
+
+plotResults(features$FEAT.nsclc)
+
+```
+
+\newpage
+### CRC
+```{r MOFA results CRC, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of CRC dataset", fig.subcap = c(" "), fig.ncol = 2, fig.align = "center" }
+
+plotResults(RNA$RNA.crc)
+
+plotResults(features$FEAT.crc)
+
+```
+
+\newpage
+### SKCM
+```{r MOFA results SKCM, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of SKCM dataset", fig.subcap = c(" "), fig.ncol = 2 , fig.align = "center"}
+
+plotResults(RNA$RNA.skcm)
+
+plotResults(features$FEAT.skcm)
+
+```
+
+
+\newpage
+### PBMC
+```{r MOFA results PBMC, echo=FALSE, warning=FALSE, out.width="30%" , fig.cap="Heatmap depicting the MOFA results of PBMC dataset", fig.subcap = c(" "), fig.ncol = 2 , fig.align = "center"}
+
+plotResults(RNA$RNA.pbmc)
+
+plotResults(features$FEAT.pbmc)
+
+```
+
+\newpage
+
+
+# Venn-diagram genes
+
+
+# Feature analysis
+
+## Correlations between the feature-based models
+```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
+
+corr.feat <- getCorr(features)
+
+ 
+```
+
+\newpage
+## Heatmaps of feature-weights
+```{r MOFA results: features, echo=FALSE, fig.height=20, fig.width=15, fig.align = "center", warning=FALSE, fig.cap = "Heatmap depicting the results of the feature analysis of all datasets."}
+
+
+all <- buildHeatmap(features$FEAT.jia) + buildHeatmap(features$FEAT.sharma) + buildHeatmap(features$FEAT.comb.jiasharma) + buildHeatmap(features$FEAT.luad)+buildHeatmap(features$FEAT.lusc) + buildHeatmap(features$FEAT.nsclc) + buildHeatmap(features$FEAT.crc)+buildHeatmap(features$FEAT.skcm) + buildHeatmap(features$FEAT.pbmc) + plotHMs_bootstrap(jiasharma,"J+S") + plotHMs_bootstrap(nsclc,"NSCLC") 
+
+draw(all)
+
+```
+
+\newpage
+# RNA analysis
+
+## Correlations of all RNA-seq based factors
+```{r Correlation RNA, echo = FALSE, fig.align="center", fig.width=10, fig.height=12, out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on RNA data. Only significant relations (p<0.001) are shown."}
+
+corr.RNA <- getCorr(RNA,RNA_corr=TRUE)
+
+```
+
+\newpage
+## GSEA: GO annotation set
+```{r GSEA GO, echo=FALSE, fig.align="center", fig.cap=" Heatmap depicting the results of the GSEA analysis using the GO annotation set.", fig.height=30, fig.width=25, message=FALSE, warning=FALSE, out.width="300%"}
+#plotGOjiasharma(GO_results$RNA.comb.jiasharma, GO_results$RNA.sharma, GO_results$RNA.jia)
+
+plotGSEA(GO_results,"GO")
+
+```
+
+\newpage
+## GSEA: Hallmark annotation set
+```{r GSEA Hallmark, echo=FALSE, fig.align="center", fig.cap="Heatmap depicting the results of the GSEA analysis using the Hallmark annotation set.", fig.height=20, fig.width=25, out.width = "100%", message=FALSE, warning=FALSE}
+#plotHallmarkjiasharma(Hallmark_results$RNA.comb.jiasharma,Hallmark_results$RNA.sharma,Hallmark_results$RNA.jia)
+
+plotGSEA(Hallmark_results,"HALLMARK")
+
+```
+
+\newpage
+# Immunotherapy
+
+## Response to immunotherapy: features
+```{r Immunotherapy features, echo=FALSE, fig.align="center", fig.cap="Correlations to immune response: Features", fig.height=3, fig.ncol=2, fig.subcap=c(" "), out.width="50%", message=FALSE, warning=FALSE}
+
+# for (model in features[grepl(paste( c("jia","sharma"),collapse="|"),ls(features))]){
+#   plot(plotResponseCorr(model,"Features",corr.feat))}
+# 
+# for (model in features[!grepl(paste( c("jia","sharma"),collapse="|"),ls(features))]){
+#   plot(plotResponseCorr(model,"Features",corr.feat))}
+
+for (model in c("jia","sharma","comb.jiasharma")){
+  plot(plotResponseCorr(features[[paste0("FEAT.",model)]],"Features",corr.feat))}
+
+for (model in c("luad","lusc","nsclc","skcm","crc")){
+  plot(plotResponseCorr(features[[paste0("FEAT.",model)]],"Features",corr.feat))}
+
+
+```
+
+\newpage
+## Response to immunotherapy: RNA
+```{r Immunotherapy RNA, echo=FALSE, fig.align="center", fig.cap="Correlations to immune response: RNA", fig.height=3, fig.ncol=2, fig.subcap=c(" "), message=FALSE, warning=FALSE, out.width="50%"}
+
+for (model in c("jia","sharma","comb.jiasharma")){
+  plot(plotResponseCorr(RNA[[paste0("RNA.",model)]],"RNA",corr.RNA))}
+
+for (model in c("luad","lusc","nsclc","skcm","crc")){
+  plot(plotResponseCorr(RNA[[paste0("RNA.",model)]],"RNA",corr.RNA))}
+
+```
+
+\newpage
+## Within-patient response Jia & Sharma
+```{r Immunotherapy heatmap, include=FALSE, echo=FALSE, fig.align="center", fig.cap="Overview of the immune response for the Jia and Sharma dataset.", fig.height=3, fig.ncol=1, fig.subcap=c(" "), message=FALSE, warning=FALSE, out.width="120%"}
+
+print(responseHeatmap("JIA"))
+print(responseHeatmap("SHARMA"))
+
+```
+
+\newpage
+
+# Results bootstrapping
+
+```{r Bootstrapping results 2, echo=FALSE, message=FALSE,  fig.width=15, fig.height=10, warning=FALSE, fig.align="center", out.width="100%", fig.cap="Overview of bootstrapped mean values"}
+
+labels <- plotOverview(jiasharma,nsclc)
+
+```
+
+\newpage
+```{r Bootstrapping results 3, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center", fig.width=18, fig.height=14, out.width="100%", fig.cap="Volcano plot of bootstrapped values"}
+
+plotVolcano(jiasharma,nsclc,labels)
+
+```
+
+
+\newpage
+```{r Beeswarm plots, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center", out.width="100%", fig.ncol=2, fig.subcap=c("Jia","Sharma"), fig.height=20, fig.width = 8,  fig.cap = "Beeswarm plots showing the intra-patient variability of the highlighted features for the Jia and Sharma dataset" }
+
+plotBeeswarm(labels,JIA)
+plotBeeswarm(labels,SHARMA)
+
+```
+
+
+
