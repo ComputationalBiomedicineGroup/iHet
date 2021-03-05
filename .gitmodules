@@ -4,3 +4,6 @@
 [submodule "lib/pygenesig"]
 	path = lib/pygenesig
 	url = git@github.com:grst/pygenesig.git
+[submodule "lib/CIBERSORT"]
+	path = lib/CIBERSORT
+	url = git@github.com:grst/CIBERSORT.git
