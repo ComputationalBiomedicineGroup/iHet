@@ -6,24 +6,22 @@ process run_cellphonedb {
     conda "/data/scratch/sturm/conda/envs/2021-nsclc_heterogeneity-cellphonedb"
 
     publishDir "../../data/60_cellphonedb/20_run_cellphonedb/${id}", mode: 'copy'
-    cpus 8
+    cpus 22
 
     input:
     tuple val(id), path(adata), path(obs)
 
     output:
-    path("${id}")
+    path("out/*")
 
     script:
     """
     cellphonedb method statistical_analysis ${obs} ${adata} \\
-        --iterations 100  \\
+        --iterations 1000  \\
         --threads ${task.cpus} \\
         --counts-data hgnc_symbol && \\
     cellphonedb plot dot_plot && \\
     cellphonedb plot heatmap_plot ${obs}
-
-    mv out ${id}
     """
 }
 
@@ -31,11 +29,6 @@ process run_cellphonedb {
 workflow {
     run_cellphonedb(
         Channel.from([
-            [
-                "myeloid_cells",
-                file("../../data/60_cellphonedb/01_prepare_input_data/adata_myeloid.h5ad"),
-                file("../../data/60_cellphonedb/01_prepare_input_data/adata_myeloid.obs.csv")
-            ],
             [
                 "all_cells",
                 file("../../data/60_cellphonedb/01_prepare_input_data/adata.h5ad"),
