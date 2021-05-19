@@ -598,7 +598,7 @@ runMOFA <- function(MOFAdata){
   set.seed(1234)
 
   # Run MOFA
-  MOFAobject <- prepare_mofa(object = MOFAobject, data_options = data_opts , model_options = model_opts, training_options = train_opts)
+  MOFAobject <- prepare_mofa(object = MOFAobject, data_options = data_opts , model_options = model_opts, training_options = train_opts, use_basilisk=FALSE)
 
   model <- run_mofa(MOFAobject, outfile = paste0("./Models/",MOFAdata,".hdf5"))
 
@@ -622,7 +622,7 @@ runMOFA_bootstrap <- function(MOFAdata,type,N){
   set.seed(1234)
 
   # Run MOFA
-  MOFAobject <- prepare_mofa(object = MOFAobject, data_options = data_opts , model_options = model_opts, training_options = train_opts)
+  MOFAobject <- prepare_mofa(object = MOFAobject, data_options = data_opts , model_options = model_opts, training_options = train_opts, use_basilisk=FALSE)
 
   model <- run_mofa(MOFAobject, outfile = paste0("./Models/Bootstrap/",type,N,".hdf5"))
 
