@@ -1,0 +1,1 @@
+nextflow run main.nf -profile icbi
