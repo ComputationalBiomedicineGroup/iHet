@@ -2,14 +2,13 @@
 title: "Unsupervised multi-modal data analysis reveals features underlying spatial heterogeneity and immune responses in non-small cell lung cancer: results"
 author: "Luc van Bochove"
 date: "12/22/2020"
-output: 
+output:
+  html_document:
+    df_print: paged
   pdf_document:
     keep_md: yes
-
 sansfont: Calibri Light
-header-includes:
-   - \usepackage{subfig}
-   
+header-includes: \usepackage{subfig}
 ---
 
 ```{r setup, include=FALSE}
@@ -437,7 +436,7 @@ labels <- plotOverview(jiasharma,nsclc)
 \newpage
 ```{r Bootstrapping results 3, echo=FALSE, message=FALSE, warning=FALSE, fig.align="center", fig.width=18, fig.height=14, out.width="100%", fig.cap="Volcano plot of bootstrapped values"}
 
-plotVolcano(jiasharma,nsclc,labels)
+# plotVolcano(jiasharma,nsclc,labels)
 
 ```
 
