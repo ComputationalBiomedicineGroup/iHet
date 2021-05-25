@@ -12,7 +12,7 @@ NSCLCobj.sel.easier <- getEASIERinfo(NSCLCobj.sel,
                                      cancertype = cancertype)
 
 save(NSCLCobj.sel.easier, 
-     file="../RData/NSCLC_easier.RData")
+     file="../RData/NSCLC_easier_sel.RData")
 
 
 ## GTEx data
