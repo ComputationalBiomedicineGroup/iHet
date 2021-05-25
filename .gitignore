@@ -7,3 +7,7 @@ scratch
 .vscode
 deploy
 *.ipynb
+.pytest_cache
+.nextflow*
+work
+results
