@@ -449,7 +449,6 @@ runGSEA <- function(model, feature_set, factors, p = 0.1){
 
   return(enrichment.merged)
 }
-
 getGSEAdata <- function(model,gene_annotation){
   out <- runGSEA(model, get(gene_annotation), 1:3, p = 0.1)
   out <- as.data.frame(out)
@@ -578,6 +577,8 @@ plotGSEA <- function(list_of_GSEA_results,type){
            getGSEAHeatmap(list_of_GSEA_results[["RNA.comb.jiasharma"]],"Jia-Sharma") + getGSEAHeatmap(list_of_GSEA_results[["RNA.lusc"]],"LUSC") +
            getGSEAHeatmap(list_of_GSEA_results[["RNA.luad"]],"LUAD") + getGSEAHeatmap(list_of_GSEA_results[["RNA.nsclc"]],"NSCLC") +
            getGSEAHeatmap(list_of_GSEA_results[["RNA.crc"]],"CRC") +    getGSEAHeatmap(list_of_GSEA_results[["RNA.skcm"]],"SKCM") + getGSEAHeatmap(list_of_GSEA_results[["RNA.pbmc"]],"PBMC")) }
+
+
 
 
 
@@ -1208,8 +1209,6 @@ plotVolcano <- function(jiasharma,nsclc,labels){
   plot(g)
 
 }
-
-
 
 
 plotBeeswarm <- function(labels,dataset){

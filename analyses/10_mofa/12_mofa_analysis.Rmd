@@ -1,0 +1,45 @@
+---
+params:
+  data_dir: "../../data/10_processed/bulk_rna_seq"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
+source('helper_functions.R')
+```
+
+
+
+```{r loaddata}
+gtex_data = readRDS(file.path(params$data_dir, "GTEx_easier.rds"))
+nsclc_data = readRDS(file.path(params$data_dir, "NSCLC_easier.rds"))
+data_all = nsclc_data
+for(slot in names(gtex_data)) {
+  data_all[[slot]][["GTEx"]] = gtex_data[[slot]][["Lung"]]
+}
+```
+
+
+```{r processfeatures}
+feature_data = sapply(c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx"), function(dataset_id) {
+  processFeatures(data_all, dataset_id) 
+}, simplify = FALSE, USE.NAMES = TRUE)
+
+feature_data$JiaSharma = bind_rows(feature_data$Jia2018, feature_data$Sharma2019)
+feature_data$NSCLC = bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate(group = "NSCLC")
+```
+
+```{r}
+for (feature in unique(feature_data$Jia2018$view)){
+  generateHeatmap(feature_data$Jia2018 %>% filter(view == feature), feature, row_names=TRUE)
+}
+```
+
+
+```{r runmofa}
+# Train the MOFA model
+runMOFA(feature_data$Jia2018)
+
+```
+
