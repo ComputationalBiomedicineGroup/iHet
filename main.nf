@@ -5,11 +5,12 @@ nextflow.enable.dsl = 2
 process P11_easier {
     def id = "11_easier" 
     publishDir "${params.result_dir}/10_mofa/${id}", mode: params.publish_dir_mode 
-    conda "/data/scratch/sturm/conda/envs/2021-nsclc_heterogeneity-easier"
+    // conda "/data/scratch/sturm/conda/envs/2021-nsclc_heterogeneity-easier"
+    container "containers/2021-nsclc_heterogeneity-easier.sif"
     input: 
         path("${id}.R")
         path("NSCLC_expr_data_sel.RData") 
-        path("GTEX_expr_data.RData")
+        path("GTEx_expr_data.RData")
     
     output:
         "*.rds"

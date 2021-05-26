@@ -11,3 +11,4 @@ deploy
 .nextflow*
 work
 results
+containers
