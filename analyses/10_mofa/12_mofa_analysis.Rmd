@@ -1,7 +1,7 @@
 ---
 params:
-  data_dir: "../../data/10_mofa/11_easier"
-  model_dir: "../../data/10_mofa/12_mofa_analysis"
+  data_dir: "../../results/10_mofa/11_easier"
+  model_dir: "../../results/10_mofa/12_mofa_analysis"
 ---
 
 
@@ -39,7 +39,7 @@ for (feature in unique(feature_data$Jia2018$view)){
 ```
 
 
-```{r runmofa, echo=FALSE, message=FALSE}
+```{r runmofa, echo=FALSE, message=FALSE, results='hide'}
 # Train the MOFA model
 models = sapply(names(feature_data), function(dataset_id) {
   runMOFA(feature_data[[dataset_id]], file.path(params$model_dir, paste0(dataset_id, ".hdf5")))
@@ -51,6 +51,15 @@ lapply(names(models), function(dataset_id) {
   print(dataset_id)
   plotResults(models[[dataset_id]], dataset_id)
 })
+```
+### Bootstrapping analysis
+```{r}
+
+N_BOOTSTRAP=100
+bootstrap_datasets = sapply(DATASETS, function(dataset_id) {
+  
+}, simplify = FALSE, USE.NAMES = TRUE)
+
 ```
 
 
@@ -70,3 +79,15 @@ all <- buildHeatmap(models$Jia2018, "Jia") +
 draw(all)
 
 ```
+
+
+```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
+
+# corr.feat <- getCorr(models)
+
+ 
+```
+
+
+
+

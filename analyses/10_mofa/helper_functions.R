@@ -10,48 +10,36 @@ library(ggplot2)
 library(cowplot)
 library(tidyr)
 library(tibble)
+library(corrplot)
 
 
 #' Bring features into 'tidy' format required by MOFA
 processFeatures <- function(data, dataset_id) {
-  # Transpose data
-  cellfrac <- data.matrix(t(data$cellfrac[[dataset_id]]))
-  #lrpairs <- data.matrix(t(data$lrpairs))
-  pathways <- data.matrix(t(data$pathway[[dataset_id]]))
-  tfs <- data.matrix(t(data$tf[[dataset_id]]))
 
-  # Processing features
+  add_patient_col = function(df) {
+    if (dataset_id %in% c("Jia2018", "Sharma2019")) {
+      df %>% separate("sample", c("patient", "replicate"), remove=FALSE) %>% 
+        # exclude normal samples
+        filter(replicate != "N") %>% 
+        select(-replicate)
+    } else {
+      df %>% mutate(patient = sample)
+    }
+  }
 
-  # Remove missing entries
-  #lrpairs <- lrpairs[complete.cases(lrpairs),]
+  do_pivot = function(df, view) {
+    df %>% as_tibble(rownames="sample") %>% 
+      pivot_longer(cols=-sample, names_to="feature") %>% 
+      mutate(view = !!view) %>% 
+      add_patient_col
+  }
 
-  # Remove cell type 'Others'
-  cellfrac <- cellfrac[-which(rownames(cellfrac) == "Other"), ]
-  # Log transformation
-  cellfrac <- log10(cellfrac * 100 + 0.001)
-
-  # Scale pathways
-  pathways <- t(scale(t(pathways)))
-
-
-  # Convert to dataframe
-  cellfrac.df <- as.data.frame(as.table(cellfrac))
-  #lrpairs.df <- as.data.frame(as.table(lrpairs))
-  pathways.df <- as.data.frame(as.table(pathways))
-  tfs.df <- as.data.frame(as.table(tfs))
-
-  # Add 'view' as column
-  cellfrac.df["view"] <- "Immune cells quantification"
-  #lrpairs.df['view'] <- "Ligand-receptor pairs"
-  pathways.df["view"] <- "Pathway scores"
-  tfs.df["view"] <- "Transcription factors"
-
-  # Rename columns
-  colnames(cellfrac.df) <- c("feature", "sample", "value", "view")
-  #colnames(lrpairs.df) <- c("feature", "sample", "value", "view" )
-  colnames(tfs.df) <- c("feature", "sample", "value", "view")
-  colnames(pathways.df) <- c("feature", "sample", "value", "view")
-
+  cellfrac.df = do_pivot(data$cellfrac[[dataset_id]], "Immune cells quantification") %>% 
+    filter(feature != "Other") %>% 
+    # Log transform
+    mutate(value = log10(value * 100 + 0.001))
+  pathways.df = do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores") 
+  tfs.df = do_pivot(data$tf[[dataset_id]], "Transcription factors")
 
   # These are datasets with multiple biospies per patient. Regressing
   # out effects related to the inter-patient variability (we want to focus
@@ -60,11 +48,8 @@ processFeatures <- function(data, dataset_id) {
     print("Processing regression")
 
     linRegression <- function(dataframe.df) {
-      # Add the patients as a new column
-      dataLM <- dataframe.df %>% separate("sample", c("patient", NA), remove=FALSE)
-
       # Fit a linear model
-      lm.out <- lm(value ~ patient, data = dataLM)
+      lm.out <- lm(value ~ patient, data = dataframe.df)
       residuals <- lm.out[["residuals"]]
 
       # Assign the residuals as new values
@@ -74,7 +59,6 @@ processFeatures <- function(data, dataset_id) {
     }
 
     cellfrac.df <- linRegression(cellfrac.df)
-    #lrpairs.df <- linRegression(lrpairs.df)
     tfs.df <- linRegression(tfs.df)
     pathways.df <- linRegression(pathways.df)
   }
@@ -255,3 +239,70 @@ buildHeatmap <- function(model, title){
 
   return(hm1)
 }
+
+# transformFactors <- function(model){
+
+#   data <- data.frame(do.call("rbind",get_weights(model)))[1:3]
+#   colSums(data)
+
+#   if (paste(names(model@dimensions$N),collapse="") == "CRCLUADLUSCSKCM"){
+#     colnames(data) <- paste("TCGA",substr(colnames(data),start=7,stop=7),sep=" ")
+#   } else if (paste(names(model@dimensions$N),collapse="") == "LUADLUSC"){
+#     colnames(data) <- paste("NSCLC",substr(colnames(data),start=7,stop=7),sep=" ")
+#   }else{
+#     colnames(data) <- paste(paste(names(model@dimensions$N),collapse=""),substr(colnames(data),start=7,stop=7),sep=" ")}
+#   return(data)
+# }
+
+# #' Plot Correlation matrix
+# getCorr <- function(list_of_models,RNA_corr=FALSE){
+#   factors <- lapply(list_of_models,transformFactors)
+
+#   cnames <- Reduce(intersect,lapply(factors,rownames))
+
+#   factors <- lapply(factors,function(i) i[cnames,])
+
+#   data <- do.call(cbind,factors)
+
+#   colnames(data) <- unlist(lapply(factors,colnames))
+
+#   cor_matrix <- cor(data)
+
+#   # TODO rotate!
+#   # rotation <- getRotation(cor_matrix)
+#   # data[rownames(rotation)] <-  t(t(data[rownames(rotation)])*rotation$Sign)
+
+#   # if (RNA_corr == FALSE){
+#   #   data['JS B1'] <- get_median_bootstrap_data(jiasharma)
+#   #   data['NSCLC B1'] <- get_median_bootstrap_data(nsclc)}
+
+#   cor_matrix_plot <- cor(data)
+
+#   p.mat = cor.mtest(cor_matrix_plot)
+
+
+#   # cor_matrix_plot[p.mat>0.05] <- 1
+
+#   # p.mat[p.mat>0.05] <- 0.00
+
+#   # # plot <- heatmaply_cor(
+#   # #   cor_matrix_plot,
+#   # #   node_type = "scatter",
+#   # #   column_text_angle = 90,
+#   # #   fontsize_row = 13,
+#   # #   fontsize_col = 13,
+#   # #   point_size_mat = -log10(p.mat),
+#   # #   point_size_name = "-log10",
+#   # #   label_names = c("x", "y", "Pearson \ncorrelation") )
+
+#   # # print(plot)
+
+#   # cor_matrix_plot[p.mat>0.05] <- 0
+
+
+#   corrplot(cor_matrix_plot, tl.col="black", tl.srt=75, tl.cex=1.2, p.mat = p.mat, sig.level = 0.001, insig = "blank")
+
+
+#   return(cor_matrix)
+
+# }
