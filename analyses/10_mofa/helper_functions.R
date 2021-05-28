@@ -11,6 +11,7 @@ library(cowplot)
 library(tidyr)
 library(tibble)
 library(corrplot)
+library(stringr)
 
 
 #' Bring features into 'tidy' format required by MOFA
@@ -18,9 +19,9 @@ processFeatures <- function(data, dataset_id) {
 
   add_patient_col = function(df) {
     if (dataset_id %in% c("Jia2018", "Sharma2019")) {
-      df %>% separate("sample", c("patient", "replicate"), remove=FALSE) %>% 
+      df %>% separate("sample", c("patient", "replicate"), remove=FALSE) %>%
         # exclude normal samples
-        filter(replicate != "N") %>% 
+        filter(replicate != "N") %>%
         select(-replicate)
     } else {
       df %>% mutate(patient = sample)
@@ -28,17 +29,17 @@ processFeatures <- function(data, dataset_id) {
   }
 
   do_pivot = function(df, view) {
-    df %>% as_tibble(rownames="sample") %>% 
-      pivot_longer(cols=-sample, names_to="feature") %>% 
-      mutate(view = !!view) %>% 
+    df %>% as_tibble(rownames="sample") %>%
+      pivot_longer(cols=-sample, names_to="feature") %>%
+      mutate(view = !!view) %>%
       add_patient_col
   }
 
-  cellfrac.df = do_pivot(data$cellfrac[[dataset_id]], "Immune cells quantification") %>% 
-    filter(feature != "Other") %>% 
+  cellfrac.df = do_pivot(data$cellfrac[[dataset_id]], "Immune cells quantification") %>%
+    filter(feature != "Other") %>%
     # Log transform
     mutate(value = log10(value * 100 + 0.001))
-  pathways.df = do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores") 
+  pathways.df = do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
   tfs.df = do_pivot(data$tf[[dataset_id]], "Transcription factors")
 
   # These are datasets with multiple biospies per patient. Regressing

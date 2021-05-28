@@ -4,6 +4,14 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.DumperOptions
 
 /**
+ * Turn a filename into a tuple (simpleName, file)
+ */
+def file_tuple(filename) {
+    f = file(filename)
+    return tuple(f.simpleName, f)
+}
+
+/**
  * recursivly convert a groovy map to strings. Maps and Lists are descended into,
  * all other objects are converted to string. 
  */
@@ -52,7 +60,9 @@ def nxfvars(task) {
     def tmp_inputs = task.binding.findAll { 
         it.key != '$' && it.key != 'task' 
     }
-    def tmp_task = task.binding.task.each { it }
+    def tmp_task = task.binding.task.findAll {
+        it.key in ["cpus", "process"]
+    }
     // workflow and nextflow contain object ids or timestamps and break caching. 
     def tmp_vars = this.binding.variables.findAll {
         it.key != "workflow" && it.key != "nextflow"
@@ -60,11 +70,11 @@ def nxfvars(task) {
 
     // inputs on the first level, task and params as separate dictionaries. 
     def nxf_vars = tmp_vars + tmp_inputs + [task: tmp_task]
-
+    
     // convert to string recursively - e.g. paths need to be converted
     // to strings explicitly
     nxf_vars = mapToString(nxf_vars)
-
+    
     DumperOptions options = new DumperOptions();
     options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
     def yaml = new Yaml(options)
