@@ -44,7 +44,7 @@ for (feature in unique(feature_data$Jia2018$view)){
 ### save feature data
 ```{r}
 lapply(names(feature_data), function(dataset_id) {
-  saveRDS(feature_data[[dataset_id]], file=file.path(nxfvars$out_dir, paste0(dataset_id, ".rds")))
+  saveRDS(feature_data[[dataset_id]], file=file.path(nxfvars$out_dir, paste0(dataset_id, ".rds")), compress=FALSE)
 })
 ```
 
@@ -82,7 +82,7 @@ lapply(names(feature_data), function(dataset_id) {
     saveRDS(bootstrap_datasets[[dataset_id]][[i]],
             file = file.path(nxfvars$out_dir, paste0(
               "boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
-            )))
+            )), compress=FALSE)
   })
 })
 
