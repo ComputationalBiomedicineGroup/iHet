@@ -2,13 +2,16 @@
 params:
   data_dir: "../../results/10_mofa/11_easier"
   model_dir: "../../results/10_mofa/12_mofa_analysis"
+  n_cpus: "16"
 ---
 
 
 ```{r setup, include=FALSE}
+library(BiocParallel)
 knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
 source('helper_functions.R')
 DATASETS = c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx")
+BiocParallel::register(BiocParallel::MulticoreParam(workers=as.numeric(params$n_cpus)))
 ```
 
 
@@ -42,7 +45,8 @@ for (feature in unique(feature_data$Jia2018$view)){
 ```{r runmofa, echo=FALSE, message=FALSE, results='hide'}
 # Train the MOFA model
 models = sapply(names(feature_data), function(dataset_id) {
-  runMOFA(feature_data[[dataset_id]], file.path(params$model_dir, paste0(dataset_id, ".hdf5")))
+  runMOFA(feature_data[[dataset_id]] %>% select(sample, feature, value, group, view),
+          file.path(params$model_dir, paste0(dataset_id, ".hdf5")))
 }, simplify=FALSE, USE.NAMES = TRUE)
 ```
 
@@ -53,15 +57,49 @@ lapply(names(models), function(dataset_id) {
 })
 ```
 ### Bootstrapping analysis
-```{r}
-
-N_BOOTSTRAP=100
+```{r, message=FALSE}
+# Build 100 random bootstrap datasets for each dataset 
+N_BOOTSTRAP = 100
 bootstrap_datasets = sapply(DATASETS, function(dataset_id) {
-  
+  samples = feature_data[[dataset_id]]$sample %>% unique()
+  lapply(1:N_BOOTSTRAP, function(i) {
+    set.seed(i)
+    # make new sample ids unique (required for MOFA)!
+    sample_df = tibble(sample = sample(samples, replace = TRUE)) %>% 
+      mutate(sample_id = row_number())
+    feature_data[[dataset_id]] %>% right_join(sample_df) %>%
+      mutate(sample = paste0(sample, "_", sample_id))
+  })
 }, simplify = FALSE, USE.NAMES = TRUE)
+
+bootstrap_datasets$JiaSharma = lapply(1:N_BOOTSTRAP, function(i) {
+  bind_rows(bootstrap_datasets$Jia2018[[i]],
+            bootstrap_datasets$Sharma2019[[i]])
+})
+bootstrap_datasets$NSCLC = lapply(1:N_BOOTSTRAP, function(i) {
+  bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
+})
 
 ```
 
+### Run MOFA on bootstrap models
+
+```{r}
+bootstrap_models = BiocParallel::bplapply(names(bootstrap_datasets), function(dataset_id) {
+  lapply(1:N_BOOTSTRAP, function(i) {
+    runMOFA(
+      bootstrap_datasets[[dataset_id]][[i]] %>% select(sample, feature, value, group, view) ,
+      paste0(
+        params$model_dir,
+        paste0(dataset_id, "_boot_", stringr::str_pad(i, 3, pad = "0"), ".hdf5")
+      )
+    )
+  })
+})
+names(bootstrap_models) = names(bootstrap_datasets)
+
+save(models, bootstrap_datasets, bootstrap_models, file="./tmp_mofa.rda")
+```
 
 
 

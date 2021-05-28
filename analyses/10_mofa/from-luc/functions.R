@@ -709,9 +709,7 @@ getCorr <- function(list_of_models,RNA_corr=FALSE){
   corrplot(cor_matrix_plot, tl.col="black", tl.srt=75, tl.cex=1.2, p.mat = p.mat, sig.level = 0.001, insig = "blank")
 
 
-
   return(cor_matrix)
-
 
 }
 

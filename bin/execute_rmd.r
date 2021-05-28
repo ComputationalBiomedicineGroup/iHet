@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env Rscript
 
 # USAGE: render.R notebook.Rmd report.html
 args = commandArgs(trailingOnly=TRUE)
