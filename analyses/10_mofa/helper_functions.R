@@ -184,14 +184,18 @@ plotResults <- function(model, title){
 
 
 #' Make a complex heatmap showing the different factor weitghts for different datasets.
-buildHeatmap <- function(model, title){
+buildHeatmap <- function(weight_df, title){
   col_fun = circlize::colorRamp2(seq(-1, 1, by = 2/10), rev(c("#67001F", "#B2182B", "#D6604D", "#F4A582",
                                                               "#FDDBC7", "#FFFFFF", "#D1E5F0", "#92C5DE",
                                                               "#4393C3", "#2166AC", "#053061")))
 
-  setup <- function(weights){
     # Define vectors to split the heatmap
-    row.split.vector <- c(rep("Immune cell\n Quantification",10), rep("Pathway\n Scores",14), rep("Transcription Factor Activity", nrow(weights)-24))
+    row.split.vector <- weight_df$view
+    weights = weight_df %>% 
+      select(-view) %>% 
+      column_to_rownames("feature") %>% 
+      as.matrix() %>% 
+      .[,1:3]
 
     # Size of the each cell
     setsize = 0.30 #cm
@@ -227,18 +231,6 @@ buildHeatmap <- function(model, title){
                   width = unit(setsize, "cm")*ncol(weights) , height  = unit(setsize, "cm")*nrow(weights))
 
     return(hm)
-  }
-
-  data <- cbind(do.call( "rbind",get_weights(model,  scale = T)))[,1:3]
-
-  # The signs of MOFA factors are meaningless. "Rotate" factors among
-  # data sources to make sure the sign is consistent among data sources.
-  #
-  # We want all factors to have positive correlation with CD8+ T cells,
-  # which makes the factors more intuitive to interpret.
-  hm1 <- setup(t(t(data)*sign(data["CD8+ T", ])))
-
-  return(hm1)
 }
 
 # transformFactors <- function(model){

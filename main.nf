@@ -42,6 +42,24 @@ process P12_prepare_mofa_data {
     """
 }
 
+process P13_run_mofa {
+    publishDir "${params.result_dir}/10_mofa/${id}", mode: params.publish_dir_mode 
+    conda "/data/scratch/sturm/conda/envs/2021-nsclc_heterogeneity-mofa"
+    cpus 1
+    input:
+        tuple val(id), path(script)
+        path("helper_functions.R")
+        each path(dataset)
+
+    output:
+        path("*.hdf5"), emit: models 
+
+    script:
+    """
+    Rscript ${script} ${dataset}
+    """
+}
+
 
 workflow W10_mofa {
     def dir = "analyses/10_mofa"
@@ -52,8 +70,13 @@ workflow W10_mofa {
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
-        file("analyses/10_mofa/helper_functions.R"),
+        file("$dir/helper_functions.R"),
         P11_easier.out
+    )
+    P13_run_mofa(
+        file_tuple("$dir/13_run_mofa.R"),
+        file("$dir/helper_functions.R"),
+        P12_prepare_mofa_data.out.datasets
     )
 }
 

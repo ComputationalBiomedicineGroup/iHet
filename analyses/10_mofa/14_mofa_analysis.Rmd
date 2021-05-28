@@ -1,54 +1,91 @@
-```{r runmofa, echo=FALSE, message=FALSE, results='hide'}
-# Train the MOFA model
-models = sapply(names(feature_data), function(dataset_id) {
-  runMOFA(feature_data[[dataset_id]] %>% select(sample, feature, value, group, view),
-          file.path(params$model_dir, paste0(dataset_id, ".hdf5")))
-}, simplify=FALSE, USE.NAMES = TRUE)
+---
+params:
+  nxfvars:
+    value:
+      data_dir: "../../results/10_mofa/13_run_mofa"
+      out_dir: "/local/scratch/sturm/mofa"
+---
+
+
+```{r setup, include=FALSE, message=FALSE}
+nxfvars = params$nxfvars
+message(capture.output(str(nxfvars)))
+knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
+source('helper_functions.R')
+DATASETS = c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
+dir.create(nxfvars$out_dir)
 ```
 
-```{r}
+```{r, message=FALSE}
+models = sapply(DATASETS, function(dataset_id) {
+  load_model(file.path(nxfvars$data_dir, sprintf("%s.hdf5", dataset_id)))
+}, simplify = FALSE, USE.NAMES = TRUE)
+```
+```{r, message=FALSE}
+bootstrap_models = sapply(DATASETS, function(dataset_id) {
+  lapply(Sys.glob(file.path(nxfvars$data_dir, sprintf("boot_%s_*.hdf5", dataset_id))), function(x) {
+    load_model(x)
+  })
+}, simplify = FALSE, USE.NAMES = TRUE)
+```
+
+```{r, results='hide'}
 lapply(names(models), function(dataset_id) {
   print(dataset_id)
   plotResults(models[[dataset_id]], dataset_id)
 })
 ```
+```{r}
+get_weight_df = function(model) {
+  weights= get_weights(model)
+  # Rotate factors such that they are positively associated with CD8+ T-cell infiltration. 
+  rotation = diag(sign(weights[["Immune cells quantification"]]["CD8+ T", ]))
+  lapply(names(weights), function(modality) {
+    weights[[modality]] %*% rotation %>%
+      as_tibble(rownames="feature") %>%
+      mutate(view=modality)
+  }) %>% bind_rows() %>% arrange(view, feature)
+}
+```
 
-### Run MOFA on bootstrap models
 
 ```{r}
-bootstrap_models = BiocParallel::bplapply(names(bootstrap_datasets), function(dataset_id) {
-  lapply(1:N_BOOTSTRAP, function(i) {
-    runMOFA(
-      bootstrap_datasets[[dataset_id]][[i]] %>% select(sample, feature, value, group, view) ,
-      paste0(
-        params$model_dir,
-        paste0(dataset_id, "_boot_", stringr::str_pad(i, 3, pad = "0"), ".hdf5")
-      )
-    )
-  })
-})
-names(bootstrap_models) = names(bootstrap_datasets)
+median_weights = sapply(names(bootstrap_models), function(dataset_id) {
+  lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
+    bind_rows() %>%
+    group_by(view, feature) %>% 
+    summarise_all(median) %>% 
+    ungroup()
+}, USE.NAMES = TRUE, simplify = FALSE) 
 
-save(models, bootstrap_datasets, bootstrap_models, file="./tmp_mofa.rda")
 ```
 
 
-
+## Heatmap of factors
 ```{r, fig.width=15, fig.height=20}
-all <- buildHeatmap(models$Jia2018, "Jia") + 
-  buildHeatmap(models$Sharma2019, "Sharma") + 
-  buildHeatmap(models$JiaSharma, "J+S") +
-  buildHeatmap(models$LUAD, "LUAD") +
-  buildHeatmap(models$LUSC, "LUSC") +
-  buildHeatmap(models$NSCLC, "NSCLC") +
-  buildHeatmap(models$GTEx, "GTEx")
-
-# + buildHeatmap(features$FEAT.comb.jiasharma) + buildHeatmap(features$FEAT.luad)+buildHeatmap(features$FEAT.lusc) + buildHeatmap(features$FEAT.nsclc) + buildHeatmap(features$FEAT.crc)+buildHeatmap(features$FEAT.skcm) + buildHeatmap(features$FEAT.pbmc) + plotHMs_bootstrap(jiasharma,"J+S") + plotHMs_bootstrap(nsclc,"NSCLC") 
+all <- buildHeatmap(get_weight_df(models$Jia2018), "Jia") + 
+  buildHeatmap(get_weight_df(models$Sharma2019), "Sharma") + 
+  buildHeatmap(get_weight_df(models$JiaSharma), "J+S") +
+  buildHeatmap(get_weight_df(models$LUAD), "LUAD") +
+  buildHeatmap(get_weight_df(models$LUSC), "LUSC") +
+  buildHeatmap(get_weight_df(models$NSCLC), "NSCLC") +
+  buildHeatmap(get_weight_df(models$GTEx), "GTEx") 
 
 draw(all)
-
 ```
 
+## Heatmap of bootstrapped factors
+```{r, fig.width=15, fig.height=20}
+all <- buildHeatmap(median_weights$Jia2018, "Jia") + 
+  buildHeatmap(median_weights$Sharma2019, "Sharma") + 
+  buildHeatmap(median_weights$JiaSharma, "J+S") +
+  buildHeatmap(median_weights$LUAD, "LUAD") +
+  buildHeatmap(median_weights$LUSC, "LUSC") +
+  buildHeatmap(median_weights$NSCLC, "NSCLC") +
+  buildHeatmap(median_weights$GTEx, "GTEx") 
+
+draw(all)
+```
 
 ```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
 
