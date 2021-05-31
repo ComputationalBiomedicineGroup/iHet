@@ -9,7 +9,7 @@ range01 <- function(x) {
   return(x)
 }
 
-getEASIERinfo <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FALSE, onlyEasier = TRUE) {
+getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FALSE, onlyEasier = TRUE, epic = FALSE) {
   
   goldstd <- c("IMPRES",
                "MSI",
@@ -38,7 +38,18 @@ getEASIERinfo <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies
     
     cellfrac <- compute_cell_fractions(
       RNA.tpm = dataobj$tpm[[dataset]])
+    
+    if (epic) {
       
+      epic.cellfrac <- deconvolute_epic(dataobj$tpm[[dataset]], 
+                                        tumor = TRUE, 
+                                        scale_mrna = TRUE)
+      
+      cellfrac <- cbind(cellfrac,
+        t(epic.cellfrac[c("CAFs", "Endothelial"), rownames(cellfrac)]))
+      
+    }
+    
     pathway <- compute_pathways_scores(
       RNA.counts = dataobj$count[[dataset]],
       remove.genes.ICB_proxies = remove.genes.ICB_proxies)
@@ -99,14 +110,16 @@ getEASIERinfo <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies
 
 
 
+
 cancertype <- "NSCLC"
 
 ## NSCLC data
 
 load("NSCLC_expr_data_sel.RData")
 
-NSCLCobj.sel.easier <- getEASIERinfo(NSCLCobj.sel, 
-                                     cancertype = cancertype)
+NSCLCobj.sel.easier <- getFeat(NSCLCobj.sel, 
+                               cancertype = cancertype,
+                               epic = TRUE)
 
 saveRDS(NSCLCobj.sel.easier, 
      file="NSCLC_easier.rds")
@@ -116,8 +129,9 @@ saveRDS(NSCLCobj.sel.easier,
 
 load("GTEx_expr_data.RData")
 
-GTExobj.easier <- getEASIERinfo(GTExobj, 
-                                 cancertype = cancertype)
+GTExobj.easier <- getFeat(GTExobj, 
+                          cancertype = cancertype,
+                          epic = TRUE)
 
 saveRDS(GTExobj.easier, 
      file="GTEx_easier.rds")
