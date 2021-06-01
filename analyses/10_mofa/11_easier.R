@@ -1,6 +1,18 @@
 #!/usr/bin/env Rscript
+"
+Prepare Feature data with EASIER. 
+
+Usage:
+  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds>
+
+" -> doc
 
 library(easier)
+library(immunedeconv)
+
+args = commandArgs(trailingOnly=TRUE)
+input_file = args[1]
+output_file = args[2]
 
 range01 <- function(x) {
   
@@ -108,33 +120,9 @@ getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FAL
   
 }
 
-
-
-
 cancertype <- "NSCLC"
+expr_obj = readRDS(input_file)
 
-## NSCLC data
+easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE)
 
-load("NSCLC_expr_data_sel.RData")
-
-NSCLCobj.sel.easier <- getFeat(NSCLCobj.sel, 
-                               cancertype = cancertype,
-                               epic = TRUE)
-
-saveRDS(NSCLCobj.sel.easier, 
-     file="NSCLC_easier.rds")
-
-
-## GTEx data
-
-load("GTEx_expr_data.RData")
-
-GTExobj.easier <- getFeat(GTExobj, 
-                          cancertype = cancertype,
-                          epic = TRUE)
-
-saveRDS(GTExobj.easier, 
-     file="GTEx_easier.rds")
-
-
-
+saveRDS(easier_obj, file=output_file)
