@@ -16,6 +16,7 @@ PATHWAYS_OF_INTEREST = c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST = c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 gtex_easier = readRDS("../../data/results/10_mofa/11_easier/GTEx_easier.rds")
 nsclc_easier = readRDS("../../data/results/10_mofa/11_easier/NSCLC_easier.rds")
+features_jiasharma = readRDS("../../data/results/10_mofa/12_prepare_mofa_data/datasets/JiaSharma.rds")
 ```
 
 ```{r, message=FALSE}
@@ -171,3 +172,55 @@ plot_correlation = function(dataset_id) {
 lapply(DATASETS[1:6], plot_correlation)
 
 ```
+### Variability of weights between bootstrap samples
+```{r}
+all_weights = lapply(names(bootstrap_models), function(dataset_id) {
+  lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
+    bind_rows() %>% 
+    mutate(dataset=dataset_id)
+}) %>% bind_rows() %>% 
+  pivot_longer(cols=c(-feature, -view, -dataset), names_to="factor", values_to="factor_weight") %>%
+  filter(factor %in% c("factor 1", "factor 2", "factor 3"))
+```
+
+```{r, fig.height=60, fig.width=12}
+all_weights %>% ggplot(aes(x=factor_weight, y=feature)) +
+  geom_boxplot(aes(fill=dataset), outlier.size=.5) + 
+  facet_wrap(~factor, ncol=3) + 
+  scale_fill_brewer(type="qual", palette="Set2") + 
+  theme_bw()
+```
+### Variability of features within and between patients in Jia and Sharma
+```{r, fig.width=18, fig.height=15}
+features_jiasharma %>% 
+  ggplot(aes(x=value, y=patient, fill=group)) + 
+    geom_boxplot() + facet_wrap(~feature, scale="free_x") + 
+    scale_fill_brewer(type="qual") + 
+    theme_bw() +
+    theme(axis.text.y=element_blank(), axis.ticks.y=element_blank())
+```
+
+```{r}
+get_df = function(df, group) {
+    bf= anovaBF(value~patient, data = df) %>% as.vector()
+    data.frame(bayes_factor=bf)
+}
+
+bfs = features_jiasharma %>% 
+  mutate(patient = as.factor(patient)) %>% 
+  group_by(feature) %>% 
+  group_modify(get_df)
+
+```
+
+
+```{r, fig.width=7, fig.height=18}
+bfs %>% mutate(log_bf = log2(bayes_factor)) %>% 
+  ggplot(aes(y=reorder(feature, -log_bf), x=log_bf)) +
+  geom_point() + 
+  geom_vline(xintercept=0) + 
+  geom_vline(xintercept=log2(10), color="red") + 
+  theme_bw() 
+```
+
+

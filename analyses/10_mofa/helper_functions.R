@@ -13,6 +13,7 @@ library(tibble)
 library(corrplot)
 library(rstatix)
 library(stringr)
+library(ggbeeswarm)
 
 
 #' Bring features into 'tidy' format required by MOFA
