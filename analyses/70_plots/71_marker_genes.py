@@ -18,15 +18,16 @@ import infercnvpy as cnv
 
 sc.set_figure_params(figsize=(4, 4))
 import numpy as np
+import pandas as pd
 
 # %%
 adata = sc.read_h5ad(
-    "../../data/40_dorothea_progeny/40_primary_tumor_dorothea_progeny.h5ad"
+    "../../results/40_dorothea_progeny/40_primary_tumor_dorothea_progeny.h5ad"
 )
 
 # %%
 adata_m = sc.read_h5ad(
-    "../../data/50_myeloid_cells/20_cell_type_annotation/adata_annotated.h5ad"
+    "../../results/50_myeloid_cells/20_cell_type_annotation/adata_annotated.h5ad"
 )
 
 # %%
@@ -231,7 +232,37 @@ sc.pl.dotplot(
 )
 
 # %% [markdown]
-# ## Experiments with paga
+# ## Export TF and Pathway scores
+
+# %%
+adata.obs
+
+# %%
+adata.obs["cell_type_all"] = adata.obs["cell_type_coarse"].astype(str)
+
+# %%
+adata.obs.loc[adata_m.obs.index, "cell_type_all"] = adata_m.obs["cell_type"]
+
+# %%
+sc.pl.umap(adata, color="cell_type_all")
+
+# %%
+progeny_all = sc.read_h5ad(
+    "../../results/40_dorothea_progeny/40_primary_tumor_dorothea_progeny.h5ad"
+)
+
+# %%
+progeny_all.obsm["dorothea"].assign(cell_type=adata.obs["cell_type_all"]).groupby(
+    "cell_type"
+).agg(np.median).to_csv("../../results/70_plots/median_dorothea.csv")
+
+# %%
+progeny_all.obsm["progeny"].assign(cell_type=adata.obs["cell_type_all"]).groupby(
+    "cell_type"
+).agg(np.median).to_csv("../../results/70_plots/median_progeny.csv")
+
+# %% [markdown]
+# ## experiments with paga
 
 # %%
 adata_dc = adata_m[adata_m.obs["cell_type"].str.contains("DC"), :].copy()
