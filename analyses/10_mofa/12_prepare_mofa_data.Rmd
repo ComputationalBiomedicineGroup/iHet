@@ -17,8 +17,8 @@ dir.create(nxfvars$out_dir)
 
 
 ```{r loaddata}
-gtex_data = readRDS(file.path(nxfvars$data_dir, "GTEx_easier.rds"))
-nsclc_data = readRDS(file.path(nxfvars$data_dir, "NSCLC_easier.rds"))
+gtex_data = readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
+nsclc_data = readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
 data_all = nsclc_data
 for(slot in names(gtex_data)) {
   data_all[[slot]][["GTEx"]] = gtex_data[[slot]][["Lung"]]

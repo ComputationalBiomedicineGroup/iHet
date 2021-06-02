@@ -12,6 +12,10 @@ message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
 source('helper_functions.R')
 DATASETS = c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
+PATHWAYS_OF_INTEREST = c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
+TFS_OF_INTEREST = c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
+gtex_easier = readRDS("../../data/results/10_mofa/11_easier/GTEx_easier.rds")
+nsclc_easier = readRDS("../../data/results/10_mofa/11_easier/NSCLC_easier.rds")
 ```
 
 ```{r, message=FALSE}
@@ -41,7 +45,8 @@ get_weight_df = function(model) {
   lapply(names(weights), function(modality) {
     weights[[modality]] %*% rotation %>%
       as_tibble(rownames="feature") %>%
-      mutate(view=modality)
+      mutate(view=modality) %>% 
+      rename_with(function(x) {str_replace(x, "V", "factor ")}, starts_with("V"))
   }) %>% bind_rows() %>% arrange(view, feature)
 }
 ```
@@ -53,13 +58,15 @@ median_weights = sapply(names(bootstrap_models), function(dataset_id) {
     bind_rows() %>%
     group_by(view, feature) %>% 
     summarise_all(median) %>% 
-    ungroup()
+    ungroup() 
 }, USE.NAMES = TRUE, simplify = FALSE) 
 
 ```
 
 
 ## Heatmap of factors
+
+
 ```{r, fig.width=15, fig.height=20}
 all <- buildHeatmap(get_weight_df(models$Jia2018), "Jia") + 
   buildHeatmap(get_weight_df(models$Sharma2019), "Sharma") + 
@@ -73,6 +80,24 @@ draw(all)
 ```
 
 ## Heatmap of bootstrapped factors
+```{r, fig.width=15, fig.height=8}
+get_filtered_weight = function(model) {
+  model %>% 
+    filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))   
+}
+
+all <- buildHeatmap(get_filtered_weight(median_weights$Jia2018), "Jia") + 
+  buildHeatmap(get_filtered_weight(median_weights$Sharma2019), "Sharma") + 
+  buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "J+S") +
+  buildHeatmap(get_filtered_weight(median_weights$LUAD), "LUAD") +
+  buildHeatmap(get_filtered_weight(median_weights$LUSC), "LUSC") +
+  buildHeatmap(get_filtered_weight(median_weights$NSCLC), "NSCLC") +
+  buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx") 
+
+draw(all)
+```
+
+
 ```{r, fig.width=15, fig.height=20}
 all <- buildHeatmap(median_weights$Jia2018, "Jia") + 
   buildHeatmap(median_weights$Sharma2019, "Sharma") + 
@@ -87,9 +112,62 @@ draw(all)
 
 ```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
 
-# corr.feat <- getCorr(models)
+weight_mat = lapply(names(median_weights), function(dataset_id) {
+  median_weights[[dataset_id]] %>%
+    select(feature, `factor 1`, `factor 2`, `factor 3`) %>%
+    rename_with(function(x) {str_replace(x, "factor", dataset_id)}, starts_with("factor")) %>% 
+    column_to_rownames("feature")
+}) %>% bind_cols()
 
+cor_res = rstatix::cor_mat(weight_mat)
+cor_mat = cor_res %>% column_to_rownames("rowname") %>% as.matrix()
+cor_pmat = rstatix::cor_get_pval(cor_res)%>% column_to_rownames("rowname") %>% as.matrix()
+
+i = upper.tri(cor_pmat)
+cor_pmat[i] = p.adjust(cor_pmat[i], method="fdr")
+j = lower.tri(cor_pmat)
+cor_pmat[j] = p.adjust(cor_pmat[j], method="fdr")
+
+corrplot(cor_mat, 
+         is.corr = TRUE, 
+         p.mat = cor_pmat, 
+         sig.level=0.01, 
+         insig="blank", tl.col="black")
+
+
+corrplot(cor_mat, 
+         is.corr = TRUE, 
+         p.mat = cor_pmat, 
+         sig.level=0.01, 
+         insig="blank",
+         tl.col="black",
+         order="hclust")
  
 ```
+### Correlation with immune response
+```{r, fig.width=8, fig.height=3}
+immrep_all = nsclc_easier$immresp
+immrep_all[["GTEx"]] = gtex_easier$immresp[["Lung"]]
+immrep_all[["JiaSharma"]] = bind_rows(immrep_all[["Jia2018"]], immrep_all[["Sharma2019"]])
+immrep_all[["NSCLC"]] = bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
 
+plot_correlation = function(dataset_id) {
+  get_factors(models[[dataset_id]]) %>% 
+    lapply(function(x){x[, 1:3]}) %>% 
+    do.call("rbind", .) %>% 
+    as.data.frame() %>%
+    as_tibble(rownames="patient") %>% 
+    pivot_longer(cols=-patient, names_to="factor", values_to="factor_value") %>%
+    inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames="patient")) %>% 
+    ggplot(aes(x=factor_value, y=response)) + 
+    geom_point() + 
+    facet_wrap(~factor, scale="free_x") + 
+    theme_cowplot() + 
+    stat_cor() +
+    geom_smooth(method="lm") + 
+    ggtitle(dataset_id)
+}
 
+lapply(DATASETS[1:6], plot_correlation)
+
+```
