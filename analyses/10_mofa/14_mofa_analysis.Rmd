@@ -7,25 +7,25 @@ params:
 
 
 ```{r setup, include=FALSE, message=FALSE}
-nxfvars = params$nxfvars
+nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
-knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
-source('helper_functions.R')
-DATASETS = c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
-PATHWAYS_OF_INTEREST = c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
-TFS_OF_INTEREST = c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
-gtex_easier = readRDS("../../data/results/10_mofa/11_easier/GTEx_easier.rds")
-nsclc_easier = readRDS("../../data/results/10_mofa/11_easier/NSCLC_easier.rds")
-features_jiasharma = readRDS("../../data/results/10_mofa/12_prepare_mofa_data/datasets/JiaSharma.rds")
+knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
+source("helper_functions.R")
+DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
+PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
+TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
+gtex_easier <- readRDS("../../data/results/10_mofa/11_easier/GTEx_easier.rds")
+nsclc_easier <- readRDS("../../data/results/10_mofa/11_easier/NSCLC_easier.rds")
+features_jiasharma <- readRDS("../../data/results/10_mofa/12_prepare_mofa_data/datasets/JiaSharma.rds")
 ```
 
-```{r, message=FALSE}
-models = sapply(DATASETS, function(dataset_id) {
+```{r, message=FALSE, warning=FALSE}
+models <- sapply(DATASETS, function(dataset_id) {
   load_model(file.path(nxfvars$data_dir, sprintf("%s.hdf5", dataset_id)))
 }, simplify = FALSE, USE.NAMES = TRUE)
 ```
-```{r, message=FALSE}
-bootstrap_models = sapply(DATASETS, function(dataset_id) {
+```{r, message=FALSE, warning=FALSE}
+bootstrap_models <- sapply(DATASETS, function(dataset_id) {
   lapply(Sys.glob(file.path(nxfvars$data_dir, sprintf("boot_%s_*.hdf5", dataset_id))), function(x) {
     load_model(x)
   })
@@ -39,29 +39,32 @@ lapply(names(models), function(dataset_id) {
 })
 ```
 ```{r}
-get_weight_df = function(model) {
-  weights= get_weights(model, scale=TRUE)
-  # Rotate factors such that they are positively associated with CD8+ T-cell infiltration. 
-  rotation = diag(sign(weights[["Immune cells quantification"]]["CD8+ T", ]))
+get_weight_df <- function(model) {
+  weights <- get_weights(model, scale = TRUE)
+  # Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
+  rotation <- diag(sign(weights[["Immune cells quantification"]]["CD8+ T", ]))
   lapply(names(weights), function(modality) {
     weights[[modality]] %*% rotation %>%
-      as_tibble(rownames="feature") %>%
-      mutate(view=modality) %>% 
-      rename_with(function(x) {str_replace(x, "V", "factor ")}, starts_with("V"))
-  }) %>% bind_rows() %>% arrange(view, feature)
+      as_tibble(rownames = "feature") %>%
+      mutate(view = modality) %>%
+      rename_with(function(x) {
+        str_replace(x, "V", "factor ")
+      }, starts_with("V"))
+  }) %>%
+    bind_rows() %>%
+    arrange(view, feature)
 }
 ```
 
 
 ```{r}
-median_weights = sapply(names(bootstrap_models), function(dataset_id) {
+median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
   lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
     bind_rows() %>%
-    group_by(view, feature) %>% 
-    summarise_all(median) %>% 
-    ungroup() 
-}, USE.NAMES = TRUE, simplify = FALSE) 
-
+    group_by(view, feature) %>%
+    summarise_all(median) %>%
+    ungroup()
+}, USE.NAMES = TRUE, simplify = FALSE)
 ```
 
 
@@ -69,158 +72,168 @@ median_weights = sapply(names(bootstrap_models), function(dataset_id) {
 
 
 ```{r, fig.width=15, fig.height=20}
-all <- buildHeatmap(get_weight_df(models$Jia2018), "Jia") + 
-  buildHeatmap(get_weight_df(models$Sharma2019), "Sharma") + 
+all <- buildHeatmap(get_weight_df(models$Jia2018), "Jia") +
+  buildHeatmap(get_weight_df(models$Sharma2019), "Sharma") +
   buildHeatmap(get_weight_df(models$JiaSharma), "J+S") +
   buildHeatmap(get_weight_df(models$LUAD), "LUAD") +
   buildHeatmap(get_weight_df(models$LUSC), "LUSC") +
   buildHeatmap(get_weight_df(models$NSCLC), "NSCLC") +
-  buildHeatmap(get_weight_df(models$GTEx), "GTEx") 
+  buildHeatmap(get_weight_df(models$GTEx), "GTEx")
 
 draw(all)
 ```
 
 ## Heatmap of bootstrapped factors
 ```{r, fig.width=15, fig.height=8}
-get_filtered_weight = function(model) {
-  model %>% 
-    filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))   
+get_filtered_weight <- function(model) {
+  model %>%
+    filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))
 }
 
-all <- buildHeatmap(get_filtered_weight(median_weights$Jia2018), "Jia") + 
-  buildHeatmap(get_filtered_weight(median_weights$Sharma2019), "Sharma") + 
+all <- buildHeatmap(get_filtered_weight(median_weights$Jia2018), "Jia") +
+  buildHeatmap(get_filtered_weight(median_weights$Sharma2019), "Sharma") +
   buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "J+S") +
   buildHeatmap(get_filtered_weight(median_weights$LUAD), "LUAD") +
   buildHeatmap(get_filtered_weight(median_weights$LUSC), "LUSC") +
   buildHeatmap(get_filtered_weight(median_weights$NSCLC), "NSCLC") +
-  buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx") 
+  buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx")
 
 draw(all)
 ```
 
 
 ```{r, fig.width=15, fig.height=20}
-all <- buildHeatmap(median_weights$Jia2018, "Jia") + 
-  buildHeatmap(median_weights$Sharma2019, "Sharma") + 
+all <- buildHeatmap(median_weights$Jia2018, "Jia") +
+  buildHeatmap(median_weights$Sharma2019, "Sharma") +
   buildHeatmap(median_weights$JiaSharma, "J+S") +
   buildHeatmap(median_weights$LUAD, "LUAD") +
   buildHeatmap(median_weights$LUSC, "LUSC") +
   buildHeatmap(median_weights$NSCLC, "NSCLC") +
-  buildHeatmap(median_weights$GTEx, "GTEx") 
+  buildHeatmap(median_weights$GTEx, "GTEx")
 
 draw(all)
 ```
 
 ```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
 
-weight_mat = lapply(names(median_weights), function(dataset_id) {
+weight_mat <- lapply(names(median_weights), function(dataset_id) {
   median_weights[[dataset_id]] %>%
     select(feature, `factor 1`, `factor 2`, `factor 3`) %>%
-    rename_with(function(x) {str_replace(x, "factor", dataset_id)}, starts_with("factor")) %>% 
+    rename_with(function(x) {
+      str_replace(x, "factor", dataset_id)
+    }, starts_with("factor")) %>%
     column_to_rownames("feature")
 }) %>% bind_cols()
 
-cor_res = rstatix::cor_mat(weight_mat)
-cor_mat = cor_res %>% column_to_rownames("rowname") %>% as.matrix()
-cor_pmat = rstatix::cor_get_pval(cor_res)%>% column_to_rownames("rowname") %>% as.matrix()
+cor_res <- rstatix::cor_mat(weight_mat)
+cor_mat <- cor_res %>%
+  column_to_rownames("rowname") %>%
+  as.matrix()
+cor_pmat <- rstatix::cor_get_pval(cor_res) %>%
+  column_to_rownames("rowname") %>%
+  as.matrix()
 
-i = upper.tri(cor_pmat)
-cor_pmat[i] = p.adjust(cor_pmat[i], method="fdr")
-j = lower.tri(cor_pmat)
-cor_pmat[j] = p.adjust(cor_pmat[j], method="fdr")
+i <- upper.tri(cor_pmat)
+cor_pmat[i] <- p.adjust(cor_pmat[i], method = "fdr")
+j <- lower.tri(cor_pmat)
+cor_pmat[j] <- p.adjust(cor_pmat[j], method = "fdr")
 
-corrplot(cor_mat, 
-         is.corr = TRUE, 
-         p.mat = cor_pmat, 
-         sig.level=0.01, 
-         insig="blank", tl.col="black")
+corrplot(cor_mat,
+  is.corr = TRUE,
+  p.mat = cor_pmat,
+  sig.level = 0.01,
+  insig = "blank", tl.col = "black"
+)
 
 
-corrplot(cor_mat, 
-         is.corr = TRUE, 
-         p.mat = cor_pmat, 
-         sig.level=0.01, 
-         insig="blank",
-         tl.col="black",
-         order="hclust")
- 
+corrplot(cor_mat,
+  is.corr = TRUE,
+  p.mat = cor_pmat,
+  sig.level = 0.01,
+  insig = "blank",
+  tl.col = "black",
+  order = "hclust"
+)
 ```
 ### Correlation with immune response
 ```{r, fig.width=8, fig.height=3}
-immrep_all = nsclc_easier$immresp
-immrep_all[["GTEx"]] = gtex_easier$immresp[["Lung"]]
-immrep_all[["JiaSharma"]] = bind_rows(immrep_all[["Jia2018"]], immrep_all[["Sharma2019"]])
-immrep_all[["NSCLC"]] = bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
+immrep_all <- nsclc_easier$immresp
+immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
+immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia2018"]], immrep_all[["Sharma2019"]])
+immrep_all[["NSCLC"]] <- bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
 
-plot_correlation = function(dataset_id) {
-  get_factors(models[[dataset_id]]) %>% 
-    lapply(function(x){x[, 1:3]}) %>% 
-    do.call("rbind", .) %>% 
+plot_correlation <- function(dataset_id) {
+  get_factors(models[[dataset_id]]) %>%
+    lapply(function(x) {
+      x[, 1:3]
+    }) %>%
+    do.call("rbind", .) %>%
     as.data.frame() %>%
-    as_tibble(rownames="patient") %>% 
-    pivot_longer(cols=-patient, names_to="factor", values_to="factor_value") %>%
-    inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames="patient")) %>% 
-    ggplot(aes(x=factor_value, y=response)) + 
-    geom_point() + 
-    facet_wrap(~factor, scale="free_x") + 
-    theme_cowplot() + 
+    as_tibble(rownames = "patient") %>%
+    pivot_longer(cols = -patient, names_to = "factor", values_to = "factor_value") %>%
+    inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames = "patient")) %>%
+    ggplot(aes(x = factor_value, y = response)) +
+    geom_point() +
+    facet_wrap(~factor, scale = "free_x") +
+    theme_cowplot() +
     stat_cor() +
-    geom_smooth(method="lm") + 
+    geom_smooth(method = "lm") +
     ggtitle(dataset_id)
 }
 
 lapply(DATASETS[1:6], plot_correlation)
-
 ```
 ### Variability of weights between bootstrap samples
 ```{r}
-all_weights = lapply(names(bootstrap_models), function(dataset_id) {
+all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
   lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
-    bind_rows() %>% 
-    mutate(dataset=dataset_id)
-}) %>% bind_rows() %>% 
-  pivot_longer(cols=c(-feature, -view, -dataset), names_to="factor", values_to="factor_weight") %>%
+    bind_rows() %>%
+    mutate(dataset = dataset_id)
+}) %>%
+  bind_rows() %>%
+  pivot_longer(cols = c(-feature, -view, -dataset), names_to = "factor", values_to = "factor_weight") %>%
   filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
 ```{r, fig.height=60, fig.width=12}
-all_weights %>% ggplot(aes(x=factor_weight, y=feature)) +
-  geom_boxplot(aes(fill=dataset), outlier.size=.5) + 
-  facet_wrap(~factor, ncol=3) + 
-  scale_fill_brewer(type="qual", palette="Set2") + 
+all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
+  geom_boxplot(aes(fill = dataset), outlier.size = .5) +
+  facet_wrap(~factor, ncol = 3) +
+  scale_fill_brewer(type = "qual", palette = "Set2") +
   theme_bw()
 ```
 ### Variability of features within and between patients in Jia and Sharma
 ```{r, fig.width=18, fig.height=15}
-features_jiasharma %>% 
-  ggplot(aes(x=value, y=patient, fill=group)) + 
-    geom_boxplot() + facet_wrap(~feature, scale="free_x") + 
-    scale_fill_brewer(type="qual") + 
-    theme_bw() +
-    theme(axis.text.y=element_blank(), axis.ticks.y=element_blank())
+features_jiasharma %>%
+  ggplot(aes(x = value, y = patient, fill = group)) +
+  geom_boxplot() +
+  facet_wrap(~feature, scale = "free_x") +
+  scale_fill_brewer(type = "qual") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
 ```
 
 ```{r}
-get_df = function(df, group) {
-    bf= anovaBF(value~patient, data = df) %>% as.vector()
-    data.frame(bayes_factor=bf)
+get_df <- function(df, group) {
+  bf <- anovaBF(value ~ patient, data = df) %>% as.vector()
+  data.frame(bayes_factor = bf)
 }
 
-bfs = features_jiasharma %>% 
-  mutate(patient = as.factor(patient)) %>% 
-  group_by(feature) %>% 
+bfs <- features_jiasharma %>%
+  mutate(patient = as.factor(patient)) %>%
+  group_by(feature) %>%
   group_modify(get_df)
-
 ```
 
 
 ```{r, fig.width=7, fig.height=18}
-bfs %>% mutate(log_bf = log2(bayes_factor)) %>% 
-  ggplot(aes(y=reorder(feature, -log_bf), x=log_bf)) +
-  geom_point() + 
-  geom_vline(xintercept=0) + 
-  geom_vline(xintercept=log2(10), color="red") + 
-  theme_bw() 
+bfs %>%
+  mutate(log_bf = log2(bayes_factor)) %>%
+  ggplot(aes(y = reorder(feature, -log_bf), x = log_bf)) +
+  geom_point() +
+  geom_vline(xintercept = 0) +
+  geom_vline(xintercept = log2(10), color = "red") +
+  theme_bw()
 ```
 
 

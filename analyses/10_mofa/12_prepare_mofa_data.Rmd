@@ -7,72 +7,74 @@ params:
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
-nxfvars = params$nxfvars
+nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
-knitr::opts_chunk$set(echo = TRUE,dpi=300,dev = "png",fig.path='figures/')
-source('helper_functions.R')
-DATASETS = c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx")
+knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
+source("helper_functions.R")
+DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx")
 dir.create(nxfvars$out_dir)
 ```
 
 
 ```{r loaddata}
-gtex_data = readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
-nsclc_data = readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
-data_all = nsclc_data
-for(slot in names(gtex_data)) {
-  data_all[[slot]][["GTEx"]] = gtex_data[[slot]][["Lung"]]
+gtex_data <- readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
+nsclc_data <- readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
+data_all <- nsclc_data
+for (slot in names(gtex_data)) {
+  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
 }
 ```
 
 ## Process features
 ```{r processfeatures}
-feature_data = sapply(DATASETS, function(dataset_id) {
-  processFeatures(data_all, dataset_id) 
+feature_data <- sapply(DATASETS, function(dataset_id) {
+  processFeatures(data_all, dataset_id)
 }, simplify = FALSE, USE.NAMES = TRUE)
 
-feature_data$JiaSharma = bind_rows(feature_data$Jia2018, feature_data$Sharma2019)
-feature_data$NSCLC = bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate(group = "NSCLC")
+feature_data$JiaSharma <- bind_rows(feature_data$Jia2018, feature_data$Sharma2019)
+feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate(group = "NSCLC")
 ```
 
 ```{r}
-for (feature in unique(feature_data$Jia2018$view)){
-  generateHeatmap(feature_data$Jia2018 %>% filter(view == !!feature), feature, row_names=TRUE)
+for (feature in unique(feature_data$Jia2018$view)) {
+  generateHeatmap(feature_data$Jia2018 %>% filter(view == !!feature), feature, row_names = TRUE)
 }
 ```
 
 ### save feature data
 ```{r}
 lapply(names(feature_data), function(dataset_id) {
-  saveRDS(feature_data[[dataset_id]], file=file.path(nxfvars$out_dir, paste0(dataset_id, ".rds")), compress=FALSE)
+  saveRDS(feature_data[[dataset_id]], file = file.path(nxfvars$out_dir, paste0(dataset_id, ".rds")), compress = FALSE)
 })
 ```
 
 
 ## Generate bootstrap datasets 
 ```{r, message=FALSE}
-# Build random bootstrap datasets for each dataset 
-N_BOOTSTRAP = 100 
-bootstrap_datasets = sapply(DATASETS, function(dataset_id) {
-  samples = feature_data[[dataset_id]]$sample %>% unique()
+# Build random bootstrap datasets for each dataset
+N_BOOTSTRAP <- 100
+bootstrap_datasets <- sapply(DATASETS, function(dataset_id) {
+  samples <- feature_data[[dataset_id]]$sample %>% unique()
   lapply(1:N_BOOTSTRAP, function(i) {
     set.seed(i)
     # make new sample ids unique (required for MOFA)!
-    sample_df = tibble(sample = sample(samples, replace = TRUE)) %>% 
+    sample_df <- tibble(sample = sample(samples, replace = TRUE)) %>%
       mutate(sample_id = row_number())
-    feature_data[[dataset_id]] %>% right_join(sample_df) %>%
+    feature_data[[dataset_id]] %>%
+      right_join(sample_df) %>%
       mutate(sample = paste0(sample, "_", sample_id))
   })
 }, simplify = FALSE, USE.NAMES = TRUE)
 
-bootstrap_datasets$JiaSharma = lapply(1:N_BOOTSTRAP, function(i) {
-  bind_rows(bootstrap_datasets$Jia2018[[i]],
-            bootstrap_datasets$Sharma2019[[i]])
+bootstrap_datasets$JiaSharma <- lapply(1:N_BOOTSTRAP, function(i) {
+  bind_rows(
+    bootstrap_datasets$Jia2018[[i]],
+    bootstrap_datasets$Sharma2019[[i]]
+  )
 })
-bootstrap_datasets$NSCLC = lapply(1:N_BOOTSTRAP, function(i) {
+bootstrap_datasets$NSCLC <- lapply(1:N_BOOTSTRAP, function(i) {
   bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
 })
-
 ```
 
 ### save bootstrap datasets
@@ -80,12 +82,12 @@ bootstrap_datasets$NSCLC = lapply(1:N_BOOTSTRAP, function(i) {
 lapply(names(feature_data), function(dataset_id) {
   lapply(1:N_BOOTSTRAP, function(i) {
     saveRDS(bootstrap_datasets[[dataset_id]][[i]],
-            file = file.path(nxfvars$out_dir, paste0(
-              "boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
-            )), compress=FALSE)
+      file = file.path(nxfvars$out_dir, paste0(
+        "boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
+      )), compress = FALSE
+    )
   })
 })
-
 ```
 
 
