@@ -183,6 +183,30 @@ plot_correlation <- function(dataset_id) {
 
 lapply(DATASETS[1:6], plot_correlation)
 ```
+
+### Weight scatter NSCLC / JiaSharma
+
+```{r, fig.width=10, fig.height=8}
+scatter_data = bind_rows(lapply(names(median_weights), function(dataset_id) {
+  median_weights[[dataset_id]] %>% mutate(dataset=dataset_id)
+}))
+
+tmp_scatter_data = scatter_data %>% filter(dataset %in% c("JiaSharma", "NSCLC")) %>% 
+  select(view, dataset, feature, `factor 1`) %>% 
+  pivot_wider(names_from="dataset", values_from="factor 1")
+
+tmp_scatter_data  %>% 
+  ggplot(aes(x=JiaSharma, y=NSCLC)) +
+  geom_smooth(method=lm, color="black", lty="dashed") + 
+  geom_point(aes(color=view)) + 
+  geom_label_repel(data = tmp_scatter_data %>% filter((view == "Immune cells quantification")  | abs(JiaSharma) > 0.5 | abs(NSCLC) > 0.5), aes(label=feature)) + 
+  theme_bw() + 
+  scale_color_brewer(type="qual", palette = "Dark2")
+
+
+```
+
+
 ### Variability of weights between bootstrap samples
 ```{r}
 all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
@@ -196,26 +220,26 @@ all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
 ```
 
 ```{r, fig.height=60, fig.width=12}
-all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
-  geom_boxplot(aes(fill = dataset), outlier.size = .5) +
-  facet_wrap(~factor, ncol = 3) +
-  scale_fill_brewer(type = "qual", palette = "Set2") +
-  theme_bw()
+# all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
+#   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
+#   facet_wrap(~factor, ncol = 3) +
+#   scale_fill_brewer(type = "qual", palette = "Set2") +
+#   theme_bw()
 ```
 ### Variability of features within and between patients in Jia and Sharma
 ```{r, fig.width=18, fig.height=15}
-features_jiasharma %>%
-  ggplot(aes(x = value, y = patient, fill = group)) +
-  geom_boxplot() +
-  facet_wrap(~feature, scale = "free_x") +
-  scale_fill_brewer(type = "qual") +
-  theme_bw() +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+# features_jiasharma %>%
+#   ggplot(aes(x = value, y = patient, fill = group)) +
+#   geom_boxplot() +
+#   facet_wrap(~feature, scale = "free_x") +
+#   scale_fill_brewer(type = "qual") +
+#   theme_bw() +
+#   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
 ```
 
-```{r}
+```{r, message=FALSE, warning=FALSE }
 get_df <- function(df, group) {
-  bf <- anovaBF(value ~ patient, data = df) %>% as.vector()
+  bf <- anovaBF(value ~ patient, data = as.data.frame(df), progress=FALSE) %>% as.vector()
   data.frame(bayes_factor = bf)
 }
 
