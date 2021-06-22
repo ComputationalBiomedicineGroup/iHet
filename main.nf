@@ -66,6 +66,8 @@ process P14_mofa_analysis {
     input:
         tuple val(id), path(notebook)
         path("helper_functions.R")
+        path(easier_data)
+        path(features)
         path(models)
 
     output:
@@ -73,6 +75,9 @@ process P14_mofa_analysis {
 
     script:
     data_dir = "./"
+    features_dir = "./"
+    easier_dir = "./"
+    luc_dir = "/home/sturm/projects/2021/nsclc_heterogeneity/analyses/10_mofa/from-luc/Data"
     """
     ${nxfvars(task)}
     execute_rmd.r ${notebook}
@@ -99,6 +104,8 @@ workflow W10_mofa {
     P14_mofa_analysis(
         file_tuple("$dir/14_mofa_analysis.Rmd"),
         file("$dir/helper_functions.R"),
+        P11_easier.out.collect(),
+        P12_prepare_mofa_data.out.datasets,
         P13_run_mofa.out.models.collect()
     )
 }

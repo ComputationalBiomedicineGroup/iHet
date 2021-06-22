@@ -15,6 +15,7 @@ library(rstatix)
 library(stringr)
 library(ggbeeswarm)
 library(BayesFactor)
+library(ggrepel)
 
 
 #' Bring features into 'tidy' format required by MOFA
@@ -49,24 +50,24 @@ processFeatures <- function(data, dataset_id) {
   # These are datasets with multiple biospies per patient. Regressing
   # out effects related to the inter-patient variability (we want to focus
   # on the intra-patient variability).
-  if (dataset_id %in% c("Jia2018", "Sharma2019")) {
-    print("Processing regression")
+  # if (dataset_id %in% c("Jia2018", "Sharma2019")) {
+  #   print("Processing regression")
 
-    linRegression <- function(dataframe.df) {
-      # Fit a linear model
-      lm.out <- lm(value ~ patient, data = dataframe.df)
-      residuals <- lm.out[["residuals"]]
+  #   linRegression <- function(dataframe.df) {
+  #     # Fit a linear model
+  #     lm.out <- lm(value ~ patient, data = dataframe.df)
+  #     residuals <- lm.out[["residuals"]]
 
-      # Assign the residuals as new values
-      dataframe.df$value <- residuals
+  #     # Assign the residuals as new values
+  #     dataframe.df$value <- residuals
 
-      return(dataframe.df)
-    }
+  #     return(dataframe.df)
+  #   }
 
-    cellfrac.df <- linRegression(cellfrac.df)
-    tfs.df <- linRegression(tfs.df)
-    pathways.df <- linRegression(pathways.df)
-  }
+  #   cellfrac.df <- linRegression(cellfrac.df)
+  #   tfs.df <- linRegression(tfs.df)
+  #   pathways.df <- linRegression(pathways.df)
+  # }
 
   MOFAdata <- bind_rows(cellfrac.df, pathways.df, tfs.df) %>%
     mutate(group = dataset_id)

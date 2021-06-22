@@ -3,10 +3,14 @@ params:
   nxfvars:
     value:
       data_dir: "../../results/10_mofa/13_run_mofa"
+      features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
+      easier_dir: "../../results/10_mofa/11_easier"
+      luc_dir: "from-luc/Data"
 ---
 
 
 ```{r setup, include=FALSE, message=FALSE}
+options(bitmapType='cairo')
 nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
@@ -14,9 +18,9 @@ source("helper_functions.R")
 DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
-gtex_easier <- readRDS("../../data/results/10_mofa/11_easier/GTEx_easier.rds")
-nsclc_easier <- readRDS("../../data/results/10_mofa/11_easier/NSCLC_easier.rds")
-features_jiasharma <- readRDS("../../data/results/10_mofa/12_prepare_mofa_data/datasets/JiaSharma.rds")
+gtex_easier <- readRDS(file.path(nxfvars$easier_dir, "GTEx_expr_data.features.rds"))
+nsclc_easier <- readRDS(file.path(nxfvars$easier_dir, "NSCLC_expr_data_sel.features.rds"))
+features_jiasharma <- readRDS(file.path(nxfvars$features_dir, "JiaSharma.rds"))
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -206,6 +210,84 @@ tmp_scatter_data  %>%
 
 ```
 
+### comparison to Luc's weights
+```{r, fig.width=9, fig.height=7}
+# TODO remove this section
+
+bootstrap_weights_luc = readRDS(file.path(nxfvars$luc_dir, "results_bootstrap.rds"))
+
+js1_luc = bootstrap_weights_luc$jiasharma[grepl("Factor1", rownames(bootstrap_weights_luc$jiasharma)), ] %>% rename(
+  `B` = `B_cells`,
+  `M2` = `Macrophages_M2`,
+  `M1` = `Macrophages_M1`,
+  `Monocyte` = `Monocytes`, 
+  `Neutrophil` = `Neutrophils`, 
+  `NK` = `NK_cells`,
+  `CD4 T` = `T_cells_CD4`, 
+  `CD8+ T` = `T_cells_CD8`,
+  `Treg` = `T_regulatory`, 
+  `DC` = `Dendritic_cells`) %>%
+  apply(1, function(x) { x * sign(x["CD8+ T"])}) %>% 
+  apply(1, median)
+
+nsclc1_luc = bootstrap_weights_luc$nsclc[grepl("Factor1", rownames(bootstrap_weights_luc$nsclc)), ] %>% rename(
+  `B` = `B_cells`,
+  `M2` = `Macrophages_M2`,
+  `M1` = `Macrophages_M1`,
+  `Monocyte` = `Monocytes`, 
+  `Neutrophil` = `Neutrophils`, 
+  `NK` = `NK_cells`,
+  `CD4 T` = `T_cells_CD4`, 
+  `CD8+ T` = `T_cells_CD8`,
+  `Treg` = `T_regulatory`, 
+  `DC` = `Dendritic_cells`) %>% 
+  apply(1, function(x) { x * sign(x["CD8+ T"])}) %>% 
+  apply(1, median)
+
+tmp_scatter_data_luc = tmp_scatter_data %>% inner_join(tibble(JiaSharmaLuc=js1_luc, feature=names(js1_luc))) %>% 
+  inner_join(tibble(NSCLCLuc=nsclc1_luc, feature=names(nsclc1_luc)))
+
+tmp_scatter_data_luc  %>% 
+  ggplot(aes(x=JiaSharma, y=JiaSharmaLuc)) +
+  geom_smooth(method=lm, color="black", lty="dashed") + 
+  geom_point(aes(color=view)) + 
+  geom_label_repel(data = tmp_scatter_data_luc %>% filter((view == "Immune cells quantification")  | abs(JiaSharma) > 0.5 | abs(JiaSharmaLuc) > 0.25), aes(label=feature)) + 
+  theme_bw() + 
+  scale_color_brewer(type="qual", palette = "Dark2")  + 
+  ylim(c(-1, 1)) +
+  xlim(c(-1, 1))
+
+tmp_scatter_data_luc  %>% 
+  ggplot(aes(x=NSCLC, y=NSCLCLuc)) +
+  geom_smooth(method=lm, color="black", lty="dashed") + 
+  geom_point(aes(color=view)) + 
+  geom_label_repel(data = tmp_scatter_data_luc %>% filter((view == "Immune cells quantification")  | abs(NSCLC) > 0.5 | abs(NSCLCLuc) > 0.25), aes(label=feature)) + 
+  theme_bw() + 
+  scale_color_brewer(type="qual", palette = "Dark2") + 
+  ylim(c(-1, 1)) + 
+  xlim(c(-1, 1))
+
+tmp_scatter_data_luc  %>% 
+  ggplot(aes(x=JiaSharmaLuc, y=NSCLCLuc)) +
+  geom_smooth(method=lm, color="black", lty="dashed") + 
+  geom_point(aes(color=view)) + 
+  geom_label_repel(data = tmp_scatter_data_luc %>% filter((view == "Immune cells quantification")  | abs(JiaSharmaLuc) > 0.5 | abs(NSCLCLuc) > 0.5), aes(label=feature)) + 
+  theme_bw() + 
+  scale_color_brewer(type="qual", palette = "Dark2") + 
+  ylim(c(-1, 1)) + 
+  xlim(c(-1, 1))
+
+
+```
+
+### Comparison LUC data
+```{r}
+luad_data_luc = new.env()
+lusc_data_luc = new.env()
+load(file.path(nxfvars$luc_dir, "LUAD_data.RData"), envir = luad_data_luc)
+load(file.path(nxfvars$luc_dir, "LUSC_data.RData"), envir = lusc_data_luc)
+
+```
 
 ### Variability of weights between bootstrap samples
 ```{r}
@@ -219,23 +301,25 @@ all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
   filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
-```{r, fig.height=60, fig.width=12}
-# all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
-#   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
-#   facet_wrap(~factor, ncol = 3) +
-#   scale_fill_brewer(type = "qual", palette = "Set2") +
-#   theme_bw()
-```
-### Variability of features within and between patients in Jia and Sharma
-```{r, fig.width=18, fig.height=15}
-# features_jiasharma %>%
-#   ggplot(aes(x = value, y = patient, fill = group)) +
-#   geom_boxplot() +
-#   facet_wrap(~feature, scale = "free_x") +
-#   scale_fill_brewer(type = "qual") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-```
+<!-- ```{r, fig.height=60, fig.width=12} -->
+<!-- all_weights %>% ggplot(aes(x = factor_weight, y = feature)) + -->
+<!--   geom_boxplot(aes(fill = dataset), outlier.size = .5) + -->
+<!--   facet_wrap(~factor, ncol = 3) + -->
+<!--   scale_fill_brewer(type = "qual", palette = "Set2") + -->
+<!--   theme_bw() -->
+<!-- ``` -->
+
+
+<!-- ### Variability of features within and between patients in Jia and Sharma -->
+<!-- ```{r, fig.width=18, fig.height=15} -->
+<!-- features_jiasharma %>% -->
+<!--   ggplot(aes(x = value, y = patient, fill = group)) + -->
+<!--   geom_boxplot() + -->
+<!--   facet_wrap(~feature, scale = "free_x") + -->
+<!--   scale_fill_brewer(type = "qual") + -->
+<!--   theme_bw() + -->
+<!--   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) -->
+<!-- ``` -->
 
 ```{r, message=FALSE, warning=FALSE }
 get_df <- function(df, group) {
