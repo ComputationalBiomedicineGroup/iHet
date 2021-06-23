@@ -40,7 +40,14 @@ processFeatures <- function(data, dataset_id) {
       add_patient_col()
   }
 
-  cellfrac.df <- do_pivot(data$cellfrac[[dataset_id]], "Immune cells quantification") %>%
+  cellfrac.df <- data$cellfrac[[dataset_id]] %>%
+    as.data.frame() %>% 
+    # fix naming CD8
+    rename(`CD8 T` = `CD8+ T`) %>%
+    # summarise Tregs and CD4, but keep treg estimate. 
+    # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
+    mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
+    do_pivot("Immune cells quantification") %>%
     filter(feature != "Other") %>%
     # Log transform
     mutate(value = log10(value * 100 + 0.001))

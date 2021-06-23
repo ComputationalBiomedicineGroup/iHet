@@ -46,7 +46,7 @@ lapply(names(models), function(dataset_id) {
 get_weight_df <- function(model) {
   weights <- get_weights(model, scale = TRUE)
   # Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
-  rotation <- diag(sign(weights[["Immune cells quantification"]]["CD8+ T", ]))
+  rotation <- diag(sign(weights[["Immune cells quantification"]]["CD8 T", ]))
   lapply(names(weights), function(modality) {
     weights[[modality]] %*% rotation %>%
       as_tibble(rownames = "feature") %>%
@@ -215,6 +215,23 @@ tmp_scatter_data  %>%
 # TODO remove this section
 
 bootstrap_weights_luc = readRDS(file.path(nxfvars$luc_dir, "results_bootstrap.rds"))
+load(file.path(nxfvars$luc_dir, "Processed/processed_data.RData"), envir = feature_data_luc <- new.env())
+features_nsclc <- readRDS(file.path(nxfvars$features_dir, "NSCLC.rds"))
+
+comparison_features_nsclc = features_nsclc %>%
+  mutate(feature = recode(feature,
+  `B` = "B_cells",
+  `M2` = "Macrophages_M2",
+  `M1` = "Macrophages_M1",
+  `Monocyte` = "Monocytes", 
+  `Neutrophil` = "Neutrophils", 
+  `NK` = "NK_cells",
+  `CD4 T` = "T_cells_CD4", 
+  `CD8+ T` = "T_cells_CD8",
+  `Treg` = "T_regulatory", 
+  `DC` = "Dendritic_cells"))%>% 
+  mutate(sample = str_replace_all(sample, "\\.", "-")) %>% 
+  inner_join(feature_data_luc$processed_features$FEAT.nsclc %>% rename(value_luc=value))
 
 js1_luc = bootstrap_weights_luc$jiasharma[grepl("Factor1", rownames(bootstrap_weights_luc$jiasharma)), ] %>% rename(
   `B` = `B_cells`,
@@ -280,12 +297,89 @@ tmp_scatter_data_luc  %>%
 
 ```
 
-### Comparison LUC data
 ```{r}
+comparison_features_nsclc %>% 
+  ggplot(aes(x=value, y=value_luc)) + facet_wrap(~view, scales="free") + geom_point()
+
+```
+
+```{r}
+comparison_features_nsclc %>% 
+  filter(view == "Immune cells quantification") %>% 
+  ggplot(aes(x=value, y=value_luc, color=feature)) + 
+  geom_point() + 
+  scale_color_brewer(type="qual", palette="Paired")
+
+```
+
+### Comparison LUC data
+```{r, fig.width=10, fig.height=10}
 luad_data_luc = new.env()
 lusc_data_luc = new.env()
 load(file.path(nxfvars$luc_dir, "LUAD_data.RData"), envir = luad_data_luc)
 load(file.path(nxfvars$luc_dir, "LUSC_data.RData"), envir = lusc_data_luc)
+load(file.path(nxfvars$luc_dir, "JIA_data.RData"), envir = jia_data_luc <- new.env())
+
+luad_data_luc$cellfrac %>% as_tibble(rownames="sample") %>% 
+  rename(
+  `B` = `B_cells`,
+  `M2` = `Macrophages_M2`,
+  `M1` = `Macrophages_M1`,
+  `Monocyte` = `Monocytes`, 
+  `Neutrophil` = `Neutrophils`, 
+  `NK` = `NK_cells`,
+  `CD4 T` = `T_cells_CD4`, 
+  `CD8+ T` = `T_cells_CD8`,
+  `Treg` = `T_cells_regulatory_Tregs`, 
+  `DC` = `Dendritic_cells`) %>% 
+  pivot_longer(cols=-sample, values_to = "value_luc") %>% 
+  inner_join(
+    nsclc_easier$cellfrac$LUAD %>% as_tibble(rownames="sample") %>% 
+    mutate(sample = str_replace_all(sample, "\\.", "-")) %>%
+    pivot_longer(cols=-sample)
+  ) %>% 
+  ggplot(aes(x=value, y=value_luc)) + geom_point() + facet_wrap(~name, scales="free")
+
+lusc_data_luc$cellfrac %>% as_tibble(rownames="sample") %>% 
+  rename(
+  `B` = `B_cells`,
+  `M2` = `Macrophages_M2`,
+  `M1` = `Macrophages_M1`,
+  `Monocyte` = `Monocytes`, 
+  `Neutrophil` = `Neutrophils`, 
+  `NK` = `NK_cells`,
+  `CD4 T` = `T_cells_CD4`, 
+  `CD8+ T` = `T_cells_CD8`,
+  `Treg` = `T_cells_regulatory_Tregs`, 
+  `DC` = `Dendritic_cells`) %>% 
+  pivot_longer(cols=-sample, values_to = "value_luc") %>% 
+  inner_join(
+    nsclc_easier$cellfrac$LUSC %>% as_tibble(rownames="sample") %>% 
+    mutate(sample = str_replace_all(sample, "\\.", "-")) %>%
+    pivot_longer(cols=-sample)
+  ) %>% 
+  ggplot(aes(x=value, y=value_luc)) + geom_point() + facet_wrap(~name, scales="free")
+
+jia_data_luc$cellfrac %>% as_tibble(rownames="sample") %>% 
+  rename(
+  `B` = `B.cells`,
+  `M2` = `Macrophages.M2`,
+  `M1` = `Macrophages.M1`,
+  `Monocyte` = `Monocytes`, 
+  `Neutrophil` = `Neutrophils`, 
+  `NK` = `NK.cells`,
+  `CD4 T` = `T.cells.CD4`, 
+  `CD8+ T` = `T.cells.CD8`,
+  `Treg` = `Tregs`, 
+  `DC` = `Dendritic.cells`) %>% 
+  pivot_longer(cols=-sample, values_to = "value_luc") %>% 
+  mutate(sample = str_replace(sample, "_RNA", "")) %>% 
+  inner_join(
+    nsclc_easier$cellfrac$Jia2018 %>% as_tibble(rownames="sample") %>% 
+    mutate(sample = str_replace_all(sample, "\\.", "-")) %>%
+    pivot_longer(cols=-sample)
+  ) %>% 
+  ggplot(aes(x=value, y=value_luc)) + geom_point() + facet_wrap(~name, scales="free")
 
 ```
 
