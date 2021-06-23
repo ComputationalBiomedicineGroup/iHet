@@ -94,10 +94,7 @@ getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FAL
     proxies.mat <- as.data.frame(proxies.mat)
     proxies.mat$response <- response
     
-    dataobj$immresp[[dataset]] <- proxies.mat
-    
-    }
-    
+    dataobj$immresp[[dataset]] <- proxies.mat 
     
   }
   
