@@ -17,6 +17,52 @@ library(ggbeeswarm)
 library(BayesFactor)
 library(ggrepel)
 
+#' Function to compute the iHet score starting from immune cell, pathway, and TF features
+#' using either the NSCLC or JiaSharma feature weights
+#' TODO: fix path to weightfile
+getiHet <- function(featobj, dataset, weightfile = "/Users/francescafinotello/Dropbox/Research_projects/MODiSH/RData/median_weights.rds", model = c("NSCLC", "JiaSharma")) {
+  
+  # Select model weights
+  model <- match.arg(model, c("NSCLC", "JiaSharma"))
+  
+  # Derive the median weights for factor 1
+  weights <- readRDS(weightfile)
+  if (model == "JiaSharma") {
+    
+    F1 <- weights$JiaSharma$`factor 1`
+    names(F1) <- weights$JiaSharma$feature
+    
+  } else if (model == "NSCLC") {
+    
+    F1 <- weights$NSCLC$`factor 1`
+    names(F1) <- weights$NSCLC$feature
+    
+  }
+  
+  # Extract, aggregate, and normalize the input features
+  immcell <- featobj$cellfrac[[dataset]]
+  immcell <- immcell[which(rownames(immcell)!="Other"),]
+  immcell[, "CD4 T"] <- immcell[, "CD4 T"] + immcell[, "Treg"] 
+  immcell <- log10(immcell*100+0.001)
+  tf <- featobj$tf[[dataset]]
+  path <- featobj$pathway[[dataset]]
+  path <- t(scale(t(path)))
+  features <- cbind(immcell, tf, path)
+  
+  # Select the common features
+  # TODO: put some warnings for missing/exceeding ones?
+  cfeatures <- intersect(colnames(features), names(F1))
+  features <- features[, cfeatures]
+  F1 <- F1[cfeatures]
+  features <- t(features)
+  
+  # Compute iHet on the input features
+  iHet <- F1 %*% features
+  iHet <- iHet[1,,drop=TRUE]
+  
+  return(iHet)
+  
+}
 
 #' Bring features into 'tidy' format required by MOFA
 processFeatures <- function(data, dataset_id) {
