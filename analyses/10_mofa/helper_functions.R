@@ -57,21 +57,6 @@ processFeatures <- function(data, dataset_id) {
   MOFAdata <- bind_rows(cellfrac.df, pathways.df, tfs.df) %>%
     mutate(group = dataset_id)
 
-  # These are datasets with multiple biospies per patient. Regressing
-  # out effects related to the inter-patient variability (we want to focus
-  # on the intra-patient variability).
-  if (dataset_id %in% c("Jia2018", "Sharma2019")) {
-    print("Processing regression")
-
-    MOFAdata = MOFAdata %>% group_by(group, feature) %>%
-      group_modify(function(df, group) {
-        lm_out = lm(value ~ patient, data=df)
-        df$value = lm_out[["residuals"]]
-        df
-      })
-  }
-
-
   return(MOFAdata)
 }
 
