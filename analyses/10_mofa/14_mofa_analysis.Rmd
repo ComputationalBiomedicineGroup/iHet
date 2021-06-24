@@ -17,7 +17,7 @@ message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
 library(readr)
-DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
+DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 gtex_easier <- readRDS(file.path(nxfvars$easier_dir, "GTEx_expr_data.features.rds"))
@@ -79,8 +79,8 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
 
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-all <- buildHeatmap(get_weight_df(models$Jia2018), "Jia") +
-  buildHeatmap(get_weight_df(models$Sharma2019), "Sharma") +
+all <- buildHeatmap(get_weight_df(models$Jia), "Jia") +
+  buildHeatmap(get_weight_df(models$Sharma), "Sharma") +
   buildHeatmap(get_weight_df(models$JiaSharma), "J+S") +
   buildHeatmap(get_weight_df(models$LUAD), "LUAD") +
   buildHeatmap(get_weight_df(models$LUSC), "LUSC") +
@@ -97,8 +97,8 @@ get_filtered_weight <- function(model) {
     filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))
 }
 
-all <- buildHeatmap(get_filtered_weight(median_weights$Jia2018), "Jia") +
-  buildHeatmap(get_filtered_weight(median_weights$Sharma2019), "Sharma") +
+all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
+  buildHeatmap(get_filtered_weight(median_weights$Sharma), "Sharma") +
   buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "J+S") +
   buildHeatmap(get_filtered_weight(median_weights$LUAD), "LUAD") +
   buildHeatmap(get_filtered_weight(median_weights$LUSC), "LUSC") +
@@ -110,8 +110,8 @@ draw(all)
 
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-all <- buildHeatmap(median_weights$Jia2018, "Jia") +
-  buildHeatmap(median_weights$Sharma2019, "Sharma") +
+all <- buildHeatmap(median_weights$Jia, "Jia") +
+  buildHeatmap(median_weights$Sharma, "Sharma") +
   buildHeatmap(median_weights$JiaSharma, "J+S") +
   buildHeatmap(median_weights$LUAD, "LUAD") +
   buildHeatmap(median_weights$LUSC, "LUSC") +
@@ -171,7 +171,7 @@ write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir
 ```{r, fig.width=8, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
 immrep_all <- nsclc_easier$immresp
 immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
-immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia2018"]], immrep_all[["Sharma2019"]])
+immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia"]], immrep_all[["Sharma"]])
 immrep_all[["NSCLC"]] <- bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
 
 plot_correlation <- function(dataset_id) {
