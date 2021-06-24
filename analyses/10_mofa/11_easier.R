@@ -15,98 +15,102 @@ input_file <- args[1]
 output_file <- args[2]
 
 getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FALSE, onlyEasier = TRUE, epic = FALSE, proxies = TRUE, zcoredata = "../../tables/easier_Zscores/immscoreZ.rds") {
-  
+
   # List of immune response scores to be computed
-  selscores <- c("CYT",
-                 "Roh_IS",
-                 "chemokines",
-                 "Davoli_IS",
-                 "IFNy",
-                 "Ayers_expIS" ,
-                 "Tcell_inflamed", 
-                 "RIR",
-                 "TLS")
+  selscores <- c(
+    "CYT",
+    "Roh_IS",
+    "chemokines",
+    "Davoli_IS",
+    "IFNy",
+    "Ayers_expIS",
+    "Tcell_inflamed",
+    "RIR",
+    "TLS"
+  )
 
   # List of datasets in the input object
   datasets <- names(dataobj[[1]])
-  
+
   # Initialization of the output object
   dataobj$tf <- dataobj$pathway <- vector(mode = "list", length = length(datasets))
   names(dataobj$tf) <- names(dataobj$pathway) <- datasets
-  
+
   for (dataset in datasets) {
-    
     cat("Computing cell fractions, TF scores, pathway scores, and proxies of response from ", dataset, " data...\n", sep = "")
-    
+
     # Quantification of immune cell fractions with quanTIseq
     cellfrac <- compute_cell_fractions(
-      RNA.tpm = dataobj$tpm[[dataset]])
+      RNA.tpm = dataobj$tpm[[dataset]]
+    )
 
     # Optional quantification of CAFs and endothelial cells qith EPIC
     if (epic) {
-
       epic.cellfrac <- deconvolute_epic(dataobj$tpm[[dataset]],
-                                        tumor = TRUE,
-                                        scale_mrna = TRUE)
+        tumor = TRUE,
+        scale_mrna = TRUE
+      )
 
-      cellfrac <- cbind(cellfrac,
-                        t(epic.cellfrac[c("CAFs", "Endothelial"), rownames(cellfrac)]))
-
+      cellfrac <- cbind(
+        cellfrac,
+        t(epic.cellfrac[c("CAFs", "Endothelial"), rownames(cellfrac)])
+      )
     }
 
-    # Quantification of pathway activity scores with RPOGENy 
+    # Quantification of pathway activity scores with RPOGENy
     pathway <- compute_pathways_scores(
       RNA.counts = dataobj$count[[dataset]],
-      remove.genes.ICB_proxies = remove.genes.ICB_proxies)
+      remove.genes.ICB_proxies = remove.genes.ICB_proxies
+    )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
       RNA.tpm = dataobj$tpm[[dataset]],
-      remove.genes.ICB_proxies = remove.genes.ICB_proxies)
+      remove.genes.ICB_proxies = remove.genes.ICB_proxies
+    )
 
-    # Storing of the computed features in the output object 
+    # Storing of the computed features in the output object
     dataobj$cellfrac[[dataset]] <- cellfrac
     dataobj$pathway[[dataset]] <- pathway$scores
     dataobj$tf[[dataset]] <- TF$scores
-    
+
     # Computation of immune response scores (proxies)
-    proxies <- compute_gold_standards(RNA.tpm = 
-                                        as.data.frame(dataobj$tpm[[dataset]]), 
-                                      list_gold_standards = selscores, 
-                                      cancertype = cancertype)
-    proxies.mat <- as.data.frame(matrix(unlist(proxies), 
-                                        nrow = length(proxies), 
-                                        byrow = T))
+    proxies <- compute_gold_standards(
+      RNA.tpm =
+        as.data.frame(dataobj$tpm[[dataset]]),
+      list_gold_standards = selscores,
+      cancertype = cancertype
+    )
+    proxies.mat <- as.data.frame(matrix(unlist(proxies),
+      nrow = length(proxies),
+      byrow = T
+    ))
     rownames(proxies.mat) <- names(proxies)
     colnames(proxies.mat) <- colnames(proxies[[1]])
     proxies.mat <- t(proxies.mat)
-    
+
     # Rotation of the "Chemokines" score to agree with "CYT" direction
-    chemosign <- sign(cor(proxies.mat[,"CYT"], proxies.mat[,"chemokines"]))
-    if (chemosign < 0) proxies.mat[,"chemokines"] <- -proxies.mat[,"chemokines"]
-    
+    chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
+    if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
+
     # Computation of the median scaled response
     immscoreZ <- readRDS(zcoredata)
-    immscoreZ <- immscoreZ[match(selscores, immscoreZ$score),]
-    response <- proxies.mat[,match(selscores, colnames(proxies.mat))]
-    response <- ((t(response)-immscoreZ$mean)/immscoreZ$sd)
+    immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
+    response <- proxies.mat[, match(selscores, colnames(proxies.mat))]
+    response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
     response <- apply(response, 2, median)
     proxies.mat <- as.data.frame(proxies.mat)
     proxies.mat$response <- response
-    
-    dataobj$immresp[[dataset]] <- proxies.mat 
-    
+
+    dataobj$immresp[[dataset]] <- proxies.mat
   }
-  
+
   # Removal of gene expression data
   if (onlyEasier == TRUE) {
-
     dataobj <- dataobj[c("cellfrac", "pathway", "tf", "immresp")]
-
   }
-  
+
   return(dataobj)
-  
 }
 
 cancertype <- "NSCLC"
