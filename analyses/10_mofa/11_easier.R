@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds>
+  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds>
 
 " -> doc
 
@@ -12,9 +12,17 @@ library(immunedeconv)
 
 args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
-output_file <- args[2]
+immscore_file <- args[2]
+output_file <- args[3]
 
-getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FALSE, onlyEasier = TRUE, epic = FALSE, proxies = TRUE, zcoredata = "../../tables/easier_Zscores/immscoreZ.rds") {
+getFeat <- function(dataobj,
+                    cancertype = "LUAD",
+                    remove.genes.ICB_proxies = FALSE,
+                    onlyEasier = TRUE,
+                    epic = FALSE,
+                    proxies = TRUE,
+                    zscoredata = "../../tables/easier_Zscores/immscoreZ.rds") {
+  immscoreZ <- readRDS(zscoredata)
 
   # List of immune response scores to be computed
   selscores <- c(
@@ -94,7 +102,6 @@ getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FAL
     if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
 
     # Computation of the median scaled response
-    immscoreZ <- readRDS(zcoredata)
     immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
     response <- proxies.mat[, match(selscores, colnames(proxies.mat))]
     response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
@@ -116,6 +123,6 @@ getFeat <- function(dataobj, cancertype = "LUAD", remove.genes.ICB_proxies = FAL
 cancertype <- "NSCLC"
 expr_obj <- readRDS(input_file)
 
-easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE)
+easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE, zscoredata = immscore_file)
 
 saveRDS(easier_obj, file = output_file)

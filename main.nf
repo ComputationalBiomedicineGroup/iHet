@@ -15,7 +15,10 @@ process P11_easier {
         path("*.features.rds")
 
     """
-    Rscript ${script} ${expr_data} ${expr_data.baseName}.features.rds
+    Rscript ${script} \\
+        ${expr_data} \\
+        ${projectDir}/tables/easier_Zscores/immscoreZ.rds \\
+        ${expr_data.baseName}.features.rds 
     """
 }
 
