@@ -11,7 +11,7 @@ nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx")
+DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx")
 dir.create(nxfvars$out_dir, showWarnings = FALSE)
 ```
 
@@ -20,8 +20,14 @@ dir.create(nxfvars$out_dir, showWarnings = FALSE)
 gtex_data <- readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
 nsclc_data <- readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
 data_all <- nsclc_data
+
+# Rename datasets
 for (slot in names(gtex_data)) {
   data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
+  data_all[[slot]][["Jia"]] <- data_all[[slot]][["Jia2018"]]
+  data_all[[slot]][["Jia2018"]] <- NULL
+  data_all[[slot]][["Sharma"]] <- data_all[[slot]][["Sharma2019"]]
+  data_all[[slot]][["Sharma2019"]] <- NULL
 }
 ```
 
@@ -31,13 +37,13 @@ feature_data <- sapply(DATASETS, function(dataset_id) {
   processFeatures(data_all, dataset_id)
 }, simplify = FALSE, USE.NAMES = TRUE)
 
-feature_data$JiaSharma <- bind_rows(feature_data$Jia2018, feature_data$Sharma2019)
+feature_data$JiaSharma <- bind_rows(feature_data$Jia, feature_data$Sharma)
 feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate(group = "NSCLC")
 ```
 
 ```{r}
-for (feature in unique(feature_data$Jia2018$view)) {
-  generateHeatmap(feature_data$Jia2018 %>% filter(view == !!feature), feature, row_names = TRUE)
+for (feature in unique(feature_data$Jia$view)) {
+  generateHeatmap(feature_data$Jia %>% filter(view == !!feature), feature, row_names = TRUE)
 }
 ```
 
@@ -68,8 +74,8 @@ bootstrap_datasets <- sapply(DATASETS, function(dataset_id) {
 
 bootstrap_datasets$JiaSharma <- lapply(1:N_BOOTSTRAP, function(i) {
   bind_rows(
-    bootstrap_datasets$Jia2018[[i]],
-    bootstrap_datasets$Sharma2019[[i]]
+    bootstrap_datasets$Jia[[i]],
+    bootstrap_datasets$Sharma[[i]]
   )
 })
 bootstrap_datasets$NSCLC <- lapply(1:N_BOOTSTRAP, function(i) {

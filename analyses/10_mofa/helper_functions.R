@@ -87,10 +87,10 @@ processFeatures <- function(data, dataset_id) {
   }
 
   cellfrac.df <- data$cellfrac[[dataset_id]] %>%
-    as.data.frame() %>% 
+    as.data.frame() %>%
     # fix naming CD8
     rename(`CD8 T` = `CD8+ T`) %>%
-    # summarise Tregs and CD4, but keep treg estimate. 
+    # summarise Tregs and CD4, but keep treg estimate.
     # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
     mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
     do_pivot("Immune cells quantification") %>%
@@ -99,7 +99,7 @@ processFeatures <- function(data, dataset_id) {
     mutate(value = log10(value * 100 + 0.001))
   pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
   tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
-  
+
   MOFAdata <- bind_rows(cellfrac.df, pathways.df, tfs.df) %>%
     mutate(group = dataset_id)
 

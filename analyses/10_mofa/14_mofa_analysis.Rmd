@@ -6,16 +6,17 @@ params:
       data_dir: "../../results/10_mofa/13_run_mofa"
       features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
       easier_dir: "../../results/10_mofa/11_easier"
-      luc_dir: "from-luc/Data"
+      out_dir: "/local/scratch/sturm/mofa"
 ---
 
 
 ```{r setup, include=FALSE, message=FALSE}
-options(bitmapType='cairo')
+options(bitmapType = "cairo")
 nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
+library(readr)
 DATASETS <- c("Jia2018", "Sharma2019", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
@@ -121,7 +122,7 @@ draw(all)
 ```
 
 ## Correlation heatmaps
-```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (p<0.001) are shown."}
+```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
 weight_mat <- lapply(names(median_weights), function(dataset_id) {
   median_weights[[dataset_id]] %>%
@@ -161,6 +162,9 @@ corrplot(cor_mat,
   tl.col = "black",
   order = "hclust"
 )
+
+write_tsv(cor_mat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir, "factor_correlations.tsv"))
+write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir, "factor_correlation_pvalues.tsv"))
 ```
 
 ### Correlation with immune response
@@ -195,23 +199,22 @@ lapply(DATASETS[1:6], plot_correlation)
 ### Weight scatter NSCLC / JiaSharma
 
 ```{r, fig.width=10, fig.height=8, echo=FALSE, message=FALSE, warning=FALSE}
-scatter_data = bind_rows(lapply(names(median_weights), function(dataset_id) {
-  median_weights[[dataset_id]] %>% mutate(dataset=dataset_id)
+scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
+  median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
 }))
 
-tmp_scatter_data = scatter_data %>% filter(dataset %in% c("JiaSharma", "NSCLC")) %>% 
-  select(view, dataset, feature, `factor 1`) %>% 
-  pivot_wider(names_from="dataset", values_from="factor 1")
+tmp_scatter_data <- scatter_data %>%
+  filter(dataset %in% c("JiaSharma", "NSCLC")) %>%
+  select(view, dataset, feature, `factor 1`) %>%
+  pivot_wider(names_from = "dataset", values_from = "factor 1")
 
-tmp_scatter_data  %>% 
-  ggplot(aes(x=JiaSharma, y=NSCLC)) +
-  geom_smooth(method=lm, color="black", lty="dashed") + 
-  geom_point(aes(color=view)) + 
-  geom_label_repel(data = tmp_scatter_data %>% filter((view == "Immune cells quantification")  | abs(JiaSharma) > 0.5 | abs(NSCLC) > 0.5), aes(label=feature)) + 
-  theme_bw() + 
-  scale_color_brewer(type="qual", palette = "Dark2")
-
-
+tmp_scatter_data %>%
+  ggplot(aes(x = JiaSharma, y = NSCLC)) +
+  geom_smooth(method = lm, color = "black", lty = "dashed") +
+  geom_point(aes(color = view)) +
+  geom_label_repel(data = tmp_scatter_data %>% filter((view == "Immune cells quantification") | abs(JiaSharma) > 0.5 | abs(NSCLC) > 0.5), aes(label = feature)) +
+  theme_bw() +
+  scale_color_brewer(type = "qual", palette = "Dark2")
 ```
 
 
@@ -227,7 +230,7 @@ all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
   filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
-```{r, fig.height=60, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.height=40, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
 all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
   facet_wrap(~factor, ncol = 3) +
@@ -249,7 +252,7 @@ features_jiasharma %>%
 
 ```{r, include=FALSE}
 get_df <- function(df, group) {
-  bf <- anovaBF(value ~ patient, data = as.data.frame(df), progress=FALSE) %>% as.vector()
+  bf <- anovaBF(value ~ patient, data = as.data.frame(df), progress = FALSE) %>% as.vector()
   data.frame(bayes_factor = bf)
 }
 

@@ -72,12 +72,13 @@ process P14_mofa_analysis {
 
     output:
         path("*.html"), emit: report
+        path("*.tsv"), emit: tables
 
     script:
     data_dir = "./"
     features_dir = "./"
     easier_dir = "./"
-    luc_dir = "/home/sturm/projects/2021/nsclc_heterogeneity/analyses/10_mofa/from-luc/Data"
+    out_dir = "./"
     """
     ${nxfvars(task)}
     execute_rmd.r ${notebook}
