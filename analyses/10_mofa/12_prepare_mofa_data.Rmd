@@ -10,11 +10,72 @@ params:
 nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
-source("helper_functions.R")
 DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx")
 dir.create(nxfvars$out_dir, showWarnings = FALSE)
+
+library(conflicted)
+library(MOFA2)
+library(reticulate)
+library(dplyr)
+conflict_prefer("filter", "dplyr")
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(ggpubr)
+library(ggplot2)
+library(cowplot)
+library(tidyr)
+library(tibble)
+library(corrplot)
+library(rstatix)
+library(stringr)
+library(ggbeeswarm)
+library(BayesFactor)
+library(ggrepel)
 ```
 
+```{r}
+#' Bring features into 'tidy' format required by MOFA
+processFeatures <- function(data, dataset_id) {
+  add_patient_col <- function(df) {
+    if (dataset_id %in% c("Jia", "Sharma")) {
+      df %>%
+        separate("sample", c("patient", "replicate"), remove = FALSE) %>%
+        # exclude normal samples
+        filter(replicate != "N") %>%
+        select(-replicate)
+    } else {
+      df %>% mutate(patient = sample)
+    }
+  }
+
+  do_pivot <- function(df, view) {
+    df %>%
+      as_tibble(rownames = "sample") %>%
+      pivot_longer(cols = -sample, names_to = "feature") %>%
+      mutate(view = !!view) %>%
+      add_patient_col()
+  }
+
+  cellfrac.df <- data$cellfrac[[dataset_id]] %>%
+    as.data.frame() %>%
+    # fix naming CD8
+    rename(`CD8 T` = `CD8+ T`) %>%
+    # summarise Tregs and CD4, but keep treg estimate.
+    # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
+    mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
+    do_pivot("Immune cells quantification") %>%
+    filter(feature != "Other") %>%
+    # Log transform
+    mutate(value = log10(value * 100 + 0.001))
+  pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
+  tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
+
+  MOFAdata <- bind_rows(cellfrac.df, pathways.df, tfs.df) %>%
+    mutate(group = dataset_id)
+
+  return(MOFAdata)
+}
+```
 
 ```{r loaddata}
 gtex_data <- readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
@@ -39,12 +100,6 @@ feature_data <- sapply(DATASETS, function(dataset_id) {
 
 feature_data$JiaSharma <- bind_rows(feature_data$Jia, feature_data$Sharma)
 feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate(group = "NSCLC")
-```
-
-```{r}
-for (feature in unique(feature_data$Jia$view)) {
-  generateHeatmap(feature_data$Jia %>% filter(view == !!feature), feature, row_names = TRUE)
-}
 ```
 
 ### save feature data

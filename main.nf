@@ -17,7 +17,7 @@ process P11_easier {
     """
     Rscript ${script} \\
         ${expr_data} \\
-        ${projectDir}/tables/easier_Zscores/immscoreZ.rds \\
+        ${baseDir}/tables/easier_Zscores/immscoreZ.rds \\
         ${expr_data.baseName}.features.rds 
     """
 }
@@ -28,7 +28,6 @@ process P12_prepare_mofa_data {
     cpus 1
     input:
         tuple val(id), path(notebook)
-        path("helper_functions.R")
         path(datasets)
 
     output:
@@ -50,7 +49,6 @@ process P13_run_mofa {
     cpus 1
     input:
         tuple val(id), path(script)
-        path("helper_functions.R")
         each path(dataset)
 
     output:
@@ -97,12 +95,10 @@ workflow W10_mofa {
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
-        file("$dir/helper_functions.R"),
         P11_easier.out.collect()
     )
     P13_run_mofa(
         file_tuple("$dir/13_run_mofa.R"),
-        file("$dir/helper_functions.R"),
         P12_prepare_mofa_data.out.datasets
     )
     P14_mofa_analysis(

@@ -171,6 +171,10 @@ write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir
 ```{r, fig.width=8, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
 immrep_all <- nsclc_easier$immresp
 immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
+immrep_all[["Jia"]] <- immrep_all[["Jia2018"]]
+immrep_all[["Sharma"]] <- immrep_all[["Sharma2019"]]
+immrep_all[["Jia2018"]] <- NULL
+immrep_all[["Sharma2019"]] <- NULL
 immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia"]], immrep_all[["Sharma"]])
 immrep_all[["NSCLC"]] <- bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
 
