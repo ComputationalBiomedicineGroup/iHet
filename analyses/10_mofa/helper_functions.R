@@ -16,6 +16,7 @@ library(stringr)
 library(ggbeeswarm)
 library(BayesFactor)
 library(ggrepel)
+library(readr)
 
 #' Function to compute the iHet score starting from immune cell, pathway, and TF features
 #' using either the NSCLC or JiaSharma feature weights
@@ -97,7 +98,7 @@ buildHeatmap <- function(weight_df, title) {
   )))
 
   # Define vectors to split the heatmap
-  row.split.vector <- weight_df$view
+  row.split.vector <- recode(weight_df$view, "Immune cells quantification" = "Immune\ncells", "Pathway scores" = "Pathways", "Transcription factors" = "Transcription\nfactors")
   weights <- weight_df %>%
     select(-view) %>%
     column_to_rownames("feature") %>%
@@ -112,24 +113,10 @@ buildHeatmap <- function(weight_df, title) {
     col = col_fun, border = T,
     cluster_rows = FALSE, cluster_columns = FALSE,
     show_row_names = T, show_column_names = T, row_names_side = "left",
-
-    # Annotation
-    # bottom_annotation  = HeatmapAnnotation(
-    # `correlated factors` = combiFactorsFeatures,
-    # col = col.list.Features,
-    # simple_anno_size = unit(1, "mm"),
-    # annotation_height = unit(3, "mm"),
-    # annotation_name_gp = gpar(fontsize = 8, fontface = "bold"),
-    # annotation_legend_param = list(title_gp = gpar(fontsize = 10, fontface = 2))),
-
-    # labels_gp = gpar(fontsize = 7)),
-    # grid_width = unit(5, "mm"),
-    # legend_direction = "horizontal"),
-
-
     row_names_gp = gpar(fontsize = 10),
     row_split = row.split.vector,
     row_title_gp = gpar(fontsize = 15, fontface = 2),
+    row_title_rot = 0,
     column_names_gp = gpar(fontsize = 9),
     column_title_gp = gpar(fontsize = 9, fontface = 2),
     column_title = title,

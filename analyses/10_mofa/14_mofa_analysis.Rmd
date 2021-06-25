@@ -16,7 +16,6 @@ nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-library(readr)
 DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
@@ -44,14 +43,16 @@ lapply(names(models), function(dataset_id) {
 })
 ```
 ```{r, include=FALSE}
+#' Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
+get_rotation <- function(weights) {
+  diag(sign(weights[["Immune cells quantification"]]["CD8 T", ]))
+}
 
 #' extract and preprocess weights from a MOFA model
 get_weight_df <- function(model) {
   weights <- get_weights(model, scale = TRUE)
-  # Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
-  rotation <- diag(sign(weights[["Immune cells quantification"]]["CD8 T", ]))
   lapply(names(weights), function(modality) {
-    weights[[modality]] %*% rotation %>%
+    weights[[modality]] %*% get_rotation(weights) %>%
       as_tibble(rownames = "feature") %>%
       mutate(view = modality) %>%
       rename_with(function(x) {
@@ -60,6 +61,17 @@ get_weight_df <- function(model) {
   }) %>%
     bind_rows() %>%
     arrange(view, feature)
+}
+
+get_factor_df <- function(model) {
+  weights <- get_weights(model, scale = TRUE)
+  get_factors(model) %>%
+    # lapply(function(x) {
+    #   x[, 1:3]
+    # }) %>%
+    do.call("rbind", .) %*% get_rotation(weights) %>%
+    as.data.frame() %>%
+    as_tibble(rownames = "patient")
 }
 ```
 
@@ -81,7 +93,7 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
 all <- buildHeatmap(get_weight_df(models$Jia), "Jia") +
   buildHeatmap(get_weight_df(models$Sharma), "Sharma") +
-  buildHeatmap(get_weight_df(models$JiaSharma), "J+S") +
+  buildHeatmap(get_weight_df(models$JiaSharma), "JS") +
   buildHeatmap(get_weight_df(models$LUAD), "LUAD") +
   buildHeatmap(get_weight_df(models$LUSC), "LUSC") +
   buildHeatmap(get_weight_df(models$NSCLC), "NSCLC") +
@@ -99,7 +111,7 @@ get_filtered_weight <- function(model) {
 
 all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
   buildHeatmap(get_filtered_weight(median_weights$Sharma), "Sharma") +
-  buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "J+S") +
+  buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "JS") +
   buildHeatmap(get_filtered_weight(median_weights$LUAD), "LUAD") +
   buildHeatmap(get_filtered_weight(median_weights$LUSC), "LUSC") +
   buildHeatmap(get_filtered_weight(median_weights$NSCLC), "NSCLC") +
@@ -112,7 +124,7 @@ draw(all)
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
 all <- buildHeatmap(median_weights$Jia, "Jia") +
   buildHeatmap(median_weights$Sharma, "Sharma") +
-  buildHeatmap(median_weights$JiaSharma, "J+S") +
+  buildHeatmap(median_weights$JiaSharma, "JS") +
   buildHeatmap(median_weights$LUAD, "LUAD") +
   buildHeatmap(median_weights$LUSC, "LUSC") +
   buildHeatmap(median_weights$NSCLC, "NSCLC") +
@@ -168,7 +180,7 @@ write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir
 ```
 
 ### Correlation with immune response
-```{r, fig.width=8, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=14, fig.height=14, echo=FALSE, message=FALSE, warning=FALSE}
 immrep_all <- nsclc_easier$immresp
 immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
 immrep_all[["Jia"]] <- immrep_all[["Jia2018"]]
@@ -178,26 +190,21 @@ immrep_all[["Sharma2019"]] <- NULL
 immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia"]], immrep_all[["Sharma"]])
 immrep_all[["NSCLC"]] <- bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
 
-plot_correlation <- function(dataset_id) {
-  get_factors(models[[dataset_id]]) %>%
-    lapply(function(x) {
-      x[, 1:3]
-    }) %>%
-    do.call("rbind", .) %>%
-    as.data.frame() %>%
-    as_tibble(rownames = "patient") %>%
+correlation_data <- lapply(names(models), function(dataset_id) {
+  get_factor_df(models[[dataset_id]]) %>%
     pivot_longer(cols = -patient, names_to = "factor", values_to = "factor_value") %>%
     inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames = "patient")) %>%
-    ggplot(aes(x = factor_value, y = response)) +
-    geom_point() +
-    facet_wrap(~factor, scale = "free_x") +
-    theme_cowplot() +
-    stat_cor() +
-    geom_smooth(method = "lm") +
-    ggtitle(dataset_id)
-}
+    mutate(dataset = dataset_id)
+}) %>% bind_rows()
 
-lapply(DATASETS[1:6], plot_correlation)
+correlation_data %>%
+  ggplot(aes(x = factor_value, y = response)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free_x") +
+  ylim(c(3, -2))
 ```
 
 ### Weight scatter NSCLC / JiaSharma
