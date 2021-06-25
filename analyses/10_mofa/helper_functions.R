@@ -18,6 +18,14 @@ library(BayesFactor)
 library(ggrepel)
 library(readr)
 
+
+rdbu10_palette <- c(
+  "#67001F", "#B2182B", "#D6604D", "#F4A582",
+  "#FDDBC7", "#FFFFFF", "#D1E5F0", "#92C5DE",
+  "#4393C3", "#2166AC", "#053061"
+)
+
+
 #' Function to compute the iHet score starting from immune cell, pathway, and TF features
 #' using either the NSCLC or JiaSharma feature weights
 #' TODO: fix path to weightfile
@@ -91,12 +99,7 @@ plotResults <- function(model, title) {
 
 #' Make a complex heatmap showing the different factor weitghts for different datasets.
 buildHeatmap <- function(weight_df, title) {
-  col_fun <- circlize::colorRamp2(seq(-1, 1, by = 2 / 10), rev(c(
-    "#67001F", "#B2182B", "#D6604D", "#F4A582",
-    "#FDDBC7", "#FFFFFF", "#D1E5F0", "#92C5DE",
-    "#4393C3", "#2166AC", "#053061"
-  )))
-
+  col_fun <- circlize::colorRamp2(seq(-1, 1, by = 2 / 10), rev(rdbu10_palette))
   # Define vectors to split the heatmap
   row.split.vector <- recode(weight_df$view, "Immune cells quantification" = "Immune\ncells", "Pathway scores" = "Pathways", "Transcription factors" = "Transcription\nfactors")
   weights <- weight_df %>%

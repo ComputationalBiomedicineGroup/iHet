@@ -71,7 +71,10 @@ get_factor_df <- function(model) {
     # }) %>%
     do.call("rbind", .) %*% get_rotation(weights) %>%
     as.data.frame() %>%
-    as_tibble(rownames = "patient")
+    as_tibble(rownames = "patient") %>%
+    rename_with(function(x) {
+      str_replace(x, "V", "factor ")
+    }, starts_with("V"))
 }
 ```
 
@@ -162,7 +165,8 @@ corrplot(cor_mat,
   is.corr = TRUE,
   p.mat = cor_pmat,
   sig.level = 0.01,
-  insig = "blank", tl.col = "black"
+  insig = "blank", tl.col = "black",
+  col = colorRampPalette(rev(rdbu10_palette))(1000),
 )
 
 
@@ -172,7 +176,8 @@ corrplot(cor_mat,
   sig.level = 0.01,
   insig = "blank",
   tl.col = "black",
-  order = "hclust"
+  order = "hclust",
+  col = colorRampPalette(rev(rdbu10_palette))(1000),
 )
 
 write_tsv(cor_mat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir, "factor_correlations.tsv"))
@@ -180,7 +185,7 @@ write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir
 ```
 
 ### Correlation with immune response
-```{r, fig.width=14, fig.height=14, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=16, fig.height=14, echo=FALSE, message=FALSE, warning=FALSE}
 immrep_all <- nsclc_easier$immresp
 immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
 immrep_all[["Jia"]] <- immrep_all[["Jia2018"]]
@@ -195,7 +200,9 @@ correlation_data <- lapply(names(models), function(dataset_id) {
     pivot_longer(cols = -patient, names_to = "factor", values_to = "factor_value") %>%
     inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames = "patient")) %>%
     mutate(dataset = dataset_id)
-}) %>% bind_rows()
+}) %>%
+  bind_rows() %>%
+  mutate(dataset = factor(dataset, levels = names(models)))
 
 correlation_data %>%
   ggplot(aes(x = factor_value, y = response)) +
@@ -223,9 +230,11 @@ tmp_scatter_data %>%
   ggplot(aes(x = JiaSharma, y = NSCLC)) +
   geom_smooth(method = lm, color = "black", lty = "dashed") +
   geom_point(aes(color = view)) +
-  geom_label_repel(data = tmp_scatter_data %>% filter((view == "Immune cells quantification") | abs(JiaSharma) > 0.5 | abs(NSCLC) > 0.5), aes(label = feature)) +
+  geom_label_repel(data = tmp_scatter_data %>% filter(abs(JiaSharma) > 0.5 | abs(NSCLC) > 0.5), aes(label = feature)) +
   theme_bw() +
-  scale_color_brewer(type = "qual", palette = "Dark2")
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  xlim(c(-1, 1)) +
+  ylim(c(-1, 1))
 ```
 
 
