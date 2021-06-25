@@ -23,6 +23,7 @@ TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 gtex_easier <- readRDS(file.path(nxfvars$easier_dir, "GTEx_expr_data.features.rds"))
 nsclc_easier <- readRDS(file.path(nxfvars$easier_dir, "NSCLC_expr_data_sel.features.rds"))
 features_jiasharma <- readRDS(file.path(nxfvars$features_dir, "JiaSharma.rds"))
+features_tracerx <- readRDS(file.path(nxfvars$features_dir, "TRACERx.rds"))
 ```
 
 ```{r, include=FALSE}
@@ -280,14 +281,19 @@ all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
 
 
 ### Variability of features within and between patients in Jia and Sharma
-```{r, fig.width=18, fig.height=15, echo=FALSE, message=FALSE, warning=FALSE}
-features_jiasharma %>%
-  ggplot(aes(x = value, y = patient, fill = group)) +
-  geom_boxplot() +
-  facet_wrap(~feature, scale = "free_x") +
-  scale_fill_brewer(type = "qual") +
-  theme_bw() +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```{r, fig.width=18, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
+feature_data <- list(TRACERx = features_tracerx, JiaSharma = features_jiasharma)
+
+lapply(names(feature_data), function(dataset_id) {
+  feature_data[[dataset_id]] %>%
+    ggplot(aes(x = value, y = patient, color = group)) +
+    geom_point(size = .2) +
+    facet_wrap(~feature, scale = "free_x") +
+    scale_fill_brewer(type = "qual") +
+    theme_bw() +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+    ggtitle(dataset_id)
+})
 ```
 
 ```{r, include=FALSE}
@@ -296,21 +302,25 @@ get_df <- function(df, group) {
   data.frame(bayes_factor = bf)
 }
 
-bfs <- features_jiasharma %>%
-  mutate(patient = as.factor(patient)) %>%
-  group_by(feature) %>%
-  group_modify(get_df)
 ```
 
 
 ```{r, fig.width=7, fig.height=18, echo=FALSE, message=FALSE, warning=FALSE}
-bfs %>%
-  mutate(log_bf = log2(bayes_factor)) %>%
-  ggplot(aes(y = reorder(feature, -log_bf), x = log_bf)) +
-  geom_point() +
-  geom_vline(xintercept = 0) +
-  geom_vline(xintercept = log2(10), color = "red") +
-  theme_bw()
+
+lapply(names(feature_data), function(dataset_id) {
+  bfs <- feature_data[[dataset_id]] %>%
+    mutate(patient = as.factor(patient)) %>%
+    group_by(feature) %>%
+    group_modify(get_df)
+  bfs %>%
+    mutate(log_bf = log2(bayes_factor)) %>%
+    ggplot(aes(y = reorder(feature, -log_bf), x = log_bf)) +
+    geom_point() +
+    geom_vline(xintercept = 0) +
+    geom_vline(xintercept = log2(10), color = "red") +
+    theme_bw() +
+    ggtitle(dataset_id)
+})
 ```
 
 

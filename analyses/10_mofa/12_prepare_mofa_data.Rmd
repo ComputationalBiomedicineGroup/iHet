@@ -37,7 +37,7 @@ library(ggrepel)
 #' Bring features into 'tidy' format required by MOFA
 processFeatures <- function(data, dataset_id) {
   add_patient_col <- function(df) {
-    if (dataset_id %in% c("Jia", "Sharma")) {
+    if (dataset_id %in% c("Jia", "Sharma", "TRACERx")) {
       df %>%
         separate("sample", c("patient", "replicate"), remove = FALSE) %>%
         # exclude normal samples
