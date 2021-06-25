@@ -6,6 +6,7 @@ params:
       data_dir: "../../results/10_mofa/13_run_mofa"
       features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
       easier_dir: "../../results/10_mofa/11_easier"
+      tmb_dir: "../../data/01_processed/bulk_rna_seq"
       out_dir: "/local/scratch/sturm/mofa"
 ---
 
@@ -16,7 +17,7 @@ nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx", "JiaSharma", "NSCLC")
+DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 gtex_easier <- readRDS(file.path(nxfvars$easier_dir, "GTEx_expr_data.features.rds"))
@@ -202,7 +203,7 @@ correlation_data <- lapply(names(models), function(dataset_id) {
     mutate(dataset = dataset_id)
 }) %>%
   bind_rows() %>%
-  mutate(dataset = factor(dataset, levels = names(models)))
+  mutate(dataset = factor(dataset, levels = DATASETS))
 
 correlation_data %>%
   ggplot(aes(x = factor_value, y = response)) +
@@ -211,7 +212,26 @@ correlation_data %>%
   stat_cor() +
   geom_smooth(method = "lm") +
   facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free_x") +
-  ylim(c(3, -2))
+  ylim(c(-2, 3))
+```
+
+
+### Correlation with tumor mutational burden
+```{r, fig.width=16, fig.height=12}
+tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
+  tmp_tmb <- readRDS(file.path(nxfvars$tmb_dir, tmb_file))
+  tibble(patient = names(tmp_tmb), TMB = tmp_tmb) %>%
+    mutate(patient = str_replace_all(patient, "-", "."))
+}) %>% bind_rows()
+
+correlation_data %>%
+  inner_join(tmb_all) %>%
+  ggplot(aes(x = factor_value, y = TMB)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free")
 ```
 
 ### Weight scatter NSCLC / JiaSharma

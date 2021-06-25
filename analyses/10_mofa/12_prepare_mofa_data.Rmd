@@ -10,7 +10,7 @@ params:
 nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
-DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx")
+DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx", "TRACERx")
 dir.create(nxfvars$out_dir, showWarnings = FALSE)
 
 library(conflicted)
@@ -80,6 +80,7 @@ processFeatures <- function(data, dataset_id) {
 ```{r loaddata}
 gtex_data <- readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
 nsclc_data <- readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
+tracerx_data <- readRDS(file.path(nxfvars$data_dir, "TRACERx_expr_data.features.rds"))
 data_all <- nsclc_data
 
 # Rename datasets
@@ -89,6 +90,7 @@ for (slot in names(gtex_data)) {
   data_all[[slot]][["Jia2018"]] <- NULL
   data_all[[slot]][["Sharma"]] <- data_all[[slot]][["Sharma2019"]]
   data_all[[slot]][["Sharma2019"]] <- NULL
+  data_all[[slot]][["TRACERx"]] <- tracerx_data[[slot]][["TRACERx"]]
 }
 ```
 
@@ -110,7 +112,6 @@ lapply(names(feature_data), function(dataset_id) {
 ```
 
 
-## Generate bootstrap datasets 
 ```{r, message=FALSE}
 # Build random bootstrap datasets for each dataset
 N_BOOTSTRAP <- 100
@@ -136,11 +137,14 @@ bootstrap_datasets$JiaSharma <- lapply(1:N_BOOTSTRAP, function(i) {
 bootstrap_datasets$NSCLC <- lapply(1:N_BOOTSTRAP, function(i) {
   bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
 })
+
+# We don't want to build models for Tracerx
+bootstrap_datasets$TRACERx <- NULL
 ```
 
 ### save bootstrap datasets
 ```{r}
-lapply(names(feature_data), function(dataset_id) {
+lapply(names(bootstrap_datasets), function(dataset_id) {
   lapply(1:N_BOOTSTRAP, function(i) {
     saveRDS(bootstrap_datasets[[dataset_id]][[i]],
       file = file.path(nxfvars$out_dir, paste0(
