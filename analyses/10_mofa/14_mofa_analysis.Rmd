@@ -20,19 +20,31 @@ source("helper_functions.R")
 DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
-gtex_easier <- readRDS(file.path(nxfvars$easier_dir, "GTEx_expr_data.features.rds"))
-nsclc_easier <- readRDS(file.path(nxfvars$easier_dir, "NSCLC_expr_data_sel.features.rds"))
-features_jiasharma <- readRDS(file.path(nxfvars$features_dir, "JiaSharma.rds"))
-features_tracerx <- readRDS(file.path(nxfvars$features_dir, "TRACERx.rds"))
+feature_data <- readRDS(file.path(nxfvars$features_dir, "data_all_tidy.rds"))
+
+tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
+  tmp_tmb <- readRDS(file.path(nxfvars$tmb_dir, tmb_file))
+  tmb_df <- tibble(sample = names(tmp_tmb), TMB = tmp_tmb) %>%
+    mutate(sample = str_replace_all(sample, "-", "."))
+  if (tmb_file == "Sharma_TMB.rds") {
+    tmb_df <- tmb_df %>% mutate(sample = paste0("Sharma-", sample))
+  }
+  if (tmb_file == "Jia_TMB.rds") {
+    tmb_df <- tmb_df %>% mutate(sample = paste0("Jia-", sample))
+  }
+  tmb_df
+}) %>%
+  bind_rows() %>%
+  mutate(`log10(TMB + 1)` = log10(TMB + 1))
 ```
 
 ```{r, include=FALSE}
 models <- sapply(DATASETS, function(dataset_id) {
-  load_model(file.path(nxfvars$data_dir, sprintf("%s.hdf5", dataset_id)))
+  load_model(file.path(nxfvars$data_dir, sprintf("mofa_%s.hdf5", dataset_id)))
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 bootstrap_models <- sapply(DATASETS, function(dataset_id) {
-  lapply(Sys.glob(file.path(nxfvars$data_dir, sprintf("boot_%s_*.hdf5", dataset_id))), function(x) {
+  lapply(Sys.glob(file.path(nxfvars$data_dir, sprintf("mofa_boot_%s_*.hdf5", dataset_id))), function(x) {
     load_model(x)
   })
 }, simplify = FALSE, USE.NAMES = TRUE)
@@ -73,7 +85,7 @@ get_factor_df <- function(model) {
     # }) %>%
     do.call("rbind", .) %*% get_rotation(weights) %>%
     as.data.frame() %>%
-    as_tibble(rownames = "patient") %>%
+    as_tibble(rownames = "sample") %>%
     rename_with(function(x) {
       str_replace(x, "V", "factor ")
     }, starts_with("V"))
@@ -89,6 +101,8 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
     summarise_all(median) %>%
     ungroup()
 }, USE.NAMES = TRUE, simplify = FALSE)
+
+saveRDS(median_weights, file = file.path(nxfvars$out_dir, "median_weights.rds"))
 ```
 
 
@@ -188,26 +202,23 @@ write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir
 
 ### Correlation with immune response
 ```{r, fig.width=16, fig.height=14, echo=FALSE, message=FALSE, warning=FALSE}
-immrep_all <- nsclc_easier$immresp
-immrep_all[["GTEx"]] <- gtex_easier$immresp[["Lung"]]
-immrep_all[["Jia"]] <- immrep_all[["Jia2018"]]
-immrep_all[["Sharma"]] <- immrep_all[["Sharma2019"]]
-immrep_all[["Jia2018"]] <- NULL
-immrep_all[["Sharma2019"]] <- NULL
-immrep_all[["JiaSharma"]] <- bind_rows(immrep_all[["Jia"]], immrep_all[["Sharma"]])
-immrep_all[["NSCLC"]] <- bind_rows(immrep_all[["LUAD"]], immrep_all[["LUSC"]])
+immresp_all <- feature_data %>%
+  filter(view == "immune response", feature == "response") %>%
+  rename(`immune response` = value) %>%
+  select(sample, `immune response`, dataset)
+
 
 correlation_data <- lapply(names(models), function(dataset_id) {
   get_factor_df(models[[dataset_id]]) %>%
-    pivot_longer(cols = -patient, names_to = "factor", values_to = "factor_value") %>%
-    inner_join(immrep_all[[dataset_id]] %>% as_tibble(rownames = "patient")) %>%
+    pivot_longer(cols = -sample, names_to = "factor", values_to = "factor_value") %>%
     mutate(dataset = dataset_id)
 }) %>%
   bind_rows() %>%
+  inner_join(immresp_all) %>%
   mutate(dataset = factor(dataset, levels = DATASETS))
 
 correlation_data %>%
-  ggplot(aes(x = factor_value, y = response)) +
+  ggplot(aes(x = factor_value, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
   theme_bw() +
   stat_cor() +
@@ -219,20 +230,70 @@ correlation_data %>%
 
 ### Correlation with tumor mutational burden
 ```{r, fig.width=16, fig.height=12}
-tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
-  tmp_tmb <- readRDS(file.path(nxfvars$tmb_dir, tmb_file))
-  tibble(patient = names(tmp_tmb), TMB = tmp_tmb) %>%
-    mutate(patient = str_replace_all(patient, "-", "."))
-}) %>% bind_rows()
-
 correlation_data %>%
   inner_join(tmb_all) %>%
-  ggplot(aes(x = factor_value, y = TMB)) +
+  ggplot(aes(x = factor_value, y = `log10(TMB + 1)`)) +
   geom_point(size = 0.8, color = "#333333") +
   theme_bw() +
   stat_cor() +
   geom_smooth(method = "lm") +
   facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free")
+```
+
+### Correlation with CD8+ T cell infiltration 
+```{r, fig.width=16, fig.height=12}
+cd8_all <- feature_data %>%
+  filter(feature == "CD8 T") %>%
+  rename(`CD8 T` = value) %>%
+  select(sample, `CD8 T`, dataset)
+
+correlation_data %>%
+  inner_join(cd8_all) %>%
+  ggplot(aes(x = factor_value, y = `CD8 T`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free")
+```
+
+### Correlate CD8+ T cell infiltration with TMB
+```{r, fig.width=16, fig.height=3}
+cd8_all %>%
+  inner_join(tmb_all) %>%
+  ggplot(aes(x = `log10(TMB + 1)`, y = `CD8 T`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~dataset, scales = "free", ncol = 7) +
+  ggtitle("CD8 T vs. TMB")
+```
+
+### Correlate CD8+ T cell infiltration with immune response 
+```{r, fig.width=16, fig.height=3}
+immresp_all %>%
+  inner_join(tmb_all) %>%
+  ggplot(aes(x = `log10(TMB + 1)`, y = `immune response`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~dataset, scales = "free", ncol = 7) +
+  ggtitle("Immune response vs. TMB")
+```
+
+### Correlate CD8+ T cell infiltration with TMB
+```{r, fig.width=16, fig.height=3}
+cd8_all %>%
+  inner_join(immresp_all) %>%
+  ggplot(aes(x = `immune response`, y = `CD8 T`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~dataset, scales = "free", ncol = 8) +
+  ggtitle("CD8T vs. immune response")
 ```
 
 ### Weight scatter NSCLC / JiaSharma
@@ -282,10 +343,10 @@ all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
 
 ### Variability of features within and between patients in Jia and Sharma
 ```{r, fig.width=18, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-feature_data <- list(TRACERx = features_tracerx, JiaSharma = features_jiasharma)
 
-lapply(names(feature_data), function(dataset_id) {
-  feature_data[[dataset_id]] %>%
+lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
+  feature_data %>%
+    filter(dataset == dataset_id) %>%
     ggplot(aes(x = value, y = patient, color = group)) +
     geom_point(size = .2) +
     facet_wrap(~feature, scale = "free_x") +
@@ -307,8 +368,9 @@ get_df <- function(df, group) {
 
 ```{r, fig.width=7, fig.height=18, echo=FALSE, message=FALSE, warning=FALSE}
 
-lapply(names(feature_data), function(dataset_id) {
-  bfs <- feature_data[[dataset_id]] %>%
+lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
+  bfs <- feature_data %>%
+    filter(dataset == dataset_id) %>%
     mutate(patient = as.factor(patient)) %>%
     group_by(feature) %>%
     group_modify(get_df)
@@ -324,3 +386,4 @@ lapply(names(feature_data), function(dataset_id) {
 ```
 
 
+ 
