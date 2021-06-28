@@ -42,7 +42,10 @@ processFeatures <- function(data, dataset_id) {
         separate("sample", c("patient", "replicate"), remove = FALSE) %>%
         # exclude normal samples
         filter(replicate != "N") %>%
-        select(-replicate)
+        select(-replicate) %>%
+        # prefix with dataset
+        mutate(patient = paste0(dataset_id, "-", patient)) %>%
+        mutate(sample = paste0(dataset_id, "-", sample))
     } else {
       df %>% mutate(patient = sample)
     }
@@ -64,16 +67,15 @@ processFeatures <- function(data, dataset_id) {
     # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
     mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
     do_pivot("Immune cells quantification") %>%
-    filter(feature != "Other") %>%
-    # Log transform
-    mutate(value = log10(value * 100 + 0.001))
+    filter(feature != "Other")
   pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
   tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
+  response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
 
-  MOFAdata <- bind_rows(cellfrac.df, pathways.df, tfs.df) %>%
-    mutate(group = dataset_id)
+  feature_df <- bind_rows(cellfrac.df, pathways.df, tfs.df, response.df) %>%
+    mutate(group = dataset_id, dataset = dataset_id)
 
-  return(MOFAdata)
+  return(feature_df)
 }
 ```
 
@@ -94,10 +96,30 @@ for (slot in names(gtex_data)) {
 }
 ```
 
+
 ## Process features
 ```{r processfeatures}
-feature_data <- sapply(DATASETS, function(dataset_id) {
+data_all_tidy <- sapply(DATASETS, function(dataset_id) {
   processFeatures(data_all, dataset_id)
+}, simplify = FALSE, USE.NAMES = TRUE)
+
+# We want to keep JiaSharma a multigroup model
+data_all_tidy$JiaSharma <- bind_rows(data_all_tidy$Jia, data_all_tidy$Sharma) %>% mutate(dataset = "JiaSharma")
+data_all_tidy$NSCLC <- bind_rows(data_all_tidy$LUAD, data_all_tidy$LUSC) %>% mutate(group = "NSCLC", dataset = "NSCLC")
+
+data_all_tidy <- data_all_tidy %>% bind_rows()
+
+saveRDS(data_all_tidy, file = file.path(nxfvars$out_dir, "data_all_tidy.rds"), compress = FALSE)
+```
+
+## Process features for MOFA
+```{r processfeatures_mofa}
+feature_data <- sapply(data_all_tidy$dataset %>% unique(), function(dataset_id) {
+  data_all_tidy %>%
+    filter(dataset == dataset_id) %>%
+    select(-dataset) %>%
+    filter(view %in% c("Immune cells quantification", "Transcription factors", "Pathway scores")) %>%
+    mutate(value = if_else(view == "Immune cells quantification", log10(value * 100 + 0.001), value))
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 feature_data$JiaSharma <- bind_rows(feature_data$Jia, feature_data$Sharma)
@@ -107,7 +129,7 @@ feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate
 ### save feature data
 ```{r}
 lapply(names(feature_data), function(dataset_id) {
-  saveRDS(feature_data[[dataset_id]], file = file.path(nxfvars$out_dir, paste0(dataset_id, ".rds")), compress = FALSE)
+  saveRDS(feature_data[[dataset_id]], file = file.path(nxfvars$out_dir, paste0("mofa_", dataset_id, ".rds")), compress = FALSE)
 })
 ```
 
@@ -148,7 +170,7 @@ lapply(names(bootstrap_datasets), function(dataset_id) {
   lapply(1:N_BOOTSTRAP, function(i) {
     saveRDS(bootstrap_datasets[[dataset_id]][[i]],
       file = file.path(nxfvars$out_dir, paste0(
-        "boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
+        "mofa_boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
       )), compress = FALSE
     )
   })

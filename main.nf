@@ -32,7 +32,8 @@ process P12_prepare_mofa_data {
 
     output:
         path("*.html"), emit: report
-        path("datasets/*.rds"), emit: datasets 
+        path("datasets/mofa_*.rds"), emit: mofa_datasets 
+        path("datasets/data_all_tidy.rds"), emit: data_all
 
     script:
     data_dir = "./"
@@ -70,16 +71,18 @@ process P14_mofa_analysis {
         path(easier_data)
         path(features)
         path(models)
+        path(tmb_data)
 
     output:
         path("*.html"), emit: report
-        path("*.tsv"), emit: tables
+        path("*.{tsv,rds}"), emit: tables
 
     script:
     data_dir = "./"
     features_dir = "./"
     easier_dir = "./"
     out_dir = "./"
+    tmb_dir = "./"
     """
     ${nxfvars(task)}
     execute_rmd.r ${notebook}
@@ -99,13 +102,14 @@ workflow W10_mofa {
     )
     P13_run_mofa(
         file_tuple("$dir/13_run_mofa.R"),
-        P12_prepare_mofa_data.out.datasets
+        P12_prepare_mofa_data.out.mofa_datasets
     )
     P14_mofa_analysis(
         file_tuple("$dir/14_mofa_analysis.Rmd"),
         file("$dir/helper_functions.R"),
         P11_easier.out.collect(),
-        P12_prepare_mofa_data.out.datasets,
+        P12_prepare_mofa_data.out.data_all,
+        Channel.fromPath("data/01_processed/bulk_rna_seq/*TMB.rds").collect(),
         P13_run_mofa.out.models.collect()
     )
 }
