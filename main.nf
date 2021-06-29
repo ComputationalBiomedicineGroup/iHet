@@ -70,6 +70,7 @@ process P14_mofa_analysis {
         path("helper_functions.R")
         path(easier_data)
         path(features)
+        path(features_mofa)
         path(models)
         path(tmb_data)
 
@@ -110,6 +111,7 @@ workflow W10_mofa {
         file("$dir/helper_functions.R"),
         P11_easier.out.collect(),
         P12_prepare_mofa_data.out.data_all,
+        P12_prepare_mofa_data.out.mofa_datasets,
         Channel.fromPath("data/01_processed/bulk_rna_seq/*TMB.rds").collect(),
         P13_run_mofa.out.models.collect()
     )
