@@ -25,48 +25,38 @@ rdbu10_palette <- c(
   "#4393C3", "#2166AC", "#053061"
 )
 
-
-#' Function to compute the iHet score starting from immune cell, pathway, and TF features
-#' using either the NSCLC or JiaSharma feature weights
-#' TODO: fix path to weightfile
-getiHet <- function(featobj, dataset, weightfile = "/Users/francescafinotello/Dropbox/Research_projects/MODiSH/RData/median_weights.rds", model = c("NSCLC", "JiaSharma")) {
-
-  # Select model weights
-  model <- match.arg(model, c("NSCLC", "JiaSharma"))
-
-  # Derive the median weights for factor 1
-  weights <- readRDS(weightfile)
-  if (model == "JiaSharma") {
-    F1 <- weights$JiaSharma$`factor 1`
-    names(F1) <- weights$JiaSharma$feature
-  } else if (model == "NSCLC") {
-    F1 <- weights$NSCLC$`factor 1`
-    names(F1) <- weights$NSCLC$feature
-  }
-
-  # Extract, aggregate, and normalize the input features
-  immcell <- featobj$cellfrac[[dataset]]
-  immcell <- immcell[which(rownames(immcell) != "Other"), ]
-  immcell[, "CD4 T"] <- immcell[, "CD4 T"] + immcell[, "Treg"]
-  immcell <- log10(immcell * 100 + 0.001)
-  tf <- featobj$tf[[dataset]]
-  path <- featobj$pathway[[dataset]]
-  path <- t(scale(t(path)))
-  features <- cbind(immcell, tf, path)
-
-  # Select the common features
-  # TODO: put some warnings for missing/exceeding ones?
-  cfeatures <- intersect(colnames(features), names(F1))
-  features <- features[, cfeatures]
-  F1 <- F1[cfeatures]
-  features <- t(features)
-
-  # Compute iHet on the input features
-  iHet <- F1 %*% features
-  iHet <- iHet[1, , drop = TRUE]
-
-  return(iHet)
+#' Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
+get_rotation <- function(weights) {
+  diag(sign(weights[["Immune cells quantification"]]["CD8 T", ]))
 }
+
+#' extract and preprocess weights from a MOFA model
+get_weight_df <- function(model) {
+  weights <- get_weights(model, scale = TRUE)
+  lapply(names(weights), function(modality) {
+    weights[[modality]] %*% get_rotation(weights) %>%
+      as_tibble(rownames = "feature") %>%
+      mutate(view = modality) %>%
+      rename_with(function(x) {
+        str_replace(x, "V", "factor ")
+      }, starts_with("V"))
+  }) %>%
+    bind_rows() %>%
+    arrange(view, feature)
+}
+
+#' extract factors from a MOFA model
+get_factor_df <- function(model) {
+  weights <- get_weights(model, scale = TRUE)
+  get_factors(model) %>%
+    do.call("rbind", .) %*% get_rotation(weights) %>%
+    as.data.frame() %>%
+    as_tibble(rownames = "sample") %>%
+    rename_with(function(x) {
+      str_replace(x, "V", "factor ")
+    }, starts_with("V"))
+}
+
 
 #' Plot MOFA results
 plotResults <- function(model, title) {
