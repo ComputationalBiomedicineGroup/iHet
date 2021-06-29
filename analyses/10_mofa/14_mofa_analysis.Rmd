@@ -15,6 +15,7 @@ params:
 options(bitmapType = "cairo")
 nxfvars <- params$nxfvars
 message(capture.output(str(nxfvars)))
+dir.create(file.path(nxfvars$out_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
 DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
@@ -155,49 +156,59 @@ draw(all)
 ## Correlation heatmaps
 ```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
-weight_mat <- lapply(names(median_weights), function(dataset_id) {
-  median_weights[[dataset_id]] %>%
-    select(feature, `factor 1`, `factor 2`, `factor 3`) %>%
-    rename_with(function(x) {
-      str_replace(x, "factor", dataset_id)
-    }, starts_with("factor")) %>%
-    column_to_rownames("feature")
-}) %>% bind_cols()
+factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
+lapply(names(factor_list), function(factors_name) {
+  factors <- factor_list[[factors_name]]
+  weight_mat <- lapply(names(median_weights), function(dataset_id) {
+    median_weights[[dataset_id]] %>%
+      select(feature, all_of(factors)) %>%
+      rename_with(function(x) {
+        str_replace(x, "factor", dataset_id)
+      }, starts_with("factor")) %>%
+      column_to_rownames("feature")
+  }) %>% bind_cols()
 
-cor_res <- rstatix::cor_mat(weight_mat)
-cor_mat <- cor_res %>%
-  column_to_rownames("rowname") %>%
-  as.matrix()
-cor_pmat <- rstatix::cor_get_pval(cor_res) %>%
-  column_to_rownames("rowname") %>%
-  as.matrix()
+  cor_res <- rstatix::cor_mat(weight_mat)
+  cor_mat <- cor_res %>%
+    column_to_rownames("rowname") %>%
+    as.matrix()
+  cor_pmat <- rstatix::cor_get_pval(cor_res) %>%
+    column_to_rownames("rowname") %>%
+    as.matrix()
 
-i <- upper.tri(cor_pmat)
-cor_pmat[i] <- p.adjust(cor_pmat[i], method = "fdr")
-j <- lower.tri(cor_pmat)
-cor_pmat[j] <- p.adjust(cor_pmat[j], method = "fdr")
+  i <- upper.tri(cor_pmat)
+  cor_pmat[i] <- p.adjust(cor_pmat[i], method = "fdr")
+  j <- lower.tri(cor_pmat)
+  cor_pmat[j] <- p.adjust(cor_pmat[j], method = "fdr")
 
-corrplot(cor_mat,
-  is.corr = TRUE,
-  p.mat = cor_pmat,
-  sig.level = 0.01,
-  insig = "blank", tl.col = "black",
-  col = colorRampPalette(rev(rdbu10_palette))(1000),
-)
+  corrplot(cor_mat,
+    is.corr = TRUE,
+    p.mat = cor_pmat,
+    sig.level = 0.01,
+    insig = "blank", tl.col = "black",
+    col = colorRampPalette(rev(rdbu10_palette))(1000),
+  )
 
 
-corrplot(cor_mat,
-  is.corr = TRUE,
-  p.mat = cor_pmat,
-  sig.level = 0.01,
-  insig = "blank",
-  tl.col = "black",
-  order = "hclust",
-  col = colorRampPalette(rev(rdbu10_palette))(1000),
-)
+  corrplot(cor_mat,
+    is.corr = TRUE,
+    p.mat = cor_pmat,
+    sig.level = 0.01,
+    insig = "blank",
+    tl.col = "black",
+    order = "hclust",
+    col = colorRampPalette(rev(rdbu10_palette))(1000),
+  )
 
-write_tsv(cor_mat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir, "factor_correlations.tsv"))
-write_tsv(cor_pmat %>% as_tibble(rownames = "factor"), file.path(nxfvars$out_dir, "factor_correlation_pvalues.tsv"))
+  write_tsv(
+    cor_mat %>% as_tibble(rownames = "factor"),
+    file.path(nxfvars$out_dir, sprintf("%s_factor_correlations.tsv", factors_name))
+  )
+  write_tsv(
+    cor_pmat %>% as_tibble(rownames = "factor"),
+    file.path(nxfvars$out_dir, sprintf("%s_factor_correlation_pvalues.tsv", factors_name))
+  )
+})
 ```
 
 ### Correlation with immune response
@@ -239,6 +250,24 @@ correlation_data %>%
   geom_smooth(method = "lm") +
   facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free")
 ```
+
+```{r, fig.height=4, fig.width=4, include=FALSE}
+lapply(correlation_data$dataset %>% unique(), function(dataset_id) {
+  correlation_data %>%
+    inner_join(tmb_all) %>%
+    filter(dataset == dataset_id, factor == "factor 1") %>%
+    rename(`factor 1` = factor_value) %>%
+    ggplot(aes(x = `factor 1`, y = `log10(TMB + 1)`)) +
+    geom_point(size = 0.8, color = "#444444") +
+    stat_cor() +
+    geom_smooth(method = "lm") +
+    theme_cowplot() +
+    ylim(c(0, 2))
+  ggsave(file.path(nxfvars$out_dir, "plots", sprintf("correlation_f1_tmb_%s.png", dataset_id)), width = 4, height = 4)
+})
+```
+
+
 
 ### Correlation with CD8+ T cell infiltration 
 ```{r, fig.width=16, fig.height=12}

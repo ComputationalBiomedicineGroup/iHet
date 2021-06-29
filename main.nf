@@ -76,6 +76,7 @@ process P14_mofa_analysis {
     output:
         path("*.html"), emit: report
         path("*.{tsv,rds}"), emit: tables
+        path("plots/*.*"), emit: figures
 
     script:
     data_dir = "./"
