@@ -132,10 +132,10 @@ draw(all)
 
 
 ## Correlation heatmaps
-```{r Correlation features, echo = FALSE,  fig.width=10, fig.height=12, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
+```{r Correlation features, echo = FALSE,  fig.width=7, fig.height=8, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
-lapply(names(factor_list), function(factors_name) {
+plots <- lapply(names(factor_list), function(factors_name) {
   factors <- factor_list[[factors_name]]
   weight_mat <- lapply(names(median_weights), function(dataset_id) {
     median_weights[[dataset_id]] %>%
@@ -159,6 +159,11 @@ lapply(names(factor_list), function(factors_name) {
   j <- lower.tri(cor_pmat)
   cor_pmat[j] <- p.adjust(cor_pmat[j], method = "fdr")
 
+  svg(
+    filename = file.path(nxfvars$out_dir, "plots", sprintf("%s_factor_correlations.svg", factors_name)),
+    width = if_else(factors_name == "F1", 4.5, 7),
+    height = if_else(factors_name == "F1", 5, 8)
+  )
   corrplot(cor_mat,
     is.corr = TRUE,
     p.mat = cor_pmat,
@@ -166,6 +171,7 @@ lapply(names(factor_list), function(factors_name) {
     insig = "blank", tl.col = "black",
     col = colorRampPalette(rev(rdbu10_palette))(1000),
   )
+  dev.off()
 
   corrplot(cor_mat,
     is.corr = TRUE,
