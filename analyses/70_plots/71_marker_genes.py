@@ -19,6 +19,7 @@ import infercnvpy as cnv
 sc.set_figure_params(figsize=(4, 4))
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # %%
 adata = sc.read_h5ad(
@@ -37,6 +38,14 @@ pathways_of_interest = [
 tfs_of_interest = [
     f"TF:{tf}" for tf in ["SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263"]
 ]
+
+# %%
+with plt.rc_context({"figure.figsize": (8, 8), "figure.dpi": (96)}):
+    sc.pl.umap(adata, color="cell_type_coarse", add_outline=True, size=15)
+
+# %%
+with plt.rc_context({"figure.figsize": (8.5, 8), "figure.dpi": (96)}):
+    sc.pl.umap(adata, color="TF:SPI1", add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3)
 
 # %%
 sc.pl.dotplot(
