@@ -20,6 +20,7 @@ sc.set_figure_params(figsize=(4, 4))
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import dorothea
 
 # %%
 adata = sc.read_h5ad(
@@ -41,11 +42,18 @@ tfs_of_interest = [
 
 # %%
 with plt.rc_context({"figure.figsize": (8, 8), "figure.dpi": (96)}):
-    sc.pl.umap(adata, color="cell_type_coarse", add_outline=True, size=15)
+    sc.pl.umap(adata, color="cell_type_coarse", add_outline=True, size=15, save="cell_type_coarse.svg")
 
 # %%
-with plt.rc_context({"figure.figsize": (8.5, 8), "figure.dpi": (96)}):
-    sc.pl.umap(adata, color="TF:SPI1", add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3)
+adata_dorothea = dorothea.extract(adata)
+
+# %%
+adata_dorothea.obs = adata_dorothea.obs.loc[:, []]
+
+# %%
+for tf in ["TF:SPI1", "TF:E2F4", "TF:SOX2"]:
+    with plt.rc_context({"figure.figsize": (8.5, 8), "figure.dpi": (96)}):
+        sc.pl.umap(adata_dorothea, color=tf, add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3)
 
 # %%
 sc.pl.dotplot(
