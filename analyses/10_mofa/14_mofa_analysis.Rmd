@@ -51,15 +51,6 @@ bootstrap_models <- sapply(DATASETS, function(dataset_id) {
 }, simplify = FALSE, USE.NAMES = TRUE)
 ```
 
-## Variance Plots
-```{r, results='hide', echo=FALSE}
-lapply(names(models), function(dataset_id) {
-  print(dataset_id)
-  plotResults(models[[dataset_id]], dataset_id)
-})
-```
-
-
 ```{r, include=FALSE}
 median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
   lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
@@ -71,6 +62,34 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
 
 saveRDS(median_weights, file = file.path(nxfvars$out_dir, "median_weights.rds"))
 ```
+
+## Variance Plots
+```{r, results='hide', echo=FALSE}
+variance_explained_bootstrap <- lapply(names(bootstrap_models), function(dataset_id) {
+  lapply(bootstrap_models[[dataset_id]], function(model) {
+    get_variance_explained(model, as.data.frame = TRUE)$r2_per_factor %>%
+      mutate(dataset = dataset_id)
+  }) %>% bind_rows()
+}) %>% bind_rows()
+```
+
+```{r, fig.height=4, fig.width=10}
+p <- variance_explained_bootstrap %>%
+  filter(factor %in% c("Factor1", "Factor2", "Factor3")) %>%
+  ggplot(aes(x = factor, y = value, color = view)) +
+  facet_wrap(~dataset, nrow = 1) +
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") +
+  scale_color_brewer(palette = "Dark2")
+
+add_summary(p, error.plot = "crossbar", fun = "mean") +
+  geom_boxplot(alpha = 0, lwd = .7) +
+  background_grid() +
+  ylab("% variance explained")
+```
+
+
+
 
 
 
