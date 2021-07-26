@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import dorothea
+import progeny
 
 # %%
 adata = sc.read_h5ad(
@@ -51,9 +52,17 @@ adata_dorothea = dorothea.extract(adata)
 adata_dorothea.obs = adata_dorothea.obs.loc[:, []]
 
 # %%
-for tf in ["TF:SPI1", "TF:E2F4", "TF:SOX2"]:
+for tf in adata_dorothea.var_names:
     with plt.rc_context({"figure.figsize": (8.5, 8), "figure.dpi": (96)}):
-        sc.pl.umap(adata_dorothea, color=tf, add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3)
+        sc.pl.umap(adata_dorothea, color=tf, add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3, save=f"_{tf.replace(':', '_')}.pdf")
+
+# %%
+adata_progeny = progeny.extract(adata)
+
+# %%
+for pw in adata_progeny.var_names:
+    with plt.rc_context({"figure.figsize": (8.5, 8), "figure.dpi": (96)}):
+        sc.pl.umap(adata_progeny, color=pw, add_outline=True, size=15, cmap="coolwarm", vmax=3, vmin=-3, save=f"_{pw.replace(':', '_')}.pdf")
 
 # %%
 sc.pl.dotplot(

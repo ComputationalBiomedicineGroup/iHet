@@ -12,3 +12,4 @@ deploy
 work
 results
 containers
+analyses/**/figures
