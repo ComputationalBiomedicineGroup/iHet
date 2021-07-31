@@ -1,17 +1,15 @@
 ---
 params:
-  nxfvars:
-    value:
-      data_dir: "../../results/10_mofa/11_easier"
-      out_dir: "/local/scratch/sturm/mofa"
+    cpus: 1
+    meta: NULL
+    input_dir: "../../results/10_mofa/11_easier"
+    artifact_dir: "/local/scratch/sturm/mofa"
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
-nxfvars <- params$nxfvars
-message(capture.output(str(nxfvars)))
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 DATASETS <- c("Jia", "Sharma", "LUAD", "LUSC", "GTEx", "TRACERx")
-dir.create(nxfvars$out_dir, showWarnings = FALSE)
+dir.create(params$artifact_dir, showWarnings = FALSE)
 
 library(conflicted)
 library(MOFA2)
@@ -80,9 +78,9 @@ processFeatures <- function(data, dataset_id) {
 ```
 
 ```{r loaddata}
-gtex_data <- readRDS(file.path(nxfvars$data_dir, "GTEx_expr_data.features.rds"))
-nsclc_data <- readRDS(file.path(nxfvars$data_dir, "NSCLC_expr_data_sel.features.rds"))
-tracerx_data <- readRDS(file.path(nxfvars$data_dir, "TRACERx_expr_data.features.rds"))
+gtex_data <- readRDS(file.path(params$input_dir, "GTEx_expr_data.features.rds"))
+nsclc_data <- readRDS(file.path(params$input_dir, "NSCLC_expr_data_sel.features.rds"))
+tracerx_data <- readRDS(file.path(params$input_dir, "TRACERx_expr_data.features.rds"))
 data_all <- nsclc_data
 
 # Rename datasets
@@ -109,7 +107,7 @@ data_all_tidy$NSCLC <- bind_rows(data_all_tidy$LUAD, data_all_tidy$LUSC) %>% mut
 
 data_all_tidy <- data_all_tidy %>% bind_rows()
 
-saveRDS(data_all_tidy, file = file.path(nxfvars$out_dir, "data_all_tidy.rds"), compress = FALSE)
+saveRDS(data_all_tidy, file = file.path(params$artifact_dir, "data_all_tidy.rds"), compress = FALSE)
 ```
 
 ## Process features for MOFA
@@ -129,7 +127,7 @@ feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate
 ### save feature data
 ```{r}
 lapply(names(feature_data), function(dataset_id) {
-  saveRDS(feature_data[[dataset_id]], file = file.path(nxfvars$out_dir, paste0("mofa_", dataset_id, ".rds")), compress = FALSE)
+  saveRDS(feature_data[[dataset_id]], file = file.path(params$artifact_dir, paste0("mofa_", dataset_id, ".rds")), compress = FALSE)
 })
 ```
 
@@ -169,7 +167,7 @@ bootstrap_datasets$TRACERx <- NULL
 lapply(names(bootstrap_datasets), function(dataset_id) {
   lapply(1:N_BOOTSTRAP, function(i) {
     saveRDS(bootstrap_datasets[[dataset_id]][[i]],
-      file = file.path(nxfvars$out_dir, paste0(
+      file = file.path(params$artifact_dir, paste0(
         "mofa_boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
       )), compress = FALSE
     )

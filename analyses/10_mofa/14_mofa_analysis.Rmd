@@ -1,30 +1,29 @@
 ---
 title: MOFA analysis results
 params:
-  nxfvars:
-    value:
-      data_dir: "../../results/10_mofa/13_run_mofa"
-      features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
-      easier_dir: "../../results/10_mofa/11_easier"
-      tmb_dir: "../../data/01_processed/bulk_rna_seq"
-      out_dir: "/local/scratch/sturm/mofa"
+    cpus: 1
+    meta: NULL
+    input_dir: "../../results/10_mofa/13_run_mofa"
+    features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
+    easier_dir: "../../results/10_mofa/11_easier"
+    tmb_dir: "../../data/01_processed/bulk_rna_seq"
+    artifact_dir: "/local/scratch/sturm/mofa"
 ---
 
 ## Load input data
 ```{r setup, include=FALSE, message=FALSE}
 options(bitmapType = "cairo")
-nxfvars <- params$nxfvars
-message(capture.output(str(nxfvars)))
-dir.create(file.path(nxfvars$out_dir, "plots"), showWarnings = FALSE)
+message(capture.output(str(params)))
+dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
 DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
-feature_data <- readRDS(file.path(nxfvars$features_dir, "data_all_tidy.rds"))
+feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
 
 tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
-  tmp_tmb <- readRDS(file.path(nxfvars$tmb_dir, tmb_file))
+  tmp_tmb <- readRDS(file.path(params$tmb_dir, tmb_file))
   tmb_df <- tibble(sample = names(tmp_tmb), TMB = tmp_tmb) %>%
     mutate(sample = str_replace_all(sample, "-", "."))
   if (tmb_file == "Sharma_TMB.rds") {
@@ -41,11 +40,11 @@ tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(t
 
 ```{r, include=FALSE}
 models <- sapply(DATASETS, function(dataset_id) {
-  load_model(file.path(nxfvars$data_dir, sprintf("mofa_%s.hdf5", dataset_id)))
+  load_model(file.path(params$input_dir, sprintf("mofa_%s.hdf5", dataset_id)))
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 bootstrap_models <- sapply(DATASETS, function(dataset_id) {
-  lapply(Sys.glob(file.path(nxfvars$data_dir, sprintf("mofa_boot_%s_*.hdf5", dataset_id))), function(x) {
+  lapply(Sys.glob(file.path(params$input_dir, sprintf("mofa_boot_%s_*.hdf5", dataset_id))), function(x) {
     load_model(x)
   })
 }, simplify = FALSE, USE.NAMES = TRUE)
@@ -60,7 +59,7 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
     ungroup()
 }, USE.NAMES = TRUE, simplify = FALSE)
 
-saveRDS(median_weights, file = file.path(nxfvars$out_dir, "median_weights.rds"))
+saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
 ```
 
 ## Variance Plots
@@ -96,7 +95,7 @@ add_summary(p, error.plot = "crossbar", fun = "mean") +
 ## Heatmap of bootstrapped factors
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-svg(file.path(nxfvars$out_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 20)
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 20)
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
   buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -160,7 +159,7 @@ plots <- lapply(names(factor_list), function(factors_name) {
   cor_pmat[j] <- p.adjust(cor_pmat[j], method = "fdr")
 
   svg(
-    filename = file.path(nxfvars$out_dir, "plots", sprintf("%s_factor_correlations.svg", factors_name)),
+    filename = file.path(params$artifact_dir, "plots", sprintf("%s_factor_correlations.svg", factors_name)),
     width = if_else(factors_name == "F1", 4.5, 7),
     height = if_else(factors_name == "F1", 5, 8)
   )
@@ -185,11 +184,11 @@ plots <- lapply(names(factor_list), function(factors_name) {
 
   write_tsv(
     cor_mat %>% as_tibble(rownames = "factor"),
-    file.path(nxfvars$out_dir, sprintf("%s_factor_correlations.tsv", factors_name))
+    file.path(params$artifact_dir, sprintf("%s_factor_correlations.tsv", factors_name))
   )
   write_tsv(
     cor_pmat %>% as_tibble(rownames = "factor"),
-    file.path(nxfvars$out_dir, sprintf("%s_factor_correlation_pvalues.tsv", factors_name))
+    file.path(params$artifact_dir, sprintf("%s_factor_correlation_pvalues.tsv", factors_name))
   )
 })
 ```
@@ -198,7 +197,7 @@ plots <- lapply(names(factor_list), function(factors_name) {
 
 ```{r}
 # Calculate factors for TRACERx data (Weighted sum of features)
-mofa_data_tracerx <- readRDS(file.path(nxfvars$features_dir, "mofa_TRACERx.rds"))
+mofa_data_tracerx <- readRDS(file.path(params$features_dir, "mofa_TRACERx.rds"))
 
 tracerx_factors <- lapply(c("JiaSharma", "NSCLC"), function(weights_source) {
   mofa_data_tracerx %>%
@@ -251,7 +250,7 @@ lapply(factors_all$dataset_label %>% unique(), function(dataset_id) {
     theme_cowplot() +
     ylim(c(-2, 3)) +
     ggtitle(dataset_id)
-  ggsave(file.path(nxfvars$out_dir, "plots", sprintf("correlation_f1_immune_response_%s.png", dataset_id)), width = 4, height = 4)
+  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_f1_immune_response_%s.png", dataset_id)), width = 4, height = 4)
 })
 ```
 
@@ -280,13 +279,13 @@ lapply(DATASETS, function(dataset_id) {
     theme_cowplot() +
     ylim(c(0, 2)) +
     ggtitle(dataset_id)
-  ggsave(file.path(nxfvars$out_dir, "plots", sprintf("correlation_f1_tmb_%s.png", dataset_id)), width = 4, height = 4)
+  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_f1_tmb_%s.png", dataset_id)), width = 4, height = 4)
 })
 ```
 
 
 
-### Correlation with CD8+ T cell infiltration 
+### Correlation with CD8+ T cell infiltration
 ```{r, fig.width=16, fig.height=12}
 cd8_all <- feature_data %>%
   filter(feature == "CD8 T") %>%
@@ -316,7 +315,7 @@ cd8_all %>%
   ggtitle("CD8 T vs. TMB")
 ```
 
-### Correlate CD8+ T cell infiltration with immune response 
+### Correlate CD8+ T cell infiltration with immune response
 ```{r, fig.width=16, fig.height=3}
 immresp_all %>%
   inner_join(tmb_all) %>%
@@ -433,4 +432,4 @@ lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
 ```
 
 
- 
+
