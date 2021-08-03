@@ -157,9 +157,6 @@ bootstrap_datasets$JiaSharma <- lapply(1:N_BOOTSTRAP, function(i) {
 bootstrap_datasets$NSCLC <- lapply(1:N_BOOTSTRAP, function(i) {
   bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
 })
-
-# We don't want to build models for Tracerx
-bootstrap_datasets$TRACERx <- NULL
 ```
 
 ### save bootstrap datasets

@@ -17,7 +17,7 @@ message(capture.output(str(params)))
 dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
+DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx", "TRACERx")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
@@ -60,6 +60,10 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
 }, USE.NAMES = TRUE, simplify = FALSE)
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
+
+# remove TRACERx for downstream analysis
+models$TRACERx <- NULL
+median_weights$TRACERx <- NULL
 ```
 
 ## Variance Plots
@@ -86,10 +90,6 @@ add_summary(p, error.plot = "crossbar", fun = "mean") +
   background_grid() +
   ylab("% variance explained")
 ```
-
-
-
-
 
 
 ## Heatmap of bootstrapped factors
