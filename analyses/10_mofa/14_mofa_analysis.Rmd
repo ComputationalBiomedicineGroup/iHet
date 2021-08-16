@@ -59,11 +59,22 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
     ungroup()
 }, USE.NAMES = TRUE, simplify = FALSE)
 
+median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
+  lapply(bootstrap_models[[dataset_id]], get_factor_df) %>%
+    bind_rows() %>%
+    mutate(sample = str_replace(sample, "_(\\d+)$", "")) %>%
+    group_by(sample) %>%
+    mutate(n = n()) %>%
+    summarise_all(median)
+}, USE.NAMES = TRUE, simplify = FALSE)
+
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
+saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
 
 # remove TRACERx for downstream analysis
 models$TRACERx <- NULL
 median_weights$TRACERx <- NULL
+median_factors$TRACERx <- NULL
 ```
 
 ## Variance Plots
@@ -209,8 +220,9 @@ tracerx_factors <- lapply(c("JiaSharma", "NSCLC"), function(weights_source) {
     mutate(dataset = "TRACERx", weights_source = weights_source)
 }) %>% bind_rows()
 
-factors_all <- lapply(names(models), function(dataset_id) {
-  get_factor_df(models[[dataset_id]]) %>%
+factors_all <- lapply(names(median_factors), function(dataset_id) {
+  median_factors[[dataset_id]] %>%
+    select(-n) %>%
     pivot_longer(cols = -sample, names_to = "factor", values_to = "factor_value") %>%
     mutate(dataset = dataset_id)
 }) %>%
