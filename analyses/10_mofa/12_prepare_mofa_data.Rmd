@@ -81,15 +81,16 @@ processFeatures <- function(data, dataset_id) {
 gtex_data <- readRDS(file.path(params$input_dir, "GTEx_expr_data.features.rds"))
 nsclc_data <- readRDS(file.path(params$input_dir, "NSCLC_expr_data_sel.features.rds"))
 tracerx_data <- readRDS(file.path(params$input_dir, "TRACERx_expr_data.features.rds"))
-data_all <- nsclc_data
+tcga_data <- readRDS(file.path(params$input_dir, "TCGA_expr_data.features.rds"))
+data_all <- tcga_data
 
-# Rename datasets
+# Merge and rename datasets
+# LUAD and LUSC are contained in both tcga and nsclc. They are identical
+# and we use the version contained in the TCGA object.
 for (slot in names(gtex_data)) {
   data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
-  data_all[[slot]][["Jia"]] <- data_all[[slot]][["Jia2018"]]
-  data_all[[slot]][["Jia2018"]] <- NULL
-  data_all[[slot]][["Sharma"]] <- data_all[[slot]][["Sharma2019"]]
-  data_all[[slot]][["Sharma2019"]] <- NULL
+  data_all[[slot]][["Jia"]] <- nsclc_data[[slot]][["Jia2018"]]
+  data_all[[slot]][["Sharma"]] <- nsclc_data[[slot]][["Sharma2019"]]
   data_all[[slot]][["TRACERx"]] <- tracerx_data[[slot]][["TRACERx"]]
 }
 ```
