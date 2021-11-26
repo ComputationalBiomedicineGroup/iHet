@@ -4,7 +4,7 @@ params:
     cpus: 1
     meta: NULL
     input_dir: "../../results/10_mofa/13_run_mofa"
-    features_dir: "../../results/10_mofa/12_prepare_mofa_data/datasets"
+    features_dir: "../../results/10_mofa/12_prepare_mofa_data/artifacts"
     easier_dir: "../../results/10_mofa/11_easier"
     tmb_dir: "../../data/01_processed/bulk_rna_seq"
     artifact_dir: "/local/scratch/sturm/mofa"
@@ -17,10 +17,11 @@ message(capture.output(str(params)))
 dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx", "TRACERx")
 PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
+DATASETS <- feature_data$dataset %>% unique()
+SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx", "TRACERx")
 
 tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
   tmp_tmb <- readRDS(file.path(params$tmb_dir, tmb_file))
@@ -87,11 +88,11 @@ variance_explained_bootstrap <- lapply(names(bootstrap_models), function(dataset
 }) %>% bind_rows()
 ```
 
-```{r, fig.height=4, fig.width=10}
+```{r, fig.height=8, fig.width=15}
 p <- variance_explained_bootstrap %>%
   filter(factor %in% c("Factor1", "Factor2", "Factor3")) %>%
   ggplot(aes(x = factor, y = value, color = view)) +
-  facet_wrap(~dataset, nrow = 1) +
+  facet_wrap(~dataset, nrow = 2) +
   theme_cowplot() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") +
   scale_color_brewer(palette = "Dark2")
@@ -142,7 +143,7 @@ draw(all)
 
 
 ## Correlation heatmaps
-```{r Correlation features, echo = FALSE,  fig.width=7, fig.height=8, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
+```{r correlation_features, echo = FALSE,  fig.width=15, fig.height=16, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
 plots <- lapply(names(factor_list), function(factors_name) {
@@ -227,6 +228,7 @@ factors_all <- lapply(names(median_factors), function(dataset_id) {
     mutate(dataset = dataset_id)
 }) %>%
   bind_rows() %>%
+  filter(dataset %in% SELECTED_DATASETS) %>%
   bind_rows(tracerx_factors) %>%
   # special labels for tracerx data
   mutate(dataset_label = if_else(is.na(weights_source), dataset, sprintf("%s (%s)", dataset, weights_source)))
@@ -279,7 +281,7 @@ factors_all %>%
 ```
 
 ```{r, fig.height=4, fig.width=4, include=FALSE}
-lapply(DATASETS, function(dataset_id) {
+lapply(SELECTED_DATASETS, function(dataset_id) {
   factors_all %>%
     inner_join(tmb_all) %>%
     filter(dataset == dataset_id, factor == "factor 1") %>%
@@ -380,7 +382,7 @@ tmp_scatter_data %>%
 
 ### Variability of weights between bootstrap samples
 ```{r, include=FALSE}
-all_weights <- lapply(names(bootstrap_models), function(dataset_id) {
+all_weights <- lapply(SELECTED_DATASETS, function(dataset_id) {
   lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
     bind_rows() %>%
     mutate(dataset = dataset_id)
@@ -420,7 +422,6 @@ get_df <- function(df, group) {
   bf <- anovaBF(value ~ patient, data = as.data.frame(df), progress = FALSE) %>% as.vector()
   data.frame(bayes_factor = bf)
 }
-
 ```
 
 
