@@ -3,14 +3,14 @@ nextflow.enable.dsl = 2
 def modules = params.modules.clone()
 
 def file_tuple(filename) {
-    f = file(filename)
+    f = file(filename, checkIfExists: true)
     return tuple([id: f.simpleName], f)
 }
 
-include { RMARKDOWN as P12_prepare_mofa_data } from "../modules/local/rmarkdown/main.nf" addParams(
+include { RMARKDOWNNOTEBOOK as P12_prepare_mofa_data } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
     options: modules["P12_prepare_mofa_data"]
 )
-include { RMARKDOWN as P14_mofa_analysis } from "../modules/local/rmarkdown/main.nf" addParams(
+include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
     options: modules["P14_mofa_analysis"]
 )
 
@@ -62,14 +62,14 @@ workflow W10_mofa {
     )
     P13_run_mofa(
         file_tuple("$dir/13_run_mofa.R"),
-        P12_prepare_mofa_data.out.artifacts.flatten().filter{
+        P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it }.flatten().filter{
             it -> it.simpleName.startsWith("mofa_")
         }
     )
     P14_mofa_analysis(
         file_tuple("$dir/14_mofa_analysis.Rmd"),
         [features_dir: "./", easier_dir: "./", tmb_dir: "./"],
-        P12_prepare_mofa_data.out.artifacts.mix(
+        P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it}.mix(
             Channel.of(file("$dir/helper_functions.R")),
             P11_easier.out.collect(),
             Channel.fromPath("data/01_processed/bulk_rna_seq/*TMB.rds").collect(),
