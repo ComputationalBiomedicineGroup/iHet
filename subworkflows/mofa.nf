@@ -72,7 +72,7 @@ workflow W10_mofa {
         P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it}.mix(
             Channel.of(file("$dir/helper_functions.R")),
             P11_easier.out.collect(),
-            Channel.fromPath("data/01_processed/bulk_rna_seq/*TMB.rds").collect(),
+            Channel.fromPath("data/01_processed/bulk_rna_seq/*.txt").collect(),
             P13_run_mofa.out.models.collect()
         ).collect()
     )

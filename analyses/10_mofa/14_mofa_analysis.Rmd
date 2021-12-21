@@ -23,20 +23,17 @@ feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
 DATASETS <- feature_data$dataset %>% unique()
 SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx", "TRACERx")
 
-tmb_all <- lapply(c("TCGA_TMB.rds", "Sharma_TMB.rds", "Jia_TMB.rds"), function(tmb_file) {
-  tmp_tmb <- readRDS(file.path(params$tmb_dir, tmb_file))
-  tmb_df <- tibble(sample = names(tmp_tmb), TMB = tmp_tmb) %>%
-    mutate(sample = str_replace_all(sample, "-", "."))
-  if (tmb_file == "Sharma_TMB.rds") {
-    tmb_df <- tmb_df %>% mutate(sample = paste0("Sharma-", sample))
-  }
-  if (tmb_file == "Jia_TMB.rds") {
-    tmb_df <- tmb_df %>% mutate(sample = paste0("Jia-", sample))
-  }
-  tmb_df
-}) %>%
-  bind_rows() %>%
-  mutate(`log10(TMB + 1)` = log10(TMB + 1))
+tmb_jia_sharma <- read_tsv(file.path(params$tmb_dir, "JiaSharma_TMB_nextNEOpi.txt")) %>%
+  select(sample = SampleID, starts_with("TMB")) %>%
+  mutate(sample = str_replace_all(sample, "_new", "")) %>%
+  mutate(sample = if_else(str_detect(sample, "P\\d{3}_"), paste0("Jia-", sample), paste0("Sharma-", sample))) %>%
+  pivot_longer(-sample, names_to = "metric", values_to = "tmb_value")
+tmb_tcga <- read_tsv(file.path(params$tmb_dir, "TCGA_mutation-load_updated.txt")) %>%
+  mutate(tmb = `Silent per Mb` + `Non-silent per Mb`, tmb_non_silent = `Silent per Mb`) %>%
+  select(sample = Tumor_Sample_ID, tmb, tmb_non_silent) %>%
+  mutate(sample = str_replace_all(sample, "-", ".")) %>%
+  pivot_longer(-sample, names_to = "metric", values_to = "tmb_value")
+tmb_all <- bind_rows(tmb_jia_sharma, tmb_tcga)
 ```
 
 ```{r, include=FALSE}
@@ -56,8 +53,9 @@ median_weights <- sapply(names(bootstrap_models), function(dataset_id) {
   lapply(bootstrap_models[[dataset_id]], get_weight_df) %>%
     bind_rows() %>%
     group_by(view, feature) %>%
-    summarise_all(median) %>%
-    ungroup()
+    summarise_all(list(median = median, mad = mad)) %>%
+    ungroup() %>%
+    rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
 median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
@@ -66,7 +64,8 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
     mutate(sample = str_replace(sample, "_(\\d+)$", "")) %>%
     group_by(sample) %>%
     mutate(n = n()) %>%
-    summarise_all(median)
+    summarise_all(list(median = median, mad = mad)) %>%
+    rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
@@ -205,7 +204,7 @@ plots <- lapply(names(factor_list), function(factors_name) {
 })
 ```
 
-### Correlation with immune response
+### Correlation: factors vs immune response
 
 ```{r}
 # Calculate factors for TRACERx data (Weighted sum of features)
@@ -214,6 +213,7 @@ mofa_data_tracerx <- readRDS(file.path(params$features_dir, "mofa_TRACERx.rds"))
 tracerx_factors <- lapply(c("JiaSharma", "NSCLC"), function(weights_source) {
   mofa_data_tracerx %>%
     inner_join(median_weights[[weights_source]]) %>%
+    select(-contains("mad")) %>%
     mutate(across(starts_with("factor"), ~ .x * value)) %>%
     group_by(sample) %>%
     summarise(across(starts_with("factor"), sum)) %>%
@@ -223,7 +223,7 @@ tracerx_factors <- lapply(c("JiaSharma", "NSCLC"), function(weights_source) {
 
 factors_all <- lapply(names(median_factors), function(dataset_id) {
   median_factors[[dataset_id]] %>%
-    select(-n) %>%
+    select(-n, -contains("mad")) %>%
     pivot_longer(cols = -sample, names_to = "factor", values_to = "factor_value") %>%
     mutate(dataset = dataset_id)
 }) %>%
@@ -249,58 +249,31 @@ factors_all %>%
   geom_smooth(method = "lm") +
   facet_wrap(dataset_label ~ factor, scales = "free_x", ncol = 7) +
   ylim(c(-2, 3))
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.pdf"), width = 18, height = 22)
 ```
 
-```{r, fig.height=4, fig.width=4, include=FALSE}
-lapply(factors_all$dataset_label %>% unique(), function(dataset_id) {
-  factors_all %>%
-    inner_join(immresp_all) %>%
-    filter(dataset_label == dataset_id, factor == "factor 1") %>%
-    rename(`factor 1` = factor_value) %>%
-    ggplot(aes(x = `factor 1`, y = `immune response`)) +
-    geom_point(size = 0.8, color = "#444444") +
-    stat_cor() +
-    geom_smooth(method = "lm") +
-    theme_cowplot() +
-    ylim(c(-2, 3)) +
-    ggtitle(dataset_id)
-  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_f1_immune_response_%s.png", dataset_id)), width = 4, height = 4)
-})
-```
 
-### Correlation with tumor mutational burden
+### Correlation: factors vs. tmb
 ```{r, fig.height=12, fig.width=12}
-factors_all %>%
-  inner_join(tmb_all) %>%
-  ggplot(aes(x = factor_value, y = `log10(TMB + 1)`)) +
-  geom_point(size = 0.8, color = "#333333") +
-  theme_bw() +
-  stat_cor() +
-  geom_smooth(method = "lm") +
-  facet_wrap(dataset_label ~ factor, scales = "free_x", ncol = 7)
-```
-
-```{r, fig.height=4, fig.width=4, include=FALSE}
-lapply(SELECTED_DATASETS, function(dataset_id) {
+lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
+  message(dataset_id)
   factors_all %>%
+    filter(dataset_label == dataset_id) %>%
     inner_join(tmb_all) %>%
-    filter(dataset == dataset_id, factor == "factor 1") %>%
-    rename(`factor 1` = factor_value) %>%
-    ggplot(aes(x = `factor 1`, y = `log10(TMB + 1)`)) +
-    geom_point(size = 0.8, color = "#444444") +
+    ggplot(aes(x = factor_value, y = tmb_value)) +
+    geom_point(size = 0.8, color = "#333333") +
+    theme_bw() +
     stat_cor() +
     geom_smooth(method = "lm") +
-    theme_cowplot() +
-    ylim(c(0, 2)) +
-    ggtitle(dataset_id)
-  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_f1_tmb_%s.png", dataset_id)), width = 4, height = 4)
+    facet_wrap(metric ~ factor, scales = "free_x", ncol = 7)
+  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_factors_tmb_%s.pdf", dataset_id)), width = 18, height = 9, title = sprintf("Correlation Factors vs. TMB %s", dataset_id))
 })
 ```
 
 
-
-### Correlation with CD8+ T cell infiltration
-```{r, fig.width=16, fig.height=12}
+### Correlation: factors vs. CD8 T 
+```{r, fig.width=16, fig.height=18}
 cd8_all <- feature_data %>%
   filter(feature == "CD8 T") %>%
   rename(`CD8 T` = value) %>%
@@ -313,37 +286,51 @@ factors_all %>%
   theme_bw() +
   stat_cor() +
   geom_smooth(method = "lm") +
-  facet_grid(rows = vars(dataset), cols = vars(factor), scales = "free")
+  facet_wrap(dataset ~ factor, scales = "free_x", ncol = 7)
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_CD8.pdf"), width = 18, height = 22)
 ```
 
-### Correlate CD8+ T cell infiltration with TMB
-```{r, fig.width=16, fig.height=3}
-cd8_all %>%
-  inner_join(tmb_all) %>%
-  ggplot(aes(x = `log10(TMB + 1)`, y = `CD8 T`)) +
-  geom_point(size = 0.8, color = "#333333") +
-  theme_bw() +
-  stat_cor() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~dataset, scales = "free", ncol = 7) +
-  ggtitle("CD8 T vs. TMB")
+### Correlation: CD8 vs. TMB
+```{r, fig.width=16, fig.height=7}
+lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
+  cd8_all %>%
+    inner_join(tmb_all) %>%
+    filter(dataset == dataset_id) %>%
+    ggplot(aes(x = tmb_value, y = `CD8 T`)) +
+    geom_point(size = 0.8, color = "#333333") +
+    theme_bw() +
+    stat_cor() +
+    geom_smooth(method = "lm") +
+    facet_wrap(~metric, scales = "free", ncol = 7) +
+    ggtitle("CD8 T vs. TMB")
+
+  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_CD8_TMB_%s.pdf", dataset_id)), width = 8, height = 4, title = sprintf("Correlation CD8 TMB %s", dataset_id))
+})
 ```
 
-### Correlate CD8+ T cell infiltration with immune response
-```{r, fig.width=16, fig.height=3}
-immresp_all %>%
-  inner_join(tmb_all) %>%
-  ggplot(aes(x = `log10(TMB + 1)`, y = `immune response`)) +
-  geom_point(size = 0.8, color = "#333333") +
-  theme_bw() +
-  stat_cor() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~dataset, scales = "free", ncol = 7) +
-  ggtitle("Immune response vs. TMB")
+### Correlation: Immune response vs. TMB
+```{r, fig.width=16, fig.height=7}
+lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
+  message(dataset_id)
+  immresp_all %>%
+    inner_join(tmb_all) %>%
+    filter(dataset == dataset_id) %>%
+    ggplot(aes(x = tmb_value, y = `immune response`)) +
+    geom_point(size = 0.8, color = "#333333") +
+    theme_bw() +
+    stat_cor() +
+    geom_smooth(method = "lm") +
+    facet_wrap(~metric, scales = "free", ncol = 7) +
+    ggtitle("Immune response vs. TMB")
+
+  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_immune_response_TMB_%s.pdf", dataset_id)), width = 8, height = 4, title = sprintf("Correlation Immune-response TMB %s", dataset_id))
+})
 ```
 
-### Correlate CD8+ T cell infiltration with TMB
-```{r, fig.width=16, fig.height=3}
+
+### Correlation: CD8 T vs immune response
+```{r, fig.width=16, fig.height=12}
 cd8_all %>%
   inner_join(immresp_all) %>%
   ggplot(aes(x = `immune response`, y = `CD8 T`)) +
@@ -353,6 +340,8 @@ cd8_all %>%
   geom_smooth(method = "lm") +
   facet_wrap(~dataset, scales = "free", ncol = 8) +
   ggtitle("CD8T vs. immune response")
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_CD8_immune_response.pdf"), width = 18, height = 13)
 ```
 
 ### Weight scatter NSCLC / JiaSharma
@@ -371,12 +360,14 @@ tmp_scatter_data %>%
   ggplot(aes(x = JiaSharma, y = NSCLC)) +
   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
   geom_point(aes(color = view)) +
-  geom_label_repel(size = 3.5, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5), aes(label = feature)) +
+  geom_label_repel(size = 3.5, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
   scale_color_brewer(type = "qual", palette = "Dark2") +
   xlim(c(-1, 1)) +
   ylim(c(-1, 1)) +
   theme_cowplot() +
   background_grid()
+
+ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.pdf"), width = 18, height = 14)
 ```
 
 
