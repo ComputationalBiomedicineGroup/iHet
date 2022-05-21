@@ -31,6 +31,7 @@ path_adata_m = nxfvars.get(
 )
 path_adata_nsclc = nxfvars.get("adata_nsclc", "../../data/results/20_single-cell/subset_atlas/adata_nsclc.h5ad")
 cpus = nxfvars.get("cpus", 16)
+artifact_dir = nxfvars.get("artifact_dir", "../../data/results/20_single-cell/annotate_myeloid")
 
 # %%
 threadpool_limits(cpus)
@@ -259,6 +260,11 @@ sc.pp.neighbors(adata_nsclc, use_rep="X_scANVI")
 sc.tl.umap(adata_nsclc, init_pos="X_umap")
 
 # %%
-sc.tl.umap(adata_nsclc)
+sc.pl.umap(adata_nsclc, color="cell_type")
+
+# %% [markdown]
+# # Save reprocessed anndatas
 
 # %%
+adata_nsclc.write_h5ad(f"{artifact_dir}/adata_nsclc_reannotated.h5ad")
+adata_m.write_h5ad(f"{artifact_dir}/adata_myeloid_reannotated.h5ad")

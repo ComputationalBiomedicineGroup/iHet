@@ -21,16 +21,22 @@ import scanpy as sc
 from nxfvars import nxfvars
 import pandas as pd
 from threadpoolctl import threadpool_limits
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 sc.settings.set_figure_params(figsize=(4, 4))
 import scanpy_helpers as sh
 
 # %%
 path_adata_m = nxfvars.get(
-    "adata_m", "../../data/results/20_single-cell/subset_atlas/adata_m.h5ad"
+    "adata_m", "../../data/results/20_single-cell/annotate_myeloid/adata_myeloid_reannotated.h5ad"
 )
-path_adata_nsclc = nxfvars.get("adata_nsclc", "../../data/results/20_single-cell/subset_atlas/adata_nsclc.h5ad")
+path_adata_nsclc = nxfvars.get(
+    "adata_nsclc", "../../data/results/20_single-cell/annotate_myeloid/adata_nsclc_reannotated.h5ad"
+)
 cpus = nxfvars.get("cpus", 16)
+artifact_dir = nxfvars.get("artifact_dir", "/home/sturm/Downloads/ihet")
 
 # %%
 threadpool_limits(cpus)
@@ -44,6 +50,56 @@ adatas = {"m": {}, "nsclc": {}}
 
 # %%
 adatas["m"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_m)
+adatas["m"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_m)
+adatas["nsclc"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_nsclc)
+adatas["nsclc"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_nsclc)
 
 # %%
-sh.compare_groups.compute_scores.run_dorothea(adata_m)
+# %%capture
+for scope, tmp_adatas in adatas.items():
+    for tool, tmp_ad in tmp_adatas.items():
+        with PdfPages(f"{artifact_dir}/{tool}_{scope}_umap.pdf") as pdf:
+            for var in tmp_ad.var_names:
+                with plt.rc_context({"figure.figsize": (6, 6), "figure.dpi": 300}):
+                    sc.pl.umap(
+                        tmp_ad,
+                        color=var,
+                        cmap="coolwarm",
+                        vmax=3,
+                        vmin=-3,
+                        show=False,
+                        size=500000 / tmp_ad.shape[0],
+                    )
+                    pdf.savefig(bbox_inches="tight")
+
+# %%
+# %%capture
+for scope, tmp_adatas in adatas.items():
+    for tool, tmp_ad in tmp_adatas.items():
+        tmp_pb = sh.pseudobulk.pseudobulk(
+            tmp_ad, groupby=["patient", "cell_type"], aggr_fun=np.mean
+        )
+        fig = sc.pl.matrixplot(
+            tmp_pb,
+            groupby="cell_type",
+            var_names=tmp_pb.var_names,
+            cmap="coolwarm",
+            swap_axes=True,
+            dendrogram=True,
+            return_fig=True,
+            show=False,
+        )
+        fig.savefig(
+            f"{artifact_dir}/{tool}_{scope}_pseudobulk_heatmap_clustered.pdf", bbox_inches="tight"
+        )
+        fig = sc.pl.matrixplot(
+            tmp_pb,
+            groupby="cell_type",
+            var_names=tmp_pb.var_names,
+            cmap="coolwarm",
+            swap_axes=True,
+            dendrogram=False,
+            return_fig=True,
+            show=False,
+        )
+        fig.savefig(f"{artifact_dir}/{tool}_{scope}_pseudobulk_heatmap.pdf", bbox_inches="tight")
