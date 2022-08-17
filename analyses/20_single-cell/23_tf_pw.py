@@ -23,6 +23,7 @@ import pandas as pd
 from threadpoolctl import threadpool_limits
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats
 from matplotlib.backends.backend_pdf import PdfPages
 
 sc.settings.set_figure_params(figsize=(4, 4))
@@ -55,6 +56,9 @@ adatas["nsclc"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_
 adatas["nsclc"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_nsclc)
 
 # %%
+sc.pl.umap(adatas["nsclc"]["dorothea"], cmap="coolwarm", color=["E2F1", "E2F2", "E2F3", "E2F4"], vmin=-2, vmax=2)
+
+# %%
 # %%capture
 for scope, tmp_adatas in adatas.items():
     for tool, tmp_ad in tmp_adatas.items():
@@ -78,6 +82,23 @@ for scope, tmp_adatas in adatas.items():
     for tool, tmp_ad in tmp_adatas.items():
         tmp_pb = sh.pseudobulk.pseudobulk(
             tmp_ad, groupby=["patient", "cell_type"], aggr_fun=np.mean
+        )
+        tmp_pb_z = tmp_pb.copy()
+        tmp_pb_z.X = scipy.stats.zscore(tmp_pb_z.X, axis=0)
+        fig = sc.pl.matrixplot(
+            tmp_pb_z,
+            groupby="cell_type",
+            var_names=tmp_pb.var_names,
+            cmap="coolwarm",
+            swap_axes=True,
+            dendrogram=True,
+            return_fig=True,
+            show=False,
+            vmin=-2.5,
+            vmax=2.5
+        )
+        fig.savefig(
+            f"{artifact_dir}/{tool}_{scope}_pseudobulk_heatmap_clustered_zscore.pdf", bbox_inches="tight"
         )
         fig = sc.pl.matrixplot(
             tmp_pb,
@@ -103,3 +124,5 @@ for scope, tmp_adatas in adatas.items():
             show=False,
         )
         fig.savefig(f"{artifact_dir}/{tool}_{scope}_pseudobulk_heatmap.pdf", bbox_inches="tight")
+
+# %%

@@ -44,6 +44,10 @@ adata_m = sc.read_h5ad(path_adata_m)
 adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
 # %%
+with plt.rc_context({"figure.figsize": (10,10), "figure.dpi": 300}):
+    sc.pl.umap(adata_nsclc, color="cell_type_tumor", legend_loc="on data", legend_fontoutline=2, size=500000 / adata_nsclc.shape[0])
+
+# %%
 # %%capture
 for scope, tmp_adata in {"m": adata_m, "nsclc": adata_nsclc}.items():
     size = 500000 / tmp_adata.shape[0]
