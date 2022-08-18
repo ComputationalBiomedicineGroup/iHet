@@ -64,7 +64,8 @@ processFeatures <- function(data, dataset_id) {
     # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
     mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
     do_pivot("Immune cells quantification") %>%
-    filter(feature != "Other")
+    # DCs and Monocytes show unstable results in the different bootstraps -> exclude them.
+    filter(!(feature %in% c("Other", "DC", "Monocyte")))
   pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
   tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
   response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
