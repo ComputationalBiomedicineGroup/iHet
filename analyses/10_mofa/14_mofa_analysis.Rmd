@@ -7,7 +7,7 @@ params:
     features_dir: "../../results/10_mofa/12_prepare_mofa_data/artifacts"
     easier_dir: "../../results/10_mofa/11_easier"
     tmb_dir: "../../data/01_processed/bulk_rna_seq"
-    artifact_dir: "/local/scratch/sturm/mofa"
+    artifact_dir: "/home/sturm/Downloads/ihet"
 ---
 
 ## Load input data
@@ -70,11 +70,6 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
 saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
-
-# remove TRACERx for downstream analysis
-models$TRACERx <- NULL
-median_weights$TRACERx <- NULL
-median_factors$TRACERx <- NULL
 ```
 
 ## Variance Plots
@@ -142,12 +137,13 @@ draw(all)
 
 
 ## Correlation heatmaps
-```{r correlation_features, echo = FALSE,  fig.width=15, fig.height=16, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
+```{r correlation_features, echo = FALSE,  fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
+dataset_list = c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
 plots <- lapply(names(factor_list), function(factors_name) {
   factors <- factor_list[[factors_name]]
-  weight_mat <- lapply(names(median_weights), function(dataset_id) {
+  weight_mat <- lapply(dataset_list, function(dataset_id) {
     median_weights[[dataset_id]] %>%
       select(feature, all_of(factors)) %>%
       rename_with(function(x) {
@@ -171,8 +167,8 @@ plots <- lapply(names(factor_list), function(factors_name) {
 
   svg(
     filename = file.path(params$artifact_dir, "plots", sprintf("%s_factor_correlations.svg", factors_name)),
-    width = if_else(factors_name == "F1", 4.5, 7),
-    height = if_else(factors_name == "F1", 5, 8)
+    width = if_else(factors_name == "F1", 3.5, 7),
+    height = if_else(factors_name == "F1", 4, 8)
   )
   corrplot(cor_mat,
     is.corr = TRUE,
@@ -252,25 +248,61 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.pdf"), width = 18, height = 22)
 ```
+```{r, fig.width=10, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+selected_datasets = c("Jia", "Sharma", "LUAD", "LUSC")
+factors_all %>%
+  inner_join(immresp_all) %>%
+  filter(dataset_label %in% selected_datasets, factor == "factor 1") %>% 
+  mutate(dataset_label = factor(dataset_label, levels = selected_datasets)) %>% 
+  ggplot(aes(x = factor_value, y = `immune response`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw(base_size=17) +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ dataset_label, scales = "free_x", ncol = 7) +
+  ylim(c(-2, 3))+ xlab("factor 1")
 
-
-### Correlation: factors vs. tmb
-```{r, fig.height=12, fig.width=12}
-lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
-  message(dataset_id)
-  factors_all %>%
-    filter(dataset_label == dataset_id) %>%
-    inner_join(tmb_all) %>%
-    ggplot(aes(x = factor_value, y = tmb_value)) +
-    geom_point(size = 0.8, color = "#333333") +
-    theme_bw() +
-    stat_cor() +
-    geom_smooth(method = "lm") +
-    facet_wrap(metric ~ factor, scales = "free_x", ncol = 7)
-  ggsave(file.path(params$artifact_dir, "plots", sprintf("correlation_factors_tmb_%s.pdf", dataset_id)), width = 18, height = 9, title = sprintf("Correlation Factors vs. TMB %s", dataset_id))
-})
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device=svg)
 ```
 
+```{r, fig.width=3, fig.height=5.5, echo=FALSE, message=FALSE, warning=FALSE}
+# same for tracerx (once as derived by mofa, once as calculated using NSCLC signatures)
+
+selected_datasets = c("TRACERx", "TRACERx (NSCLC)")
+factors_all %>%
+  inner_join(immresp_all) %>%
+  filter(dataset_label %in% selected_datasets, factor == "factor 1") %>% 
+  mutate(dataset_label = factor(dataset_label, levels = selected_datasets)) %>% 
+  ggplot(aes(x = factor_value, y = `immune response`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw(base_size=17) +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ dataset_label, scales = "free_x", ncol = 1) +
+  ylim(c(-2, 3))+ xlab("factor 1")
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_tracerx.svg"), device=svg)
+
+```
+
+### Correlation: factors vs. tmb
+
+```{r, fig.width=10, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+selected_datasets = c("Jia", "Sharma", "LUAD", "LUSC")
+factors_all %>%
+  inner_join(tmb_all) %>%
+  filter(dataset %in% selected_datasets, factor == "factor 1", str_to_lower(metric) == "tmb") %>% 
+  mutate(dataset_label = factor(dataset_label, levels = selected_datasets)) %>% 
+  ggplot(aes(x = factor_value, y = `tmb_value`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw(base_size=17) +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ dataset_label, scales = "free_x", ncol = 7) +
+  xlab("factor 1") + ylab("TMB")
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_tmb.svg"), device=svg)
+```
 
 ### Correlation: factors vs. CD8 T 
 ```{r, fig.width=16, fig.height=18}
@@ -346,7 +378,7 @@ ggsave(file.path(params$artifact_dir, "plots", "correlation_CD8_immune_response.
 
 ### Weight scatter NSCLC / JiaSharma
 
-```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=8, fig.height=5, echo=FALSE, message=FALSE, warning=FALSE}
 scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
   median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
 }))
@@ -360,14 +392,14 @@ tmp_scatter_data %>%
   ggplot(aes(x = JiaSharma, y = NSCLC)) +
   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
   geom_point(aes(color = view)) +
-  geom_label_repel(size = 3.5, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
+  geom_label_repel(size = 3.5, max_overlaps=200, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
   scale_color_brewer(type = "qual", palette = "Dark2") +
   xlim(c(-1, 1)) +
   ylim(c(-1, 1)) +
   theme_cowplot() +
   background_grid()
 
-ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.pdf"), width = 18, height = 14)
+ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device=svg)
 ```
 
 
