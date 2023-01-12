@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.1
+#       jupytext_version: 1.14.4
 #   kernelspec:
 #     display_name: Python [conda env:conda-2021-nsclc-heterogeneity-scanpy2]
 #     language: python
@@ -29,9 +29,17 @@ import scanpy_helpers as sh
 path_adata_m = nxfvars.get(
     "adata_m", "../../data/results/20_single-cell/subset_atlas/adata_m.h5ad"
 )
-path_adata_nsclc = nxfvars.get("adata_nsclc", "../../data/results/20_single-cell/subset_atlas/adata_nsclc.h5ad")
+path_adata_nsclc = nxfvars.get(
+    "adata_nsclc", "../../data/results/20_single-cell/subset_atlas/adata_nsclc.h5ad"
+)
+path_hlca_markers = nxfvars.get(
+    "hlca_markers",
+    "../../tables/gene_annotations/hlca_cell_type_signatures.csv",
+)
 cpus = nxfvars.get("cpus", 16)
-artifact_dir = nxfvars.get("artifact_dir", "../../data/results/20_single-cell/annotate_myeloid")
+artifact_dir = nxfvars.get(
+    "artifact_dir", "../../data/results/20_single-cell/annotate_myeloid"
+)
 
 # %%
 threadpool_limits(cpus)
@@ -45,14 +53,7 @@ ah = sh.annotation.AnnotationHelper()
 
 # %%
 # based on Human Lung Cell Atlas
-ah2 = sh.annotation.AnnotationHelper(
-    markers=pd.read_csv(
-        nxfvars.get(
-            "hlca_markers",
-            "../../tables/gene_annotations/hlca_cell_type_signatures.csv",
-        )
-    )
-)
+ah2 = sh.annotation.AnnotationHelper(markers=pd.read_csv(path_hlca_markers))
 
 # %% [markdown]
 # # Re-annotate myeloid cells
@@ -211,14 +212,18 @@ ah.integrate_back(adata_m, adata_macro)
 # -> maybe use HLCA markers...
 
 # %%
-sc.pl.umap(adata_m, color=["n_genes_by_counts", "total_counts", "platform"], vmax=[6000, 20000])
+sc.pl.umap(
+    adata_m, color=["n_genes_by_counts", "total_counts", "platform"], vmax=[6000, 20000]
+)
 
 # %% [markdown]
 # --> looks like empty droplets
 
 # %%
 adata_m.obs["cell_type"] = adata_m.obs["cell_type"].astype(str)
-adata_m.obs.loc[adata_m.obs["cell_type"].isin(["7", "8"]), "cell_type"] = "potential empty droplets"
+adata_m.obs.loc[
+    adata_m.obs["cell_type"].isin(["7", "8"]), "cell_type"
+] = "potential empty droplets"
 
 # %%
 sc.pl.umap(adata_m, color="cell_type")
@@ -236,7 +241,9 @@ adata_m = adata_m[adata_m.obs["cell_type"] != "potential empty droplets", :].cop
 sc.pl.umap(adata_m, color="cell_type")
 
 # %%
-adata_nsclc = adata_nsclc[adata_nsclc.obs["cell_type"] != "potential empty droplets", :].copy()
+adata_nsclc = adata_nsclc[
+    adata_nsclc.obs["cell_type"] != "potential empty droplets", :
+].copy()
 
 # %%
 sc.pl.umap(adata_nsclc, color="cell_type")

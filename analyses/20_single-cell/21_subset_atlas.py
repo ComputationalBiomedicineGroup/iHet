@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.1
+#       jupytext_version: 1.14.4
 #   kernelspec:
 #     display_name: Python [conda env:conda-2021-nsclc-heterogeneity-scanpy2]
 #     language: python
@@ -67,9 +67,12 @@ sc.tl.umap(adata_m)
 sc.tl.leiden(adata_m, resolution=0.5)
 
 # %%
+sc.pl.umap(adata_m, color="leiden")
+
+# %%
 adata_cancer.write_h5ad(f"{artifact_dir}/adata_nsclc.h5ad")
 
 # %%
-adata_m.write_h5ad(f"{artifact_dir}/adata_m.h5ad")
+adata_m.write_h5ad(f"{artifact_dir}/adata_m.h5ad") 
 
 # %%
