@@ -79,7 +79,7 @@ fig  = sc.pl.matrixplot(pb_progeny, var_names=pws_of_interest, groupby="cell_typ
 fig.savefig(f"{artifact_dir}/heatmap_progeny.svg")
 
 # %%
-dorothea = sh.pseudobulk.pseudobulk(
+pb_dorothea = sh.pseudobulk.pseudobulk(
     adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean
 )
 

@@ -1,6 +1,10 @@
 
-include { JUPYTERNOTEBOOK as JUPYTER_SUBSET_ATLAS } from "../modules/local/jupyternotebook/main"
-include { JUPYTERNOTEBOOK as JUPYTER_ANNOTATE_MYELOID } from "../modules/local/jupyternotebook/main"
+include {
+    JUPYTERNOTEBOOK as JUPYTER_SUBSET_ATLAS;
+    JUPYTERNOTEBOOK as JUPYTER_ANNOTATE_MYELOID;
+    JUPYTERNOTEBOOK as JUPYTER_TF_PW;
+    JUPYTERNOTEBOOK as JUPYTER_OVERVIEW_PLOTS
+} from "../modules/local/jupyternotebook/main"
 
 def get_notebook_channel(id) {
     return Channel.value([["id": id], file("${projectDir}/analyses/20_single-cell/${id}.py")])
@@ -26,5 +30,23 @@ workflow W20_single_cell {
         JUPYTER_SUBSET_ATLAS.out.artifacts.concat(
             Channel.fromPath("$projectDir/tables/gene_annotations/hlca_cell_type_signatures.csv", checkIfExists: true)
         ).collect()
+    )
+    ch_adata_annotated =JUPYTER_ANNOTATE_MYELOID.out.artifacts
+
+    JUPYTER_TF_PW(
+        get_notebook_channel("23_tf_pw"),
+        Channel.value([
+            "adata_m": "adata_myeloid_reannotated.h5ad",
+            "adata_nsclc": "adata_nsclc_reannotated.h5ad"
+        ]),
+        ch_adata_annotated
+    )
+    JUPYTER_OVERVIEW_PLOTS(
+        get_notebook_channel("29_overview_plots"),
+        Channel.value([
+            "adata_m": "adata_myeloid_reannotated.h5ad",
+            "adata_nsclc": "adata_nsclc_reannotated.h5ad"
+        ]),
+        ch_adata_annotated
     )
 }
