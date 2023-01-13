@@ -56,10 +56,6 @@ process JUPYTERNOTEBOOK {
     mkdir artifacts
 
     # Set parallelism for BLAS/MKL etc. to avoid over-booking of resources
-    export MKL_NUM_THREADS="1"
-    export OPENBLAS_NUM_THREADS="1"
-    export OMP_NUM_THREADS="1"
-    export NUMBA_NUM_THREADS="1"
     # export MKL_NUM_THREADS="${task.cpus}"
     # export OPENBLAS_NUM_THREADS="${task.cpus}"
     # export OMP_NUM_THREADS="${task.cpus}"
