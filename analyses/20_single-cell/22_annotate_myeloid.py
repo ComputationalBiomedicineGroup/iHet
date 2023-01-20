@@ -27,10 +27,10 @@ import scanpy_helpers as sh
 
 # %%
 path_adata_m = nxfvars.get(
-    "adata_m", "../../data/results/20_single-cell/subset_atlas/adata_m.h5ad"
+    "adata_m", "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_m.h5ad"
 )
 path_adata_nsclc = nxfvars.get(
-    "adata_nsclc", "../../data/results/20_single-cell/subset_atlas/adata_nsclc.h5ad"
+    "adata_nsclc", "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_nsclc.h5ad"
 )
 path_hlca_markers = nxfvars.get(
     "hlca_markers",
@@ -38,7 +38,7 @@ path_hlca_markers = nxfvars.get(
 )
 cpus = nxfvars.get("cpus", 16)
 artifact_dir = nxfvars.get(
-    "artifact_dir", "../../data/results/20_single-cell/annotate_myeloid"
+    "artifact_dir", "/home/sturm/Downloads/ihet/single-cell/"
 )
 
 # %%
@@ -183,13 +183,89 @@ ah.integrate_back(adata_m, adata_cdc2)
 adata_macro = adata_m[adata_m.obs["cell_type"] == "Macrophage", :].copy()
 
 # %%
-ah.reprocess_adata_subset_scvi(adata_macro, use_rep="X_scANVI", leiden_res=0.5)
+ah.reprocess_adata_subset_scvi(adata_macro, use_rep="X_scANVI", leiden_res=0.3)
 
 # %%
 sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline=2)
 
 # %%
-sc.pl.umap(adata_macro, color=["SLAMF9", "CD163", "MARCO", "platform"])
+sc.tl.rank_genes_groups(adata_macro, groupby="leiden", method="wilcoxon")
+
+# %%
+sc.tl.filter_rank_genes_groups(adata_macro, min_in_group_fraction=0.2, max_out_group_fraction=0.2, min_fold_change=1)
+
+# %%
+sc.pl.rank_genes_groups_dotplot(adata_macro, min_logfoldchange=1, n_genes=20)
+
+# %%
+pb_macro = sh.pseudobulk.pseudobulk(adata_macro, groupby=["patient", "leiden"])
+
+# %%
+sc.pp.normalize_total(pb_macro)
+sc.pp.log1p(pb_macro)
+
+# %%
+sc.tl.rank_genes_groups(pb_macro, groupby="leiden", method="wilcoxon")
+
+# %%
+sc.pl.rank_genes_groups_matrixplot(
+    pb_macro,
+    standard_scale=None,
+    min_logfoldchange=2,
+    values_to_plot="logfoldchanges",
+    cmap="bwr",
+    n_genes=20,
+)
+
+# %%
+sc.tl.filter_rank_genes_groups(pb_macro, min_fold_change=2, min_in_group_fraction=0, max_out_group_fraction=1)
+
+# %%
+pd.set_option("display.max_rows", 300)
+
+# %%
+{k: pd.Series(v).dropna().tolist()[:20] for k, v in pd.DataFrame(pb_macro.uns["rank_genes_groups_filtered"]["names"]).to_dict(orient='list').items()}
+
+# %%
+pd.DataFrame(markers).to_dict(orient='list')
+
+# %%
+sc.pl.rank_genes_groups_matrixplot(
+    pb_macro,
+    standard_scale=None,
+    min_logfoldchange=2,
+    cmap="viridis",
+    n_genes=20,
+)
+
+# %%
+sc.pl.rank_genes_groups_matrixplot(
+    pb_macro,
+    standard_scale=None,
+    min_logfoldchange=2,
+    values_to_plot="log10_pvals_adj",
+    cmap="viridis",
+    n_genes=20,
+    vmax=6
+)
+
+# %%
+sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline=2)
+
+# %%
+sc.pl.umap(adata_macro, color=["MCEMP1", "S100A8", "S100A4", "FBP1", "MARCO"], ncols=5)
+
+# %%
+sc.pl.umap(adata_macro, color=["CTSB", "SLAMF9", "SPP1", "NMB"], ncols=5)
+
+# %%
+sc.pl.umap(adata_macro, color=["MS4A6A", "F13A1", "CD74"])
+
+# %%
+sc.pl.umap(adata_macro, color=["APOE", "APOC1", "PLD3", "ACP5", "CCL18"])
+
+# %%
+sc.pl.umap(adata_macro, color=["platform"])
 
 # %%
 ah.plot_umap(adata_macro, filter_cell_type=["macro", "mono"])
@@ -198,9 +274,10 @@ ah.plot_umap(adata_macro, filter_cell_type=["macro", "mono"])
 ah.annotate_cell_types(
     adata_macro,
     {
-        "Macrophage SLAMF9+": [2],
-        "Macrophage MARCO+": [4, 3],
-        "Macrophage CD163+": [0, 5, 1, 6, 7],
+        "Macrophage SPP1-hi": [3],
+        "Macrophage MARCO-hi": [1],
+        "Macrophage CD74-hi": [0],
+        "Macrophage CCL18-hi": [2]
     },
 )
 
@@ -275,3 +352,20 @@ sc.pl.umap(adata_nsclc, color="cell_type")
 # %%
 adata_nsclc.write_h5ad(f"{artifact_dir}/adata_nsclc_reannotated.h5ad")
 adata_m.write_h5ad(f"{artifact_dir}/adata_myeloid_reannotated.h5ad")
+
+# %% [markdown]
+# ### save for cellxgene
+
+# %%
+adata_nsclc_cellxgene = adata_nsclc.raw.to_adata()
+
+# %%
+adata_m_cellxgene = adata_m.raw.to_adata()
+
+# %%
+adata_nsclc_cellxgene.write_h5ad(
+    f"{artifact_dir}/adata_nsclc_reannotated_cellxgene.h5ad", compression="lzf"
+)
+adata_m_cellxgene.write_h5ad(
+    f"{artifact_dir}/adata_myeloid_reannotated_cellxgene.h5ad", compression="lzf"
+)

@@ -27,6 +27,7 @@ from threadpoolctl import threadpool_limits
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import altair as alt
 
 sc.settings.set_figure_params(figsize=(4, 4))
 import scanpy_helpers as sh
@@ -34,11 +35,11 @@ import scanpy_helpers as sh
 # %%
 path_adata_m = nxfvars.get(
     "adata_m",
-    "../../data/results/20_single-cell/annotate_myeloid/adata_myeloid_reannotated.h5ad",
+    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_myeloid_reannotated.h5ad",
 )
 path_adata_nsclc = nxfvars.get(
     "adata_nsclc",
-    "../../data/results/20_single-cell/annotate_myeloid/adata_nsclc_reannotated.h5ad",
+    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_nsclc_reannotated.h5ad",
 )
 artifact_dir = nxfvars.get("artifact_dir", "/home/sturm/Downloads/ihet/single-cell")
 
@@ -56,7 +57,7 @@ adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 adata_nsclc.shape
 
 # %%
-adata_nsclc.obs["patient"].nunique() 
+adata_nsclc.obs["patient"].nunique()
 
 # %%
 adata_nsclc.obs["study"].nunique()
@@ -136,5 +137,281 @@ for scope, tmp_adata in {"m": adata_m, "nsclc": adata_nsclc}.items():
             fig.savefig(
                 f"{artifact_dir}/umap_{color}_{scope}.svg", bbox_inches="tight", dpi=600
             )
+
+# %% [markdown]
+# ## Dotplots
+
+# %%
+sc.pl.dotplot(
+    adata_m,
+    groupby="cell_type",
+    var_names={
+        "Macro CD74-hi": [
+            "F13A1",
+            "GPR34",
+            "MEF2C",
+            "STAB1",
+            "ADAM28",
+            "OLFML3",
+            "GAS6",
+            "TSPAN33",
+            "ST6GAL1",
+            "EBI3",
+            "PALD1",
+            "IGF1",
+            "CX3CR1",
+            "PLD4",
+            "GPR155",
+            "LPAR6",
+            "NDRG2",
+            "P2RY6",
+            "IGSF21",
+            "SELENOP",
+        ],
+        "Macro MARCO-hi": [
+            "MCEMP1",
+            "RETN",
+            "S100A8",
+            "FCN1",
+            "MARCO",
+            "VCAN",
+            "FN1",
+            "PLAC8",
+            "NFE2",
+            "AGRP",
+            "DEFB1",
+            "KAZALD1",
+            "F5",
+            "KCNA3",
+            "FOLR3",
+            "HP",
+            "TRGC1",
+            "GPA33",
+            "MYB",
+            "PDGFD",
+        ],
+        "Macro CCL18-hi": [
+            "HS3ST2",
+            "FUCA1",
+            "RARRES1",
+            "ALDH1A1",
+            "CCL18",
+            "CHCHD6",
+            "RBP1",
+            "PLPP3",
+            "CTSK",
+            "KCNJ5",
+            "BIRC7",
+            "CHIT1",
+            "ADTRP",
+            "ATP6V0D2",
+            "RTN4R",
+            "RBP4",
+            "SELENOP",
+            "DNASE2B",
+            "GPR150",
+            "SLC40A1",
+        ],
+        "Macro SPP1-hi": [
+            "SLAMF9",
+            "TM4SF19",
+            "HK2",
+            "SDC2",
+            "SPP1",
+            "NMB",
+            "BNIP3",
+            "IL1RN",
+            "HILPDA",
+            "TNFSF14",
+            "AK4",
+            "SLC2A1",
+            "CCL7",
+            "SERPINE1",
+            "CA12",
+            "ZNF395",
+            "ENO2",
+            "ANGPTL4",
+            "MT1H",
+            "ZMIZ1-AS1",
+        ],
+    },
+)
+
+# %%
+sc.pl.dotplot(
+    adata_m,
+    groupby="cell_type",
+    var_names={
+        "Macrophage SLAMF9/SPP1": ["SLAMF9", "SPP1", "MIF"],
+        "Macrophage M1": ["CD163", "RNASE1", "CCL13"],
+        "Macrophage M2": [
+            "MARCO",
+            "RBP4",
+            "PPARG",
+            "FABP4",
+            "RBP4",
+            "PCOLCE2",
+            "CXCL9",
+            "CXCL10",
+            "CXCL11",
+        ],
+        "Macrophaghe": ["TREM2"],
+        "DC mature": ["CCR7", "CCR7", "CD40", "RELB", "CD83", "CD274", "CD200"],
+        "cDC1": ["CLEC9A", "XCR1", "IRF8", "BATF3"],
+        "cDC2": ["CD1C", "FCER1A", "FCGR2B", "AXL"],
+        "cDC2 CD1A+": ["CD1C", "CD1A", "CD207", "IL18"],
+        "Monocytes": ["VCAN", "CD14", "FCGR3A", "LST1"],
+    },
+)
+
+# %%
+fig = sc.pl.dotplot(
+    adata_m,
+    groupby="cell_type",
+    var_names={
+        "DC mature": ["CCR7", "CCL22"],
+        "Macrophages": ["APOE", "C1QB"],
+        "Macrophage CD163+": ["CD163"],
+        "Macrophage MARCO+": ["MARCO"],
+        "Macrophage SLAMF9+": ["SLAMF9"],
+        "Macrophage alveolar": ["FABP4"],
+        "cDC1": ["CLEC9A"],
+        "cDC2": ["CD1C", "CLEC10A"],
+        "cDC2 CD1A+": ["CD1A"],
+        "Monocytes": ["FCN1"],
+        "Monocyte contentional": ["S100A12"],
+        "Monocyte non-conventional": ["LILRB1", "LILRB2"],
+        "dividing": ["CDK1", "MKI67"],
+    },
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/myeloid_dotplot.svg")
+
+# %%
+sc.pl.umap(
+    adata_nsclc,
+    color=["CD14", "CD68", "CD163", "CSF1R", "FCGR3A", "CD84", "MS4A4A", "MS4A2"],
+)
+
+# %%
+marker_dict = {
+    "Alveolar cell type 1": ["AGER", "CLDN18"],
+    "Alveolar cell type 2": ["SFTPC", "SFTPB", "SFTPA1"],
+    "B cell": ["CD19", "CD79A", "MS4A1"],
+    "Ciliated": ["PIFO", "FOXJ1", "HYDIN", "CFAP299"],
+    "Club": ["SCGB3A1", "SCGB3A2"],
+    "Endothelial cell": ["VWF", "CDH5", "SELE"],
+    "Endothelial cell lymphatic": ["CCL21"],
+    "Fibroblast": ["PDGFRA", "FAP", "COL1A1"],
+    "Fibroblast adventitial": ["MFAP5", "SCARA5"],
+    "Fibroblast alveolar": ["ITGA8", "SCN7A"],
+    "Epithelial cell": ["EPCAM"],
+    "Mast cells": ["TPSB2"],
+    "Mesothelial": ["MSLN", "CALB2"],
+    "Monocytic lineage": ["CD14", "CD68"],
+    "NK cell": ["KLRD1", "GNLY"],
+    "Neutrophils": ["FCGR3B", "CSF3R"],
+    "pDC": ["IL3RA", "CLEC4C"],
+    "Pericyte": ["COX4I2", "PDGFRB"],
+    "Plasma cell": ["SDC1", "MZB1"],
+    "Smooth muscle cell": ["TAGLN", "MYH11"],
+    "T cell": ["CD3E"],
+    "T cell CD4": ["CD4"],
+    "T cell CD8": ["CD8A"],
+    "T cell regulatory": ["FOXP3", "IL2RA", "CTLA4"],
+    "Dividing": ["MKI67", "CDK1"],
+    "Tumor cells LUAD": ["KRT7", "CD24"],
+    "Tumor cells LUSC": ["SOX2", "KRT17"],
+}
+fig = sc.pl.dotplot(
+    adata_nsclc, groupby="cell_type", var_names=marker_dict, return_fig=True
+)
+fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
+
+# %% [markdown]
+# ## Patients per myeloid cell-type
+
+# %%
+m_counts = (
+    adata_m.obs.groupby(["cell_type", "dataset", "study", "patient"], observed=True)
+    .size()
+    .reset_index(name="n_cells")
+    .groupby(["cell_type", "dataset"])
+    .apply(lambda x: x.assign(n_cells_cell_type_dataset=lambda k: k["n_cells"].sum()))
+    .groupby("patient")
+    .apply(lambda x: x.assign(n_cells_patient=lambda k: k["n_cells"].sum()))
+).query("n_cells_patient >= 10")
+
+# %%
+patient_cell_type_combs = (
+    m_counts.loc[:, ["dataset", "study", "patient"]]
+    .merge(m_counts.loc[:, ["cell_type"]], how="cross")
+    .drop_duplicates()
+)
+
+# %%
+tmp_df = m_counts.merge(
+    patient_cell_type_combs,
+    on=["dataset", "study", "patient", "cell_type"],
+    how="outer",
+)
+
+# %%
+tmp_df2 = (
+    tmp_df.groupby(["study", "cell_type"], observed=True)
+    .agg(n_cells=("n_cells", np.sum))
+    .reset_index()
+)
+
+# %%
+tmp_df2_study = (
+    m_counts.groupby("study", observed=True)
+    .agg(n_patients_ge_10_cells=("patient", lambda x: x.nunique()))
+    .reset_index()
+    .assign(x="#patients with ≥ 10 myeloid cells")
+)
+
+# %%
+heatmp = (
+    alt.Chart(tmp_df2)
+    .mark_rect()
+    .encode(
+        x="cell_type",
+        y=alt.Y("study", axis=None),
+        color=alt.Color("n_cells", scale=alt.Scale(scheme="inferno", reverse=True)),
+    )
+)
+txt = (
+    alt.Chart(tmp_df2)
+    .mark_text()
+    .encode(
+        x="cell_type",
+        y=alt.Y("study", axis=None),
+        text="n_cells",
+        color=alt.condition(
+            alt.datum.n_cells < 10000, alt.value("black"), alt.value("white")
+        ),
+    )
+)
+studies = (
+    alt.Chart(tmp_df2_study)
+    .mark_rect()
+    .encode(
+        y=alt.Y("study"),
+        x=alt.X("x", title=None),
+        color=alt.Color("study", scale=sh.colors.altair_scale("study"), legend=None),
+    )
+)
+studies_txt = (
+    alt.Chart(tmp_df2_study)
+    .mark_text()
+    .encode(y="study", x=alt.X("x", title=None), text="n_patients_ge_10_cells")
+)
+
+# %%
+ch = ((studies + studies_txt) | (heatmp + txt).properties(width=500)).configure_concat(
+    spacing=0
+)
+ch.display()
 
 # %%

@@ -42,12 +42,33 @@ adata.shape
 adata.obs["condition"].value_counts()
 
 # %%
+#  * Only keep cancer patients
+#  * Keep all tissue types
+#  * Exclude NOS patients
 adata_cancer = adata[
-    adata.obs["condition"].isin(["LUAD", "LUSC", "NSCLC_NOS"]), :
+    adata.obs["condition"].isin(["LUAD", "LUSC"]), :
 ].copy()
 
 # %%
 adata_cancer
+
+# %%
+adata.obs["tissue"].value_counts()
+
+# %%
+adata.obs["origin"].value_counts()
+
+# %%
+adata.obs["condition"].value_counts()
+
+# %%
+adata_cancer.obs["tissue"].value_counts()
+
+# %%
+adata_cancer.obs["origin"].value_counts()
+
+# %%
+adata_cancer.obs["condition"].value_counts()
 
 # %%
 sc.pl.umap(adata_cancer, color="cell_type_coarse")
