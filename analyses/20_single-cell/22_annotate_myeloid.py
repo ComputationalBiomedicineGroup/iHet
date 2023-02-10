@@ -227,9 +227,6 @@ pd.set_option("display.max_rows", 300)
 {k: pd.Series(v).dropna().tolist()[:20] for k, v in pd.DataFrame(pb_macro.uns["rank_genes_groups_filtered"]["names"]).to_dict(orient='list').items()}
 
 # %%
-pd.DataFrame(markers).to_dict(orient='list')
-
-# %%
 sc.pl.rank_genes_groups_matrixplot(
     pb_macro,
     standard_scale=None,
@@ -369,3 +366,5 @@ adata_nsclc_cellxgene.write_h5ad(
 adata_m_cellxgene.write_h5ad(
     f"{artifact_dir}/adata_myeloid_reannotated_cellxgene.h5ad", compression="lzf"
 )
+
+# %%

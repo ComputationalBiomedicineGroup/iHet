@@ -54,6 +54,9 @@ adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 # ## Dataset stats
 
 # %%
+adata_nsclc.obs["study"].unique().tolist()
+
+# %%
 adata_nsclc.shape
 
 # %%
@@ -73,6 +76,24 @@ adata_nsclc.obs["cell_type_coarse"].unique().tolist()
 
 # %%
 adata_nsclc.obs["cell_type"].nunique()
+
+# %% [markdown]
+# ## Cell-type stats
+
+# %%
+n_myel = np.sum(
+    adata_nsclc.obs["cell_type_coarse"].isin(["Macrophage/Monocyte", "cDC"])
+)
+n_myel, n_myel / adata_nsclc.shape[0]
+
+# %%
+n_t = np.sum(adata_nsclc.obs["cell_type_coarse"].isin(["T cell", "NK cell"]))
+n_t, n_t / adata_nsclc.shape[0]
+
+# %%
+adata_nsclc.obs.groupby("cell_type_coarse").size().reset_index(name="n").assign(
+    frac=lambda x: x["n"] / np.sum(x["n"])
+).sort_values("frac", ascending=False)
 
 # %% [markdown]
 # ## UMAP plots
@@ -269,18 +290,19 @@ fig = sc.pl.dotplot(
     adata_m,
     groupby="cell_type",
     var_names={
-        "DC mature": ["CCR7", "CCL22"],
-        "Macrophages": ["APOE", "C1QB"],
-        "Macrophage CD163+": ["CD163"],
-        "Macrophage MARCO+": ["MARCO"],
-        "Macrophage SLAMF9+": ["SLAMF9"],
+        "DC mature": ["CCR7", "CCL22", "CCR7", "CD40", "RELB"],
+        "Macrophages": ["APOE", "C1QB", "TREM2"],
+        "Macrophage CCL18-hi": ["CCL18", "CCL13", "RNASE1", "APOE", "APOC1"],
+        "Macrophage CD74-hi": ["CD74"],
+        "Macrophage MARCO-hi": ["MARCO", "FN1", "RETN", "PPARG", "S100A8"],
+        "Macrophage SPP1-hi": ["SPP1", "SLAMF9", "MIF"],
         "Macrophage alveolar": ["FABP4"],
-        "cDC1": ["CLEC9A"],
-        "cDC2": ["CD1C", "CLEC10A"],
-        "cDC2 CD1A+": ["CD1A"],
+        "cDC1": ["CLEC9A", "XCR1", "IRF8", "CD274", "MS4A1"],
+        "cDC2": ["CD1C", "FCER1A", "CLEC10A"],
+        "cDC2 CD1A-hi": ["CD1A", "CD207"],
         "Monocytes": ["FCN1"],
-        "Monocyte contentional": ["S100A12"],
-        "Monocyte non-conventional": ["LILRB1", "LILRB2"],
+        "Monocyte contentional": ["S100A12", "CD14", "VCAN"],
+        "Monocyte non-conventional": ["FCGR3A", "LST1"],
         "dividing": ["CDK1", "MKI67"],
     },
     return_fig=True,
