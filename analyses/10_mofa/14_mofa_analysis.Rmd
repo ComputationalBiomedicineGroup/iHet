@@ -455,32 +455,108 @@ lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
 })
 ```
 
-```{r, include=FALSE}
-get_df <- function(df, group) {
-  bf <- anovaBF(value ~ patient, data = as.data.frame(df), progress = FALSE) %>% as.vector()
-  data.frame(bayes_factor = bf)
+
+```{r}
+inter_sample <- feature_data %>%
+  filter(dataset == "JiaSharma") %>%
+  group_by(view, feature, patient) %>%
+  summarize(value = median(value)) %>%
+  group_by(view, feature) %>%
+  summarize(mad_inter = mad(value)) %>%
+  ungroup()
+
+intra_sample <- feature_data %>%
+  filter(dataset == "JiaSharma") %>%
+  group_by(dataset, patient, view, feature) %>%
+  summarize(mad = mad(value)) %>%
+  group_by(view, feature) %>%
+  summarize(mad_intra = median(mad)) %>%
+  ungroup()
+
+variability_df <- inter_sample %>%
+  inner_join(intra_sample, by = c("view", "feature")) %>%
+  filter(view != "immune response") %>%
+  mutate(ratio = log2(mad_intra / mad_inter))
+```
+
+```{r}
+variability_df %>%
+  ggplot(aes(x = mad_intra, y = mad_inter, color = view)) +
+  geom_point() +
+  theme_cowplot() +
+  background_grid() +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  geom_text_repel(aes(label = feature))
+
+# tmp_scatter_data %>%
+#   ggplot(aes(x = JiaSharma, y = NSCLC)) +
+#   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
+#   geom_point(aes(color = view)) +
+#   geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
+#   scale_color_brewer(type = "qual", palette = "Dark2") +
+#   xlim(c(-1, 1)) +
+#   ylim(c(-1, 1)) +
+#   theme_cowplot() +
+#   background_grid() +
+#   stat_cor()
+```
+
+```{r, fig.width=18, fig.height=4}
+variability_df %>%
+  mutate(feature = reorder(feature, ratio)) %>%
+  ggplot(aes(x = feature, y = ratio, fill = view)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+```
+
+rank based estimation of variance
+
+```{r}
+kendall_cor_per_feature <- function(sampling_res, ...) {
+  feat_cor_mat <- sampling_res %>%
+    pivot_wider(id_cols = "patient", names_from = "iteration", values_from = "value") %>%
+    column_to_rownames("patient") %>%
+    as.matrix() %>%
+    cor(method = "kendall")
+  return(data.frame(feature_stability = median(feat_cor_mat[upper.tri(feat_cor_mat)])))
 }
+
+sampling_res <- lapply(1:100, function(i) {
+  feature_data %>%
+    filter(dataset == "JiaSharma") %>%
+    group_by(view, feature, patient) %>%
+    summarize(value = sample(value, 1), .groups = "drop") %>%
+    mutate(iteration = i)
+}) %>% bind_rows()
+
+feature_stability_df <- sampling_res %>%
+  group_by(view, feature) %>%
+  group_modify(kendall_cor_per_feature) %>%
+  filter(view != "immune response")
 ```
 
-
-```{r, fig.width=7, fig.height=18, echo=FALSE, message=FALSE, warning=FALSE}
-
-lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
-  bfs <- feature_data %>%
-    filter(dataset == dataset_id) %>%
-    mutate(patient = as.factor(patient)) %>%
-    group_by(feature) %>%
-    group_modify(get_df)
-  bfs %>%
-    mutate(log_bf = log2(bayes_factor)) %>%
-    ggplot(aes(y = reorder(feature, -log_bf), x = log_bf)) +
-    geom_point() +
-    geom_vline(xintercept = 0) +
-    geom_vline(xintercept = log2(10), color = "red") +
-    theme_bw() +
-    ggtitle(dataset_id)
-})
+```{r, fig.width=18, fig.height=4}
+feature_stability_df %>%
+  ggplot(aes(x = reorder(feature, -feature_stability), y = feature_stability, fill = view)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
 ```
 
-
-
+```{r}
+feature_stability_df %>%
+  inner_join(variability_df, by = c("feature", "view")) %>%
+  ggplot(aes(x = feature_stability, y = ratio)) +
+  geom_point(aes(color = view)) +
+  theme_cowplot() +
+  background_grid() +
+  scale_color_brewer(palette = "Dark2") +
+  geom_text_repel(aes(label = feature)) +
+  stat_cor()
+```
