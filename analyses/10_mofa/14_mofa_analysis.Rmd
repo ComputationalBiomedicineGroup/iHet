@@ -242,23 +242,25 @@ factors_all <- lapply(names(median_factors), function(dataset_id) {
   mutate(dataset_label = if_else(is.na(weights_source), dataset, sprintf("%s (%s)", dataset, weights_source)))
 ```
 
-```{r, fig.width=12, fig.height=18, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=12, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
 immresp_all <- feature_data %>%
   filter(view == "immune response", feature == "response") %>%
   rename(`immune response` = value) %>%
   select(sample, `immune response`, dataset)
 
 factors_all %>%
+  filter(factor %in% c("factor 1", "factor 2", "factor 3")) %>%
+  filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")) %>%
   inner_join(immresp_all) %>%
   ggplot(aes(x = factor_value, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
   theme_bw() +
-  stat_cor() +
+  stat_cor(size = 3) +
   geom_smooth(method = "lm") +
-  facet_wrap(dataset_label ~ factor, scales = "free_x", ncol = 7) +
+  facet_wrap(factor ~ dataset, scales = "free_x", ncol = 7) +
   ylim(c(-2, 3))
 
-ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.pdf"), width = 18, height = 22)
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.svg"), width = 12, height = 7, device = svg)
 ```
 ```{r, fig.width=10, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
 selected_datasets <- c("Jia", "Sharma", "LUAD", "LUSC")
@@ -402,11 +404,15 @@ tmp_scatter_data <- scatter_data %>%
   select(view, dataset, feature, `factor 1`) %>%
   pivot_wider(names_from = "dataset", values_from = "factor 1")
 
+selected_features <- tmp_scatter_data %>%
+  filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3) %>%
+  pull(feature)
+
 tmp_scatter_data %>%
   ggplot(aes(x = JiaSharma, y = NSCLC)) +
   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
   geom_point(aes(color = view)) +
-  geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
+  geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(feature %in% selected_features), aes(label = feature)) +
   scale_color_brewer(type = "qual", palette = "Dark2") +
   xlim(c(-1, 1)) +
   ylim(c(-1, 1)) +
@@ -430,12 +436,22 @@ all_weights <- lapply(SELECTED_DATASETS, function(dataset_id) {
   filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
-```{r, fig.height=40, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
-all_weights %>% ggplot(aes(x = factor_weight, y = feature)) +
+```{r, fig.height=8, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
+all_weights %>%
+  filter(
+    feature %in% selected_features,
+    factor == "factor 1",
+    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
+  ) %>%
+  ggplot(aes(y = factor_weight, x = feature)) +
   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
   facet_wrap(~factor, ncol = 3) +
   scale_fill_brewer(type = "qual", palette = "Set2") +
-  theme_bw()
+  facet_wrap(~feature, scale = "free_x", ncol = 10) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+ggsave(file.path(params$artifact_dir, "plots", "bootstrap_feature_stability.svg"), device = svg)
 ```
 
 
@@ -458,38 +474,40 @@ lapply(c("TRACERx", "JiaSharma"), function(dataset_id) {
 
 ```{r}
 inter_sample <- feature_data %>%
-  filter(dataset == "JiaSharma") %>%
-  group_by(view, feature, patient) %>%
+  filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "TRACERx")) %>%
+  group_by(view, feature, dataset, patient) %>%
   summarize(value = median(value)) %>%
-  group_by(view, feature) %>%
+  group_by(dataset, view, feature) %>%
   summarize(mad_inter = mad(value)) %>%
   ungroup()
 
 intra_sample <- feature_data %>%
-  filter(dataset == "JiaSharma") %>%
+  filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "TRACERx")) %>%
   group_by(dataset, patient, view, feature) %>%
   summarize(mad = mad(value)) %>%
-  group_by(view, feature) %>%
+  group_by(dataset, view, feature) %>%
   summarize(mad_intra = median(mad)) %>%
   ungroup()
 
 variability_df <- inter_sample %>%
-  inner_join(intra_sample, by = c("view", "feature")) %>%
+  inner_join(intra_sample, by = c("view", "feature", "dataset")) %>%
   filter(view != "immune response") %>%
   mutate(ratio = log2(mad_intra / mad_inter))
 ```
 
-```{r}
+```{r, fig.width=14, fig.height=10}
 variability_df %>%
-  ggplot(aes(x = mad_intra, y = mad_inter, color = view)) +
-  geom_point() +
+  ggplot(aes(x = mad_intra, y = mad_inter)) +
+  geom_point(aes(color = view)) +
   theme_cowplot() +
   background_grid() +
   scale_color_brewer(palette = "Dark2") +
   scale_y_log10() +
   scale_x_log10() +
   geom_abline(slope = 1, intercept = 0, color = "red") +
-  geom_text_repel(aes(label = feature))
+  geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features)) +
+  facet_wrap(~dataset)
+
 
 # tmp_scatter_data %>%
 #   ggplot(aes(x = JiaSharma, y = NSCLC)) +
@@ -504,14 +522,18 @@ variability_df %>%
 #   stat_cor()
 ```
 
-```{r, fig.width=18, fig.height=4}
-variability_df %>%
-  mutate(feature = reorder(feature, ratio)) %>%
-  ggplot(aes(x = feature, y = ratio, fill = view)) +
-  geom_bar(stat = "identity") +
-  scale_fill_brewer(palette = "Dark2") +
-  theme_cowplot() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+```{r, fig.width=10, fig.height=7}
+lapply(c("Jia", "Sharma", "JiaSharma", "TRACERx"), function(dataset) {
+  variability_df %>%
+    filter(feature %in% selected_features, dataset == !!dataset) %>%
+    mutate(feature = reorder(feature, ratio)) %>%
+    ggplot(aes(x = feature, y = ratio, fill = view)) +
+    geom_bar(stat = "identity") +
+    scale_fill_brewer(palette = "Dark2") +
+    theme_cowplot() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8)) +
+    ggtitle(dataset)
+}) %>% ggarrange(plotlist = ., ncol = 2, nrow = 2, common.legend = TRUE)
 ```
 
 rank based estimation of variance
@@ -528,35 +550,41 @@ kendall_cor_per_feature <- function(sampling_res, ...) {
 
 sampling_res <- lapply(1:100, function(i) {
   feature_data %>%
-    filter(dataset == "JiaSharma") %>%
-    group_by(view, feature, patient) %>%
+    filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "TRACERx")) %>%
+    group_by(view, feature, dataset, patient) %>%
     summarize(value = sample(value, 1), .groups = "drop") %>%
     mutate(iteration = i)
 }) %>% bind_rows()
 
 feature_stability_df <- sampling_res %>%
-  group_by(view, feature) %>%
+  group_by(dataset, view, feature) %>%
   group_modify(kendall_cor_per_feature) %>%
   filter(view != "immune response")
 ```
 
-```{r, fig.width=18, fig.height=4}
-feature_stability_df %>%
-  ggplot(aes(x = reorder(feature, -feature_stability), y = feature_stability, fill = view)) +
-  geom_bar(stat = "identity") +
-  scale_fill_brewer(palette = "Dark2") +
-  theme_cowplot() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+```{r, fig.width=10, fig.height=7}
+lapply(c("Jia", "Sharma", "JiaSharma", "TRACERx"), function(dataset) {
+  feature_stability_df %>%
+    filter(dataset == !!dataset, feature %in% selected_features) %>%
+    ggplot(aes(x = reorder(feature, -feature_stability), y = feature_stability, fill = view)) +
+    geom_bar(stat = "identity") +
+    scale_fill_brewer(palette = "Dark2") +
+    theme_cowplot() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+}) %>% ggarrange(plotlist = ., ncol = 2, nrow = 2, common.legend = TRUE)
 ```
 
-```{r}
-feature_stability_df %>%
-  inner_join(variability_df, by = c("feature", "view")) %>%
+```{r, fig.width=10, fig.height=7}
+corr_df <- feature_stability_df %>%
+  inner_join(variability_df, by = c("dataset", "feature", "view"))
+
+corr_df %>%
   ggplot(aes(x = feature_stability, y = ratio)) +
   geom_point(aes(color = view)) +
   theme_cowplot() +
   background_grid() +
   scale_color_brewer(palette = "Dark2") +
-  geom_text_repel(aes(label = feature)) +
+  geom_text_repel(aes(label = feature), data = corr_df %>% filter(feature %in% selected_features)) +
+  facet_wrap(~dataset) +
   stat_cor()
 ```
