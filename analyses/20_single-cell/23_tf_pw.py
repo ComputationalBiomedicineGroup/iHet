@@ -14,7 +14,7 @@
 
 # %%
 # %load_ext autoreload
-# %autoreload 2 
+# %autoreload 2
 
 # %%
 import scanpy as sc
@@ -25,16 +25,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats
 from matplotlib.backends.backend_pdf import PdfPages
+import seaborn as sns
 
 sc.settings.set_figure_params(figsize=(4, 4))
 import scanpy_helpers as sh
 
 # %%
 path_adata_m = nxfvars.get(
-    "adata_m", "../../data/results/20_single-cell/annotate_myeloid/adata_myeloid_reannotated.h5ad"
+    "adata_m",
+    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_myeloid_reannotated.h5ad",
 )
 path_adata_nsclc = nxfvars.get(
-    "adata_nsclc", "../../data/results/20_single-cell/annotate_myeloid/adata_nsclc_reannotated.h5ad"
+    "adata_nsclc",
+    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_nsclc_reannotated.h5ad",
 )
 cpus = nxfvars.get("cpus", 16)
 artifact_dir = nxfvars.get("artifact_dir", "/home/sturm/Downloads/ihet")
@@ -56,33 +59,77 @@ adatas["nsclc"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_
 adatas["nsclc"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_nsclc)
 
 # %%
-sc.pl.umap(adatas["nsclc"]["dorothea"], cmap="coolwarm", color=["E2F1", "E2F2", "E2F3", "E2F4"], vmin=-2, vmax=2)
+adatas["nsclc"]["dorothea"].obs["cell_type"]
+
+# %%
+sc.pl.umap(
+    adatas["nsclc"]["dorothea"],
+    cmap="coolwarm",
+    color=["E2F1", "E2F2", "E2F3", "E2F4"],
+    vmin=-2,
+    vmax=2,
+)
 
 # %%
 tfs_of_interest = [
-    "SPI1", "NFKB1", "STAT1", "MYCN", "E2F3", "E2F2", "TFDP1", "ZNF263", "MYC", "E2F4"    
+    "E2F2",
+    "E2F3",
+    "E2F4",
+    "ETS1",
+    "MYC",
+    "MYCN",
+    "NFKB1",
+    "RELA",
+    "RFX5",
+    "SPI1",
+    "STAT1",
+    "STAT2",
+    "TFDP1",
+    "ZNF263",
 ]
-pws_of_interest = [
-    "TNFa", "NFkB", "Trail", "TGFb", "WNT", "Androgen"
-]
+pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
 
 # %%
 pb_progeny = sh.pseudobulk.pseudobulk(
     adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean
+)
+pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(
+    adatas["nsclc"]["progeny"].obs["cell_type"].dtype
 )
 
 # %% [markdown]
 # Note: another round of z-scoreing after pseudobulking hardly makes any difference. 
 
 # %%
-fig  = sc.pl.matrixplot(pb_progeny, var_names=pws_of_interest, groupby="cell_type", cmap="coolwarm", swap_axes=True, vmin=-2.5, vmax=2.5, return_fig=True)
+fig = sc.pl.matrixplot(
+    pb_progeny,
+    var_names=pws_of_interest,
+    groupby="cell_type",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+)
 fig.savefig(f"{artifact_dir}/heatmap_progeny.svg")
 
 # %%
 pb_dorothea = sh.pseudobulk.pseudobulk(
     adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean
 )
+pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(
+    adatas["nsclc"]["dorothea"].obs["cell_type"].dtype
+)
 
 # %%
-fig = sc.pl.matrixplot(pb_dorothea, var_names=tfs_of_interest, groupby="cell_type", cmap="coolwarm", swap_axes=True, vmin=-2.5, vmax=2.5, return_fig=True)
+fig = sc.pl.matrixplot(
+    pb_dorothea,
+    var_names=tfs_of_interest,
+    groupby="cell_type",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+)
 fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")

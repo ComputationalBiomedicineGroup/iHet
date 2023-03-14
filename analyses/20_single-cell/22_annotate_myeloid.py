@@ -19,6 +19,7 @@
 # %%
 import scanpy as sc
 from nxfvars import nxfvars
+import numpy as np
 import pandas as pd
 from threadpoolctl import threadpool_limits
 
@@ -27,19 +28,19 @@ import scanpy_helpers as sh
 
 # %%
 path_adata_m = nxfvars.get(
-    "adata_m", "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_m.h5ad"
+    "adata_m",
+    "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_m.h5ad",
 )
 path_adata_nsclc = nxfvars.get(
-    "adata_nsclc", "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_nsclc.h5ad"
+    "adata_nsclc",
+    "../../data/results/20_single_cell/21_subset_atlas/artifacts/adata_nsclc.h5ad",
 )
 path_hlca_markers = nxfvars.get(
     "hlca_markers",
     "../../tables/gene_annotations/hlca_cell_type_signatures.csv",
 )
 cpus = nxfvars.get("cpus", 16)
-artifact_dir = nxfvars.get(
-    "artifact_dir", "/home/sturm/Downloads/ihet/single-cell/"
-)
+artifact_dir = nxfvars.get("artifact_dir", "/home/sturm/Downloads/ihet/single-cell/")
 
 # %%
 threadpool_limits(cpus)
@@ -88,8 +89,8 @@ ah.annotate_cell_types(
         "Macrophage alveolar": [0],
         "DC mature": [10],
         "dividing": [6],
-        "monocyte conventional": [2],
-        "monocyte non-conventional": [5],
+        "Monocyte classical": [2],
+        "Monocyte non-classical": [5],
         "cDC1": [9],
         "cDC2": [4],
         "7": [7],
@@ -97,23 +98,6 @@ ah.annotate_cell_types(
         "Macrophage": [1, 3, 11],
     },
 )
-
-# %% [markdown]
-# ```
-# DC_Lagerhans --> CD1C+CD1A+ DCs
-# Macro_M0 --> SLAMF9 macro
-# Macro_M1_like --> CD163+ macro
-# Macro_M2_like_alevolar --> MARCO+ macro
-# myeloid_TF_low --> Other
-#
-# For the other cells, we might just refine a bit the final nomenclature.
-#
-# There are also a couple of refinements in the clusters that we could perform:
-#
-# Restrict the NK cell cluster, which now wrongly contains some CD8 + T cells (expressing CD3 and TCRalpha chain genes)
-# The cDC2 cluster should be made by CD1C+ DC also expressing FCER1A.
-# The  DC_Lagerhans cluster should correspond to CD1C+CD1A+ DCs. In brief, the CD1C+ blob should cover this and the cDC2 subset
-# ```
 
 # %% [markdown]
 # ## Dividing
@@ -161,6 +145,9 @@ sc.pl.umap(adata_cdc2, color="leiden", legend_loc="on data", legend_fontoutline=
 sc.pl.umap(adata_cdc2, color=["CD1C", "CD1A", "FCER1A"])
 
 # %%
+sc.pl.umap(adata_cdc2, color=["C1QA", "C1QB", "C1QC"])
+
+# %%
 sc.pl.dotplot(adata_cdc2, groupby="leiden", var_names=["CD1C", "CD1A", "FCER1A"])
 
 # %%
@@ -177,7 +164,7 @@ ah.integrate_back(adata_m, adata_cdc2)
 
 # %% [markdown]
 # ## Macrophage
-# -> subdivide into two subclusters
+# Unsupervised clusters
 
 # %%
 adata_macro = adata_m[adata_m.obs["cell_type"] == "Macrophage", :].copy()
@@ -192,7 +179,12 @@ sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline
 sc.tl.rank_genes_groups(adata_macro, groupby="leiden", method="wilcoxon")
 
 # %%
-sc.tl.filter_rank_genes_groups(adata_macro, min_in_group_fraction=0.2, max_out_group_fraction=0.2, min_fold_change=1)
+sc.tl.filter_rank_genes_groups(
+    adata_macro,
+    min_in_group_fraction=0.2,
+    max_out_group_fraction=0.2,
+    min_fold_change=1,
+)
 
 # %%
 sc.pl.rank_genes_groups_dotplot(adata_macro, min_logfoldchange=1, n_genes=20)
@@ -218,13 +210,20 @@ sc.pl.rank_genes_groups_matrixplot(
 )
 
 # %%
-sc.tl.filter_rank_genes_groups(pb_macro, min_fold_change=2, min_in_group_fraction=0, max_out_group_fraction=1)
+sc.tl.filter_rank_genes_groups(
+    pb_macro, min_fold_change=2, min_in_group_fraction=0, max_out_group_fraction=1
+)
 
 # %%
 pd.set_option("display.max_rows", 300)
 
 # %%
-{k: pd.Series(v).dropna().tolist()[:20] for k, v in pd.DataFrame(pb_macro.uns["rank_genes_groups_filtered"]["names"]).to_dict(orient='list').items()}
+{
+    k: pd.Series(v).dropna().tolist()[:20]
+    for k, v in pd.DataFrame(pb_macro.uns["rank_genes_groups_filtered"]["names"])
+    .to_dict(orient="list")
+    .items()
+}
 
 # %%
 sc.pl.rank_genes_groups_matrixplot(
@@ -232,7 +231,7 @@ sc.pl.rank_genes_groups_matrixplot(
     standard_scale=None,
     min_logfoldchange=2,
     cmap="viridis",
-    n_genes=20,
+    n_genes=10,
 )
 
 # %%
@@ -243,23 +242,11 @@ sc.pl.rank_genes_groups_matrixplot(
     values_to_plot="log10_pvals_adj",
     cmap="viridis",
     n_genes=20,
-    vmax=6
+    vmax=6,
 )
 
 # %%
 sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline=2)
-
-# %%
-sc.pl.umap(adata_macro, color=["MCEMP1", "S100A8", "S100A4", "FBP1", "MARCO"], ncols=5)
-
-# %%
-sc.pl.umap(adata_macro, color=["CTSB", "SLAMF9", "SPP1", "NMB"], ncols=5)
-
-# %%
-sc.pl.umap(adata_macro, color=["MS4A6A", "F13A1", "CD74"])
-
-# %%
-sc.pl.umap(adata_macro, color=["APOE", "APOC1", "PLD3", "ACP5", "CCL18"])
 
 # %%
 sc.pl.umap(adata_macro, color=["platform"])
@@ -270,13 +257,11 @@ ah.plot_umap(adata_macro, filter_cell_type=["macro", "mono"])
 # %%
 ah.annotate_cell_types(
     adata_macro,
-    {
-        "Macrophage SPP1-hi": [3],
-        "Macrophage MARCO-hi": [1],
-        "Macrophage CD74-hi": [0],
-        "Macrophage CCL18-hi": [2]
-    },
+    {"TAM-4": [3], "TAM-3": [1], "TAM-1": [0], "TAM-2": [2]},
 )
+
+# %%
+sc.pl.umap(adata_macro, color="cell_type", legend_loc="on data", legend_fontoutline=2)
 
 # %%
 ah.integrate_back(adata_m, adata_macro)
@@ -303,7 +288,17 @@ adata_m.obs.loc[
 sc.pl.umap(adata_m, color="cell_type")
 
 # %%
+adata_m.obs["cell_type_macro"] = adata_m.obs["cell_type"]
+adata_m.obs["cell_type"] = adata_m.obs["cell_type"].str.replace(
+    "TAM(-\d+)", "TAM", regex=True
+)
+
+# %%
 ah.integrate_back(adata_nsclc, adata_m)
+
+# %%
+adata_nsclc.obs["cell_type_macro"] = adata_nsclc.obs["cell_type"]
+ah.integrate_back(adata_nsclc, adata_m, variable="cell_type_macro")
 
 # %% [markdown]
 # ## Exclude empty droplets
@@ -312,7 +307,7 @@ ah.integrate_back(adata_nsclc, adata_m)
 adata_m = adata_m[adata_m.obs["cell_type"] != "potential empty droplets", :].copy()
 
 # %%
-sc.pl.umap(adata_m, color="cell_type")
+sc.pl.umap(adata_m, color="cell_type_macro")
 
 # %%
 adata_nsclc = adata_nsclc[
@@ -321,6 +316,88 @@ adata_nsclc = adata_nsclc[
 
 # %%
 sc.pl.umap(adata_nsclc, color="cell_type")
+
+# %% [markdown]
+# ## Fix cell-type names
+
+# %%
+fix_cell_type_names = lambda x: {
+    "Neutrophils": "Neutrophil",
+    "transitional club/AT2": "Transitional club/AT2",
+    "Tumor cells": "Tumor cell",
+    "stromal dividing": "Stromal dividing",
+}.get(x, x)
+adata_nsclc.obs["cell_type_macro"] = adata_nsclc.obs["cell_type_macro"].map(
+    fix_cell_type_names
+)
+adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].map(fix_cell_type_names)
+adata_m.obs["cell_type"] = adata_m.obs["cell_type"].map(fix_cell_type_names)
+
+# %%
+make_coarse_cell_types = {
+    "Plasma cell": "Plasma cell",
+    "Plasma cell dividing": "Plasma cell",
+    "B cell": "B cell",
+    "B cell dividing": "B cell",
+    "T cell CD4": "T cell",
+    "T cell regulatory": "T cell",
+    "T cell CD8": "T cell",
+    "T cell dividing": "T cell",
+    "NK cell": "NK cell",
+    "Mast cell": "Mast cell",
+    "pDC": "pDC",
+    "DC mature": "cDC",
+    "cDC1": "cDC",
+    "cDC2": "cDC",
+    "cDC2 CD1A+": "cDC",
+    "cDC dividing": "cDC",
+    "Monocyte classical": "Macrophage/Monocyte",
+    "Monocyte non-classical": "Macrophage/Monocyte",
+    "Macrophage alveolar": "Macrophage/Monocyte",
+    "Macrophage alveolar dividing": "Macrophage/Monocyte",
+    "Macrophage dividing": "Macrophage/Monocyte",
+    "TAM": "Macrophage/Monocyte",
+    "Neutrophil": "Neutrophil",
+    "Alveolar cell type 1": "Epithelial cell",
+    "Alveolar cell type 2": "Epithelial cell",
+    "Ciliated": "Epithelial cell",
+    "Club": "Epithelial cell",
+    "Transitional club/AT2": "Epithelial cell",
+    "ROS1+ healthy epithelial": "Epithelial cell",
+    "Tumor cell": "Epithelial cell",
+    "Endothelial cell arterial": "Stromal cell",
+    "Endothelial cell capillary": "Stromal cell",
+    "Endothelial cell lymphatic": "Stromal cell",
+    "Endothelial cell venous": "Stromal cell",
+    "Fibroblast adventitial": "Stromal cell",
+    "Fibroblast alveolar": "Stromal cell",
+    "Fibroblast peribronchial": "Stromal cell",
+    "Mesothelial": "Stromal cell",
+    "Pericyte": "Stromal cell",
+    "Smooth muscle cell": "Stromal cell",
+    "Stromal dividing": "Stromal cell",
+}
+adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].astype(
+    pd.CategoricalDtype(categories=make_coarse_cell_types)
+)
+adata_nsclc.obs["cell_type_coarse"] = (
+    adata_nsclc.obs["cell_type"]
+    .map(make_coarse_cell_types)
+    # keep order by using dict.fromkeys
+    .astype(pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values())))
+)
+adata_m.obs["cell_type_coarse"] = (
+    adata_m.obs["cell_type"]
+    .map(make_coarse_cell_types)
+    # keep order by using dict.fromkeys
+    .astype(pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values())))
+)
+
+# %%
+assert not np.sum(pd.isnull(adata_nsclc.obs["cell_type"]))
+assert not np.sum(pd.isnull(adata_nsclc.obs["cell_type_coarse"]))
+assert not np.sum(pd.isnull(adata_m.obs["cell_type"]))
+assert not np.sum(pd.isnull(adata_m.obs["cell_type_coarse"]))
 
 # %% [markdown]
 # ## Reprocess datasets
@@ -342,6 +419,9 @@ sc.tl.umap(adata_nsclc, init_pos="X_umap")
 
 # %%
 sc.pl.umap(adata_nsclc, color="cell_type")
+
+# %%
+sc.pl.umap(adata_nsclc, color="cell_type_coarse")
 
 # %% [markdown]
 # # Save reprocessed anndatas
