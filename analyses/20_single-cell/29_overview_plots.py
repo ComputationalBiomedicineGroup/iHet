@@ -290,7 +290,7 @@ fig = sc.pl.dotplot(
     adata_m,
     groupby="cell_type",
     var_names={
-        "DC mature": ["CCR7", "CCL22", "CCR7", "CD40", "RELB"],
+        "DC mature": ["CCR7", "CCL22", "CCR7", "CD40", "RELB", "LAMP3"],
         "Macrophages": ["APOE", "C1QB", "TREM2"],
         "Macrophage CCL18-hi": ["CCL18", "CCL13", "RNASE1", "APOE", "APOC1"],
         "Macrophage CD74-hi": ["CD74"],
