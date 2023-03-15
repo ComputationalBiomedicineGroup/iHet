@@ -167,102 +167,6 @@ sc.pl.dotplot(
     adata_m,
     groupby="cell_type",
     var_names={
-        "Macro CD74-hi": [
-            "F13A1",
-            "GPR34",
-            "MEF2C",
-            "STAB1",
-            "ADAM28",
-            "OLFML3",
-            "GAS6",
-            "TSPAN33",
-            "ST6GAL1",
-            "EBI3",
-            "PALD1",
-            "IGF1",
-            "CX3CR1",
-            "PLD4",
-            "GPR155",
-            "LPAR6",
-            "NDRG2",
-            "P2RY6",
-            "IGSF21",
-            "SELENOP",
-        ],
-        "Macro MARCO-hi": [
-            "MCEMP1",
-            "RETN",
-            "S100A8",
-            "FCN1",
-            "MARCO",
-            "VCAN",
-            "FN1",
-            "PLAC8",
-            "NFE2",
-            "AGRP",
-            "DEFB1",
-            "KAZALD1",
-            "F5",
-            "KCNA3",
-            "FOLR3",
-            "HP",
-            "TRGC1",
-            "GPA33",
-            "MYB",
-            "PDGFD",
-        ],
-        "Macro CCL18-hi": [
-            "HS3ST2",
-            "FUCA1",
-            "RARRES1",
-            "ALDH1A1",
-            "CCL18",
-            "CHCHD6",
-            "RBP1",
-            "PLPP3",
-            "CTSK",
-            "KCNJ5",
-            "BIRC7",
-            "CHIT1",
-            "ADTRP",
-            "ATP6V0D2",
-            "RTN4R",
-            "RBP4",
-            "SELENOP",
-            "DNASE2B",
-            "GPR150",
-            "SLC40A1",
-        ],
-        "Macro SPP1-hi": [
-            "SLAMF9",
-            "TM4SF19",
-            "HK2",
-            "SDC2",
-            "SPP1",
-            "NMB",
-            "BNIP3",
-            "IL1RN",
-            "HILPDA",
-            "TNFSF14",
-            "AK4",
-            "SLC2A1",
-            "CCL7",
-            "SERPINE1",
-            "CA12",
-            "ZNF395",
-            "ENO2",
-            "ANGPTL4",
-            "MT1H",
-            "ZMIZ1-AS1",
-        ],
-    },
-)
-
-# %%
-sc.pl.dotplot(
-    adata_m,
-    groupby="cell_type",
-    var_names={
         "Macrophage SLAMF9/SPP1": ["SLAMF9", "SPP1", "MIF"],
         "Macrophage M1": ["CD163", "RNASE1", "CCL13"],
         "Macrophage M2": [
@@ -288,14 +192,10 @@ sc.pl.dotplot(
 # %%
 fig = sc.pl.dotplot(
     adata_m,
-    groupby="cell_type",
+    groupby="cell_type_macro",
     var_names={
         "DC mature": ["CCR7", "CCL22", "CCR7", "CD40", "RELB", "LAMP3"],
         "Macrophages": ["APOE", "C1QB", "TREM2"],
-        "Macrophage CCL18-hi": ["CCL18", "CCL13", "RNASE1", "APOE", "APOC1"],
-        "Macrophage CD74-hi": ["CD74"],
-        "Macrophage MARCO-hi": ["MARCO", "FN1", "RETN", "PPARG", "S100A8"],
-        "Macrophage SPP1-hi": ["SPP1", "SLAMF9", "MIF"],
         "Macrophage alveolar": ["FABP4"],
         "cDC1": ["CLEC9A", "XCR1", "IRF8", "CD274", "MS4A1"],
         "cDC2": ["CD1C", "FCER1A", "CLEC10A"],
@@ -355,10 +255,10 @@ fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
 
 # %%
 m_counts = (
-    adata_m.obs.groupby(["cell_type", "dataset", "study", "patient"], observed=True)
+    adata_m.obs.groupby(["cell_type_macro", "dataset", "study", "patient"], observed=True)
     .size()
     .reset_index(name="n_cells")
-    .groupby(["cell_type", "dataset"])
+    .groupby(["cell_type_macro", "dataset"])
     .apply(lambda x: x.assign(n_cells_cell_type_dataset=lambda k: k["n_cells"].sum()))
     .groupby("patient")
     .apply(lambda x: x.assign(n_cells_patient=lambda k: k["n_cells"].sum()))
@@ -367,20 +267,20 @@ m_counts = (
 # %%
 patient_cell_type_combs = (
     m_counts.loc[:, ["dataset", "study", "patient"]]
-    .merge(m_counts.loc[:, ["cell_type"]], how="cross")
+    .merge(m_counts.loc[:, ["cell_type_macro"]], how="cross")
     .drop_duplicates()
 )
 
 # %%
 tmp_df = m_counts.merge(
     patient_cell_type_combs,
-    on=["dataset", "study", "patient", "cell_type"],
+    on=["dataset", "study", "patient", "cell_type_macro"],
     how="outer",
 )
 
 # %%
 tmp_df2 = (
-    tmp_df.groupby(["study", "cell_type"], observed=True)
+    tmp_df.groupby(["study", "cell_type_macro"], observed=True)
     .agg(n_cells=("n_cells", np.sum))
     .reset_index()
 )
@@ -398,7 +298,7 @@ heatmp = (
     alt.Chart(tmp_df2)
     .mark_rect()
     .encode(
-        x="cell_type",
+        x="cell_type_macro",
         y=alt.Y("study", axis=None),
         color=alt.Color("n_cells", scale=alt.Scale(scheme="inferno", reverse=True)),
     )
@@ -407,7 +307,7 @@ txt = (
     alt.Chart(tmp_df2)
     .mark_text()
     .encode(
-        x="cell_type",
+        x="cell_type_macro",
         y=alt.Y("study", axis=None),
         text="n_cells",
         color=alt.condition(

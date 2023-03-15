@@ -133,3 +133,50 @@ fig = sc.pl.matrixplot(
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")
+
+# %% [markdown]
+# ## Including myeloid subclusters
+
+# %%
+pb_progeny = sh.pseudobulk.pseudobulk(
+    adatas["nsclc"]["progeny"], groupby=["patient", "cell_type_macro"], aggr_fun=np.mean
+)
+pb_progeny.obs["cell_type_macro"] = pb_progeny.obs["cell_type_macro"].astype(
+    adatas["nsclc"]["progeny"].obs["cell_type_macro"].dtype
+)
+
+# %%
+pb_dorothea = sh.pseudobulk.pseudobulk(
+    adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type_macro"], aggr_fun=np.mean
+)
+pb_dorothea.obs["cell_type_macro"] = pb_dorothea.obs["cell_type_macro"].astype(
+    adatas["nsclc"]["dorothea"].obs["cell_type_macro"].dtype
+)
+
+# %%
+fig = sc.pl.matrixplot(
+    pb_progeny[pb_progeny.obs["cell_type_macro"].str.startswith("TAM"), :],
+    var_names=pws_of_interest,
+    groupby="cell_type_macro",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/heatmap_progeny_tam.svg")
+
+# %%
+fig = sc.pl.matrixplot(
+    pb_dorothea[pb_dorothea.obs["cell_type_macro"].str.startswith("TAM"), :,
+    var_names=tfs_of_interest,
+    groupby="cell_type_macro",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam.svg")
+
+# %%

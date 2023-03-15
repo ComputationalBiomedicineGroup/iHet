@@ -20,6 +20,7 @@
 import scanpy as sc
 from nxfvars import nxfvars
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 from threadpoolctl import threadpool_limits
 
@@ -176,83 +177,7 @@ ah.reprocess_adata_subset_scvi(adata_macro, use_rep="X_scANVI", leiden_res=0.3)
 sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline=2)
 
 # %%
-sc.tl.rank_genes_groups(adata_macro, groupby="leiden", method="wilcoxon")
-
-# %%
-sc.tl.filter_rank_genes_groups(
-    adata_macro,
-    min_in_group_fraction=0.2,
-    max_out_group_fraction=0.2,
-    min_fold_change=1,
-)
-
-# %%
-sc.pl.rank_genes_groups_dotplot(adata_macro, min_logfoldchange=1, n_genes=20)
-
-# %%
-pb_macro = sh.pseudobulk.pseudobulk(adata_macro, groupby=["patient", "leiden"])
-
-# %%
-sc.pp.normalize_total(pb_macro)
-sc.pp.log1p(pb_macro)
-
-# %%
-sc.tl.rank_genes_groups(pb_macro, groupby="leiden", method="wilcoxon")
-
-# %%
-sc.pl.rank_genes_groups_matrixplot(
-    pb_macro,
-    standard_scale=None,
-    min_logfoldchange=2,
-    values_to_plot="logfoldchanges",
-    cmap="bwr",
-    n_genes=20,
-)
-
-# %%
-sc.tl.filter_rank_genes_groups(
-    pb_macro, min_fold_change=2, min_in_group_fraction=0, max_out_group_fraction=1
-)
-
-# %%
-pd.set_option("display.max_rows", 300)
-
-# %%
-{
-    k: pd.Series(v).dropna().tolist()[:20]
-    for k, v in pd.DataFrame(pb_macro.uns["rank_genes_groups_filtered"]["names"])
-    .to_dict(orient="list")
-    .items()
-}
-
-# %%
-sc.pl.rank_genes_groups_matrixplot(
-    pb_macro,
-    standard_scale=None,
-    min_logfoldchange=2,
-    cmap="viridis",
-    n_genes=10,
-)
-
-# %%
-sc.pl.rank_genes_groups_matrixplot(
-    pb_macro,
-    standard_scale=None,
-    min_logfoldchange=2,
-    values_to_plot="log10_pvals_adj",
-    cmap="viridis",
-    n_genes=20,
-    vmax=6,
-)
-
-# %%
-sc.pl.umap(adata_macro, color="leiden", legend_loc="on data", legend_fontoutline=2)
-
-# %%
 sc.pl.umap(adata_macro, color=["platform"])
-
-# %%
-ah.plot_umap(adata_macro, filter_cell_type=["macro", "mono"])
 
 # %%
 ah.annotate_cell_types(
@@ -261,7 +186,22 @@ ah.annotate_cell_types(
 )
 
 # %%
-sc.pl.umap(adata_macro, color="cell_type", legend_loc="on data", legend_fontoutline=2)
+sc.tl.rank_genes_groups(adata_macro, groupby="cell_type", method="wilcoxon")
+
+# %%
+sc.tl.filter_rank_genes_groups(
+    adata_macro,
+    min_in_group_fraction=0.2,
+    max_out_group_fraction=0.2,
+)
+
+# %%
+fig = sc.pl.rank_genes_groups_dotplot(adata_macro, n_genes=10, show=False, return_fig=True, min_logfoldchange=1.5)
+fig.savefig(f"{artifact_dir}/dotplot_tam.svg", dpi=600, bbox_inches="tight")
+
+# %%
+fig = sc.pl.umap(adata_macro, color="cell_type", legend_loc="on data", legend_fontoutline=2, show=False, return_fig=True, frameon=False)
+fig.savefig(f"{artifact_dir}/umap_tam.svg", dpi=600, bbox_inches="tight")
 
 # %%
 ah.integrate_back(adata_m, adata_macro)
