@@ -147,7 +147,9 @@ pb_progeny.obs["cell_type_macro"] = pb_progeny.obs["cell_type_macro"].astype(
 
 # %%
 pb_dorothea = sh.pseudobulk.pseudobulk(
-    adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type_macro"], aggr_fun=np.mean
+    adatas["nsclc"]["dorothea"],
+    groupby=["patient", "cell_type_macro"],
+    aggr_fun=np.mean,
 )
 pb_dorothea.obs["cell_type_macro"] = pb_dorothea.obs["cell_type_macro"].astype(
     adatas["nsclc"]["dorothea"].obs["cell_type_macro"].dtype
@@ -168,7 +170,7 @@ fig.savefig(f"{artifact_dir}/heatmap_progeny_tam.svg")
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[pb_dorothea.obs["cell_type_macro"].str.startswith("TAM"), :,
+    pb_dorothea[pb_dorothea.obs["cell_type_macro"].str.startswith("TAM"), :],
     var_names=tfs_of_interest,
     groupby="cell_type_macro",
     cmap="coolwarm",

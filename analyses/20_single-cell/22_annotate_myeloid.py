@@ -196,11 +196,21 @@ sc.tl.filter_rank_genes_groups(
 )
 
 # %%
-fig = sc.pl.rank_genes_groups_dotplot(adata_macro, n_genes=10, show=False, return_fig=True, min_logfoldchange=1.5)
+fig = sc.pl.rank_genes_groups_dotplot(
+    adata_macro, n_genes=10, show=False, return_fig=True, min_logfoldchange=1.5
+)
 fig.savefig(f"{artifact_dir}/dotplot_tam.svg", dpi=600, bbox_inches="tight")
 
 # %%
-fig = sc.pl.umap(adata_macro, color="cell_type", legend_loc="on data", legend_fontoutline=2, show=False, return_fig=True, frameon=False)
+fig = sc.pl.umap(
+    adata_macro,
+    color="cell_type",
+    legend_loc="on data",
+    legend_fontoutline=2,
+    show=False,
+    return_fig=True,
+    frameon=False,
+)
 fig.savefig(f"{artifact_dir}/umap_tam.svg", dpi=600, bbox_inches="tight")
 
 # %%
@@ -321,16 +331,18 @@ adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].astype(
     pd.CategoricalDtype(categories=make_coarse_cell_types)
 )
 adata_nsclc.obs["cell_type_coarse"] = (
-    adata_nsclc.obs["cell_type"]
-    .map(make_coarse_cell_types)
+    adata_nsclc.obs["cell_type"].map(make_coarse_cell_types)
     # keep order by using dict.fromkeys
-    .astype(pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values())))
+    .astype(
+        pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values()))
+    )
 )
 adata_m.obs["cell_type_coarse"] = (
-    adata_m.obs["cell_type"]
-    .map(make_coarse_cell_types)
+    adata_m.obs["cell_type"].map(make_coarse_cell_types)
     # keep order by using dict.fromkeys
-    .astype(pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values())))
+    .astype(
+        pd.CategoricalDtype(categories=dict.fromkeys(make_coarse_cell_types.values()))
+    )
 )
 
 # %%

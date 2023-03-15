@@ -255,7 +255,9 @@ fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
 
 # %%
 m_counts = (
-    adata_m.obs.groupby(["cell_type_macro", "dataset", "study", "patient"], observed=True)
+    adata_m.obs.groupby(
+        ["cell_type_macro", "dataset", "study", "patient"], observed=True
+    )
     .size()
     .reset_index(name="n_cells")
     .groupby(["cell_type_macro", "dataset"])
