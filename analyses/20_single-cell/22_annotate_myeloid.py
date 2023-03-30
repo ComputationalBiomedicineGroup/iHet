@@ -327,8 +327,8 @@ make_coarse_cell_types = {
     "Smooth muscle cell": "Stromal cell",
     "Stromal dividing": "Stromal cell",
 }
-adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].astype(
-    pd.CategoricalDtype(categories=make_coarse_cell_types)
+adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].astype(str).astype(
+    pd.CategoricalDtype(categories=list(make_coarse_cell_types))
 )
 adata_nsclc.obs["cell_type_coarse"] = (
     adata_nsclc.obs["cell_type"].map(make_coarse_cell_types)
