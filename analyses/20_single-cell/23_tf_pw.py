@@ -184,13 +184,15 @@ fig = sc.pl.matrixplot(
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
-    layer="zscore"
+    layer="zscore",
 )
 fig.savefig(f"{artifact_dir}/heatmap_progeny_tam_zscore.svg")
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :],
+    pb_dorothea[
+        pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+    ],
     var_names=tfs_of_interest,
     groupby="cell_type_macro",
     cmap="coolwarm",
@@ -206,7 +208,9 @@ pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :],
+    pb_dorothea[
+        pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+    ],
     var_names=tfs_of_interest,
     groupby="cell_type_macro",
     cmap="coolwarm",
@@ -214,8 +218,45 @@ fig = sc.pl.matrixplot(
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
-    layer="zscore"
+    layer="zscore",
 )
 fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam_zscore.svg")
+
+# %% [markdown]
+# ## UMAP plots of selected features
+
+# %%
+fig, axs = plt.subplots(2, 4, figsize=(18, 8))
+axs = iter(axs.flatten())
+for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
+    sc.pl.umap(
+        adatas["nsclc"]["progeny"],
+        color=pw,
+        ax=ax,
+        show=False,
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        title=f"PW: {pw}",
+        frameon=False,
+    )
+for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
+    sc.pl.umap(
+        adatas["nsclc"]["dorothea"],
+        color=tf,
+        ax=ax,
+        show=False,
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        title=f"TF: {tf}",
+        frameon=False,
+    )
+fig.savefig(
+    f"{artifact_dir}/umap_cell_selected_features.svg",
+    bbox_inches="tight",
+    dpi=600,
+)
+plt.show()
 
 # %%

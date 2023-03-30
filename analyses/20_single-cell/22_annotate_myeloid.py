@@ -197,7 +197,12 @@ sc.tl.filter_rank_genes_groups(
 
 # %%
 fig = sc.pl.rank_genes_groups_dotplot(
-    adata_macro, n_genes=10, show=False, return_fig=True, min_logfoldchange=1.5
+    adata_macro,
+    n_genes=10,
+    show=False,
+    return_fig=True,
+    min_logfoldchange=1.5,
+    dendrogram=False
 )
 fig.savefig(f"{artifact_dir}/dotplot_tam.svg", dpi=600, bbox_inches="tight")
 
@@ -327,8 +332,10 @@ make_coarse_cell_types = {
     "Smooth muscle cell": "Stromal cell",
     "Stromal dividing": "Stromal cell",
 }
-adata_nsclc.obs["cell_type"] = adata_nsclc.obs["cell_type"].astype(str).astype(
-    pd.CategoricalDtype(categories=list(make_coarse_cell_types))
+adata_nsclc.obs["cell_type"] = (
+    adata_nsclc.obs["cell_type"]
+    .astype(str)
+    .astype(pd.CategoricalDtype(categories=list(make_coarse_cell_types)))
 )
 adata_nsclc.obs["cell_type_coarse"] = (
     adata_nsclc.obs["cell_type"].map(make_coarse_cell_types)
