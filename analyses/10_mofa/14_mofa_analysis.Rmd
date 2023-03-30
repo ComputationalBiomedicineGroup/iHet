@@ -21,7 +21,7 @@ PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
 TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
 DATASETS <- feature_data$dataset %>% unique()
-SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx", "TRACERx")
+SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx", "TRACERx")
 
 tmb_jia_sharma <- read_tsv(file.path(params$tmb_dir, "JiaSharma_TMB_nextNEOpi.txt")) %>%
   select(sample = SampleID, starts_with("TMB")) %>%
@@ -68,6 +68,12 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
     rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
+median_weights$`TCGA-NSCLC` <- median_weights$NSCLC
+median_weights$NSCLC <- NULL
+median_factors$`TCGA-NSCLC` <- median_factors$NSCLC
+median_factors$NSCLC <- NULL
+feature_data <- feature_data %>% mutate(group = if_else(group == "NSCLC", "TCGA-NSCLC", group), dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset))
+
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
 saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
 ```
@@ -83,7 +89,7 @@ variance_explained_bootstrap <- lapply(names(bootstrap_models), function(dataset
 ```
 
 ```{r, fig.height=4, fig.width=12}
-selected_datasets <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
+selected_datasets <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
 
 p <- variance_explained_bootstrap %>%
   filter(factor %in% c("Factor1", "Factor2", "Factor3")) %>%
@@ -114,7 +120,7 @@ all <- buildHeatmap(median_weights$Jia, "Jia") +
   buildHeatmap(median_weights$JiaSharma, "JS") +
   buildHeatmap(median_weights$LUAD, "LUAD") +
   buildHeatmap(median_weights$LUSC, "LUSC") +
-  buildHeatmap(median_weights$NSCLC, "NSCLC") +
+  buildHeatmap(median_weights$`TCGA-NSCLC`, "TCGA-\nNSCLC") +
   buildHeatmap(median_weights$GTEx, "GTEx")
 
 draw(all)
@@ -135,7 +141,7 @@ all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
   buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "JS") +
   buildHeatmap(get_filtered_weight(median_weights$LUAD), "LUAD") +
   buildHeatmap(get_filtered_weight(median_weights$LUSC), "LUSC") +
-  buildHeatmap(get_filtered_weight(median_weights$NSCLC), "NSCLC") +
+  buildHeatmap(get_filtered_weight(median_weights$`TCGA-NSCLC`), "TCGA-\nNSCLC") +
   buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx")
 
 draw(all)
@@ -145,7 +151,7 @@ draw(all)
 ## Correlation heatmaps
 ```{r correlation_features, echo = FALSE,  fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
-dataset_list <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
+dataset_list <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
 plots <- lapply(names(factor_list), function(factors_name) {
   factors <- factor_list[[factors_name]]
@@ -218,7 +224,7 @@ plots <- lapply(names(factor_list), function(factors_name) {
 # Calculate factors for TRACERx data (Weighted sum of features)
 mofa_data_tracerx <- readRDS(file.path(params$features_dir, "mofa_TRACERx.rds"))
 
-tracerx_factors <- lapply(c("JiaSharma", "NSCLC"), function(weights_source) {
+tracerx_factors <- lapply(c("JiaSharma", "TCGA-NSCLC"), function(weights_source) {
   mofa_data_tracerx %>%
     inner_join(median_weights[[weights_source]]) %>%
     select(-contains("mad")) %>%
@@ -250,7 +256,7 @@ immresp_all <- feature_data %>%
 
 factors_all %>%
   filter(factor %in% c("factor 1", "factor 2", "factor 3")) %>%
-  filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")) %>%
+  filter(dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")) %>%
   inner_join(immresp_all) %>%
   ggplot(aes(x = factor_value, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
@@ -281,16 +287,16 @@ ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_respo
 ```
 
 ```{r, fig.width=3, fig.height=5.5, echo=FALSE, message=FALSE, warning=FALSE}
-# same for tracerx (once as derived by mofa, once as calculated using NSCLC signatures)
+# same for tracerx (once as derived by mofa, once as calculated using TCGA-NSCLC signatures)
 
-selected_datasets <- c("TRACERx", "TRACERx (NSCLC)")
+selected_datasets <- c("TRACERx", "TRACERx (TCGA-NSCLC)")
 factors_all %>%
   inner_join(immresp_all) %>%
   filter(dataset_label %in% selected_datasets, factor == "factor 1") %>%
   mutate(dataset_label = factor(dataset_label, levels = selected_datasets)) %>%
   ggplot(aes(x = factor_value, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
-  theme_bw(base_size = 17) +
+  theme_bw(base_size = 15) +
   stat_cor() +
   geom_smooth(method = "lm") +
   facet_wrap(~dataset_label, scales = "free_x", ncol = 1) +
@@ -341,7 +347,7 @@ ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_CD8.pdf"), w
 
 ### Correlation: CD8 vs. TMB
 ```{r, fig.width=16, fig.height=7}
-lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
+lapply(c("TCGA-NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
   cd8_all %>%
     inner_join(tmb_all) %>%
     filter(dataset == dataset_id) %>%
@@ -359,7 +365,7 @@ lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(datase
 
 ### Correlation: Immune response vs. TMB
 ```{r, fig.width=16, fig.height=7}
-lapply(c("NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
+lapply(c("TCGA-NSCLC", "LUAD", "LUSC", "Jia", "Sharma", "JiaSharma"), function(dataset_id) {
   message(dataset_id)
   immresp_all %>%
     inner_join(tmb_all) %>%
@@ -392,7 +398,7 @@ cd8_all %>%
 ggsave(file.path(params$artifact_dir, "plots", "correlation_CD8_immune_response.pdf"), width = 18, height = 13)
 ```
 
-### Weight scatter NSCLC / JiaSharma
+### Weight scatter TCGA-NSCLC / JiaSharma
 
 ```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
 scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
@@ -400,16 +406,16 @@ scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
 }))
 
 tmp_scatter_data <- scatter_data %>%
-  filter(dataset %in% c("JiaSharma", "NSCLC")) %>%
+  filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
   select(view, dataset, feature, `factor 1`) %>%
   pivot_wider(names_from = "dataset", values_from = "factor 1")
 
 selected_features <- tmp_scatter_data %>%
-  filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3) %>%
+  filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
   pull(feature)
 
 tmp_scatter_data %>%
-  ggplot(aes(x = JiaSharma, y = NSCLC)) +
+  ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
   geom_point(aes(color = view)) +
   geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(feature %in% selected_features), aes(label = feature)) +
@@ -441,7 +447,7 @@ all_weights %>%
   filter(
     feature %in% selected_features,
     factor == "factor 1",
-    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "NSCLC", "GTEx")
+    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
   ) %>%
   ggplot(aes(y = factor_weight, x = feature)) +
   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
@@ -510,10 +516,10 @@ variability_df %>%
 
 
 # tmp_scatter_data %>%
-#   ggplot(aes(x = JiaSharma, y = NSCLC)) +
+#   ggplot(aes(x = JiaSharma, y = TCGA-NSCLC)) +
 #   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
 #   geom_point(aes(color = view)) +
-#   geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | NSCLC > 0.5 | NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
+#   geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | TCGA-NSCLC > 0.5 | TCGA-NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
 #   scale_color_brewer(type = "qual", palette = "Dark2") +
 #   xlim(c(-1, 1)) +
 #   ylim(c(-1, 1)) +
@@ -570,8 +576,12 @@ lapply(c("Jia", "Sharma", "JiaSharma", "TRACERx"), function(dataset) {
     geom_bar(stat = "identity") +
     scale_fill_brewer(palette = "Dark2") +
     theme_cowplot() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8)) +
+    xlab("feature") +
+    ylab("stability score") +
+    ylim(c(0, 0.9))
 }) %>% ggarrange(plotlist = ., ncol = 2, nrow = 2, common.legend = TRUE)
+ggsave(file.path(params$artifact_dir, "plots", "feature_stability_score_barchart.svg"), device = svg)
 ```
 
 ```{r, fig.width=10, fig.height=7}
