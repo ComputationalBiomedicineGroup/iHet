@@ -59,16 +59,15 @@ adatas["nsclc"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_
 adatas["nsclc"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_nsclc)
 
 # %%
-adatas["nsclc"]["dorothea"].obs["cell_type"]
-
-# %%
-sc.pl.umap(
-    adatas["nsclc"]["dorothea"],
-    cmap="coolwarm",
-    color=["E2F1", "E2F2", "E2F3", "E2F4"],
-    vmin=-2,
-    vmax=2,
-)
+with plt.rc_context({"figure.figsize": (6, 6)}):
+    sc.pl.umap(
+        adatas["nsclc"]["dorothea"],
+        cmap="coolwarm",
+        color=["E2F1", "E2F2", "E2F3", "E2F4"],
+        vmin=-2,
+        vmax=2,
+        sort_order=False,
+    )
 
 # %%
 tfs_of_interest = [
@@ -157,7 +156,9 @@ pb_dorothea.obs["cell_type_macro"] = pb_dorothea.obs["cell_type_macro"].astype(
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_progeny[pb_progeny.obs["cell_type_macro"].str.startswith("TAM"), :],
+    pb_progeny[
+        pb_progeny.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+    ],
     var_names=pws_of_interest,
     groupby="cell_type_macro",
     cmap="coolwarm",
@@ -169,8 +170,27 @@ fig = sc.pl.matrixplot(
 fig.savefig(f"{artifact_dir}/heatmap_progeny_tam.svg")
 
 # %%
+pb_progeny.layers["zscore"] = scipy.stats.zscore(pb_progeny.X, axis=1)
+
+# %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[pb_dorothea.obs["cell_type_macro"].str.startswith("TAM"), :],
+    pb_progeny[
+        pb_progeny.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+    ],
+    var_names=pws_of_interest,
+    groupby="cell_type_macro",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+    layer="zscore"
+)
+fig.savefig(f"{artifact_dir}/heatmap_progeny_tam_zscore.svg")
+
+# %%
+fig = sc.pl.matrixplot(
+    pb_dorothea[pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :],
     var_names=tfs_of_interest,
     groupby="cell_type_macro",
     cmap="coolwarm",
@@ -180,5 +200,22 @@ fig = sc.pl.matrixplot(
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam.svg")
+
+# %%
+pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
+
+# %%
+fig = sc.pl.matrixplot(
+    pb_dorothea[pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :],
+    var_names=tfs_of_interest,
+    groupby="cell_type_macro",
+    cmap="coolwarm",
+    swap_axes=True,
+    vmin=-2.5,
+    vmax=2.5,
+    return_fig=True,
+    layer="zscore"
+)
+fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam_zscore.svg")
 
 # %%
