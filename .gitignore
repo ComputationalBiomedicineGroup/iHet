@@ -13,3 +13,4 @@ work
 results
 containers
 analyses/**/figures
+analyses/**/MOFA_out

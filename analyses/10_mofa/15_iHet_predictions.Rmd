@@ -1,0 +1,1676 @@
+---
+title: "Analysis of iHet predictions"
+params:
+    repo_dir: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions"
+    folderValidation: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/Mechanistic_signatures_project/data/Validation/prediction_files/"
+    zipMOFAmodels: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/iHet_data/MOFA_noDCandMono/MOFA_out.zip"
+    weightsTCGAMOFA: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/all_tcga_iHet_weights_bootstrap_noDCandMono_scaled.RDS"
+    dataBagaevMFP: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/immune_subtypes/bagaev_mfp_tcga.xlsx"
+    dataTCGAfeatures: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/iHet_data/features/TCGA_expr_data.features.rds"
+    dataCorHIF: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/correlation_features_fibroblasts_all_tissues.RDS"
+    dataTCGAiHet: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/tcga_ihet_scores/all_tcga_iHet_scores_using_scaled_weights.RDS"
+    folderValidationiHet: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/"
+    dataImmscoreZ: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_FFGS/iHet/tables/easier_Zscores/immscoreZ.rds"
+
+---
+
+## Load input data
+
+```{r setup, include = FALSE}
+
+repo_dir <- params$repo_dir
+folderValidation <- params$folderValidation
+zipMOFAmodels <- params$zipMOFAmodels
+folderValidationiHet <- params$folderValidationiHet
+
+# utils
+source("./helper_iHet_predictions.R")
+
+# Read TCGA MOFA bootstrap weights (scaled)
+df_tcga_weights <- readRDS(file = params$weightsTCGAMOFA)
+df_tcga_weights_median <- aggregate(df_tcga_weights,
+                                    weight ~ feature + factor + view + cancertype, 
+                                    FUN = "median")
+
+# Read Bagaev molecular subtypes for TCGA data
+Bagaev_mfp <- readxl::read_xlsx(params$dataBagaevMFP, sheet = 2)
+colnames(Bagaev_mfp) <- Bagaev_mfp[1,]
+Bagaev_mfp <- Bagaev_mfp[-1,]
+model = c("BLCA", "BRCA", "CESC","CRC", "GBM", "HNSC", "KIRC", "KIRP", 
+          "LIHC", "OV", "PAAD", "PRAD", "SKCM", "STAD", "THCA", "UCEC", 
+          "LUAD", "LUSC", "NSCLC")
+Bagaev_mfp <- subset(Bagaev_mfp, TCGA_project %in% model)
+colnames(Bagaev_mfp)[1] <- "patient"
+Bagaev_mfp <- Bagaev_mfp %>% select(patient, "MFP", "PFS", "TMB")
+
+# Read TCGA features data
+all_tcga <- readRDS(params$dataTCGAfeatures)
+
+# Read information about features correlated with density of fibroblasts in tumor region
+feat_cor_hifs <- readRDS(params$dataCorHIF)
+
+# Read TCGA iHet scores
+tcga_iHet_scores <- readRDS(file = params$dataTCGAiHet)
+tcga_iHet_scores_median <- aggregate(tcga_iHet_scores, 
+                              score ~ method + model + pat_id, 
+                              FUN = "median")
+
+# Immune response score
+all_tcga[["immresp"]][["NSCLC"]] <- rbind(all_tcga[["immresp"]][["LUAD"]], all_tcga[["immresp"]][["LUSC"]])
+IR <- all_tcga[["immresp"]]
+
+immscoreZ <- readRDS(params$dataImmscoreZ)
+
+```
+
+## Compute iHet for TCGA patients
+
+```{r}
+
+# cancer types
+model = c("BLCA", "BRCA", "CESC","CRC", "GBM", "HNSC", "KIRC", "KIRP",
+          "LIHC", "LUAD", "LUSC", "NSCLC", "OV", "PAAD", "PRAD",
+          "SKCM", "STAD", "THCA", "UCEC")
+
+# Compute iHet for each cancer type
+for (model_sel in model){
+
+  counts <- solve_annotation_issues(gene_expr = tcga_features$count[[model_sel]])
+  tpm <- solve_annotation_issues(gene_expr = tcga_features$tpm[[model_sel]])
+
+  all_dataset <- list(counts = counts,
+                      tpm = tpm)
+
+  iHet_df <- compute_iHet(dataset = all_dataset,
+                          model = model_sel,
+                          use_bootstrap_weights=TRUE,
+                          method = c("iHet", "iHet_inverted"),
+                          use_fibroblasts_hifs_tissue = "tumor",
+                          cancer_type_hifs = "NSCLC",
+                          assess_cor_threshold = FALSE,
+                          approach = "standard",
+                          scaled = TRUE)
+
+  if (model_sel != "NSCLC") iHet_df$model <- model_sel
+  saveRDS(iHet_df, file = paste0(repo_dir, "/data/tcga_ihet_scores/", model_sel, "_iHet_scores_using_scaled_weights.RDS"))
+}
+
+# Re-format iHet data.frame
+tcga_iHet_scores <- do.call(rbind, lapply(model[!model %in% c("NSCLC")], function(XX){
+
+  print(XX)
+  tmp <- readRDS(file = paste0(repo_dir, "/data/tcga_ihet_scores/", XX, "_iHet_scores_using_scaled_weights.RDS"))
+  colnames(tmp) <- c("patient", "score", "hif_tissue", "method","run", "model")
+
+  return(tmp)
+}))
+
+colnames(tcga_iHet_scores)[1] <- "pat_id"
+tcga_iHet_scores$pat_id <- gsub(".", "-", tcga_iHet_scores$pat_id, fixed = TRUE)
+tcga_iHet_scores$pat_id <- substr(tcga_iHet_scores$pat_id, 1, 12)
+#saveRDS(tcga_iHet_scores, file = paste0(repo_dir, "/data/tcga_ihet_scores/all_tcga_iHet_scores_using_scaled_weights.RDS"))
+
+# Retrieve iHet score TCGA-NSCLC patients
+iHet_df <- readRDS(file = paste0(repo_dir, "/data/tcga_ihet_scores/NSCLC_iHet_scores_using_scaled_weights.RDS"))
+colnames(iHet_df)[1] <- "pat_id"
+iHet_df$pat_id <- gsub(".", "-", iHet_df$pat_id, fixed = TRUE)
+iHet_df$pat_id <- substr(iHet_df$pat_id, 1, 12)
+luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
+lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+
+## LUAD
+iHet_df_luad <- iHet_df %>% filter(model == "LUAD" & pat_id %in% luad_patients)
+
+## LUSC
+iHet_df_lusc <- iHet_df %>% filter(model == "LUSC" & pat_id %in% lusc_patients)
+iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
+iHet_df$model <- "NSCLC"
+tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
+
+#saveRDS(tcga_iHet_scores, file = paste0(repo_dir, "/data/tcga_ihet_scores/all_tcga_iHet_scores_using_scaled_weights.RDS"))
+
+# Compute median iHet (one value per patient)
+tcga_iHet_scores_median <- aggregate(tcga_iHet_scores, 
+                              score ~ method + model + pat_id, 
+                              FUN = "median")
+# Save iHet matrix
+tcga_iHet_mat <- tcga_iHet_scores_median %>% pivot_wider(names_from = method, values_from = score)
+colnames(tcga_iHet_mat)[4] <- "iHet_rev"
+#saveRDS(object = tcga_iHet_mat, file = paste0("./iHet_ms/tcga_unified_iHet_scores.RDS"))
+
+```
+
+## Examine TCGA-NSCLC features across microenvironment subtypes (Bagaev et al.)
+
+```{r}
+
+# Keep descriptors used as input for MOFA
+all_tcga <- all_tcga[c("pathway", "tf", "cellfrac")]
+cancer_types <- names(all_tcga$pathway)
+
+# Normalize scores as in MOFA
+
+## Pathways
+tmp_path <- lapply(cancer_types, function(X) scale(all_tcga$pathway[[X]]))
+all_tcga$pathway <- tmp_path; names(all_tcga$pathway) <- cancer_types
+all_tcga$pathway$NSCLC <-  rbind(all_tcga$pathway$LUAD, all_tcga$pathway$LUSC)
+
+## Cell fractions
+tmp_cellfrac <- lapply(cancer_types, function(X) log10(all_tcga$cellfrac[[X]][, -c(4,10)]*100+0.001))
+all_tcga$cellfrac <- tmp_cellfrac; names(all_tcga$cellfrac) <- cancer_types
+all_tcga$cellfrac$NSCLC <-  rbind(all_tcga$cellfrac$LUAD, all_tcga$cellfrac$LUSC)
+tmp2 <-  all_tcga$cellfrac$NSCLC
+tmp2 <- tmp2[,!colnames(tmp2) == "Other"]
+tmp2[, "CD4 T"] <- tmp2[, "CD4 T"] + tmp2[, "Treg"]
+colnames(tmp2)[colnames(tmp2) == "CD8+ T"] <- "CD8 T"
+
+## TFs
+tmp_tf <- lapply(cancer_types, function(X) all_tcga$tf[[X]])
+all_tcga$tf <- tmp_tf; names(all_tcga$tf) <- cancer_types
+all_tcga$tf$NSCLC <-  rbind(all_tcga$tf$LUAD, all_tcga$tf$LUSC)
+
+input_features <- cbind(all_tcga$pathway$NSCLC, all_tcga$tf$NSCLC, tmp2)
+tissue <- "tumor"
+
+# Filter for FDR <= 0.05 & corr > 0)
+feat_cor_hif <- feat_cor_hifs[[tissue]][[cancer_type]] %>% 
+  group_by(feature, cancertype, hif) %>%
+  filter(FDR <= 0.05 && cor > 0 && cancertype == cancer_type)
+
+yes_hif <- unique(feat_cor_hif$feature)
+not_hif <- setdiff(colnames(input_features), unique(feat_cor_hif$feature))
+
+# Change patient id -
+patients <- substr(rownames(input_features), 1 ,12)
+patients <- gsub(".", "-", patients, fixed = TRUE)
+features_df <- reshape2::melt(input_features)
+features_df$patient <- patients
+
+# Add bagaev info
+features_df_mfp <- inner_join(Bagaev_mfp, features_df, by = "patient")
+
+# Add view information
+features_df_mfp$view <- "TFs"
+features_df_mfp$view[features_df_mfp$variable %in% colnames(all_tcga$pathway$NSCLC)] <- "Pathways"
+features_df_mfp$view[features_df_mfp$variable %in% colnames(tmp2)] <- "Cell fractions"
+features_df_mfp$variable <- as.character(features_df_mfp$variable)
+
+# Keep only correlated features
+features_df_mfp_main <- subset(features_df_mfp, variable %in% yes_hif)
+# features_df_mfp_supp <- subset(features_df_mfp, variable %in% not_hif)
+
+# Calculate median feature values across patients
+features_df_mfp_main_median <- features_df_mfp_main %>%
+  group_by(variable, MFP, view) %>%
+  dplyr::summarise(median_value=median(value))
+
+# Sort molecular subtypes
+features_df_mfp_main_median$MFP <- factor(features_df_mfp_main_median$MFP,
+                                          levels = c("F", "IE/F", "D", "IE"))
+
+## Quantitative evaluation HIF features (F>IE or IE/F>IE) 
+### Visualize the data ##
+fibrotic <- filter(features_df_mfp_main, MFP %in% c("F"))
+#hist(fibrotic$value)
+enriched_fibrotic <- filter(features_df_mfp_main, MFP %in% c("IE/F"))
+#hist(enriched_fibrotic$value)
+enriched <- filter(features_df_mfp_main, MFP %in% c("IE"))
+#hist(enriched$value)
+
+# compute wilcoxon sum rank test for each variable
+test <- do.call(rbind, lapply(unique(features_df_mfp_main$variable), function(x) {
+  # consider only the data for that variable and separate R and NR
+  tmp <- subset(features_df_mfp_main, variable == x & MFP %in% c("F", "IE/F", "IE"))
+  # compute average
+  tmp_mean <- tapply(tmp$value, tmp$MFP, mean)
+  # compute wilcoxon sum rank test, effect size and sign
+  stattest <- rstatix::wilcox_test(data = tmp, value ~ MFP, ref.group = "IE")
+  effsize <- rstatix::wilcox_effsize(data = tmp, value ~ MFP, ref.group = "IE")
+  signs <- c(sign(tmp_mean["F"] - tmp_mean["IE"]), sign(tmp_mean["IE/F"] - tmp_mean["IE"]))
+  p_val <- stattest$p
+  eff_size <- effsize$effsize
+  # Summary
+  tmp_df <- data.frame(
+    datatype = unique(tmp$view),
+    variable = x,
+    comparison = paste0(stattest$group2,">",stattest$group1),
+    p_val = p_val,
+    eff_size = eff_size,
+    sign = as.numeric(signs)
+  )
+  return(tmp_df)
+}))
+
+test$signedEffect <- test$eff_size * test$sign
+test$threshold <- as.numeric(as.factor(test$p_val <= 0.05))
+test$threshold <- factor(test$threshold,levels = c(1, 2),labels = c("notSign", "Sign"))
+
+xminmax <- max(abs(test$eff_size))
+xminmax <- xminmax + xminmax * 0.01
+ymax <- max(-log10(test$p_val))
+ymax <- ymax + ymax * 0.01
+
+# Add MOFA weight to df
+mofa_nsclc_w_df <- df_tcga_weights_median %>% 
+  filter(cancertype == cancer_type) %>%
+  dplyr::rename('variable' = 'feature')
+
+test_w_df <- inner_join(mofa_nsclc_w_df, test, by = "variable")
+
+# Visualize range of values per view
+range(subset(features_df_mfp_main_median, view == "Cell fractions")$median_value)
+range(subset(features_df_mfp_main_median, view == "Pathways")$median_value)
+range(subset(features_df_mfp_main_median, view == "TFs")$median_value)
+
+# -------------------------------------------- #
+## Heatmap: features across molecular subtypes ##
+# -------------------------------------------- #
+
+# Sort features by median eff size
+tmp <- test_w_df %>% group_by(variable) %>%
+  dplyr::summarise(eff_size_median = median(signedEffect)) %>%
+  mutate(sort_feature = variable[order(eff_size_median, decreasing = TRUE)])
+
+# Extract name significant features
+significant_features <- unique(subset(test_w_df, threshold == "Sign" & sign == 1)$variable)
+facet_features <- rep("plain", length(tmp$sort_feature)); names(facet_features) <- rev(tmp$sort_feature)
+facet_features[significant_features] <- "bold"
+
+# Saturate values
+values <- features_df_mfp_main_median$median_value
+range_val <- min(abs(range(values)))
+if (range_val == abs(range(values)[2])) values[abs(values) > range_val] <- -range_val # min
+if (range_val == abs(range(values)[1])) values[abs(values) > range_val] <- range_val # max
+features_df_mfp_main_median$median_value <- values
+
+### Cell fractions ###
+features_cellfrac <- subset(features_df_mfp_main_median, view == "Cell fractions")
+features_cellfrac$MFP <- factor(features_cellfrac$MFP, levels = c("IE/F", "F", "IE", "D"))
+
+# Set factor levels using sorted features
+colnames(all_tcga$cellfrac$NSCLC) <- gsub("+","", colnames(all_tcga$cellfrac$NSCLC), fixed = TRUE)
+order_cellfrac <- tmp$sort_feature[which(tmp$sort_feature %in% colnames(all_tcga$cellfrac$NSCLC))]
+features_cellfrac$variable <- factor(features_cellfrac$variable, levels = rev(order_cellfrac))
+facet_features_cellfrac <- facet_features[names(facet_features) %in% colnames(all_tcga$cellfrac$NSCLC)]
+
+gg_cellfrac <- features_cellfrac %>%
+  ggplot(aes(x=MFP, y=variable, fill = median_value)) +
+  geom_tile() +
+  ggplot2::scale_fill_distiller(palette="RdBu", direction=-1, name = "Normalized quantification \n", guide = "none") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(axis.text.x = element_blank(),
+                 axis.text.y = element_text(size=12, angle = 0, color = "black", 
+                                            face = facet_features_cellfrac),
+                 axis.title.x = element_blank(),
+                 axis.title.y = element_blank(),
+                 axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
+                 legend.position = "none") +
+    scale_x_discrete(expand=c(0,0)) + 
+    scale_y_discrete(expand=c(0,0))
+  
+### Pathways ###
+features_path <- subset(features_df_mfp_main_median, view == "Pathways")
+features_path$MFP <- factor(features_path$MFP, levels = c("IE/F", "F", "IE", "D"))
+
+# Set factor levels using sorted features
+order_path <- tmp$sort_feature[which(tmp$sort_feature %in% colnames(all_tcga$pathway$NSCLC))]
+features_path$variable <- factor(features_path$variable, levels = rev(order_path))
+facet_features_path <- facet_features[names(facet_features) %in% colnames(all_tcga$pathway$NSCLC)]
+
+gg_pathways <- features_path %>%
+  ggplot(aes(x=MFP, y=variable, fill = median_value)) +
+  geom_tile() +
+  ggplot2::scale_fill_distiller(palette="RdBu", direction=-1, name = "Normalized quantification \n", guide="none") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(axis.text.x = element_blank(),
+                 axis.text.y = element_text(size=12, angle = 0, color = "black", face = facet_features_path),
+                 axis.title.x = element_blank(),
+                 axis.title.y = element_blank(),
+                 axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
+                 legend.position = "none")+
+    scale_x_discrete(expand=c(0,0)) + 
+    scale_y_discrete(expand=c(0,0)) 
+
+### TFs ###
+features_tf <- subset(features_df_mfp_main_median, view == "TFs")
+features_tf$MFP <- factor(features_tf$MFP, levels = c("IE/F", "F", "IE", "D"))
+
+# Set factor levels using sorted features
+order_tf <- tmp$sort_feature[which(tmp$sort_feature %in% colnames(all_tcga$tf$NSCLC))]
+features_tf$variable <- factor(features_tf$variable, levels = rev(order_tf))
+facet_features_tf <- facet_features[names(facet_features) %in% colnames(all_tcga$tf$NSCLC)]
+
+gg_tfs <- features_tf %>%
+  ggplot(aes(x=MFP, y=variable, fill = median_value)) +
+  geom_tile() +
+  ggplot2::scale_fill_distiller(palette="RdBu", direction=-1, name = "Normalized quantification \n", 
+                                guide = guide_colorbar(label = TRUE,frame.colour = "black")) +
+  # ggplot2::scale_fill_gradient2(low = "red", mid = "white", high = "blue",
+  #                               name = "Normalized quantification \n") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(axis.text.x = element_text(size=12, angle = 0, hjust=1, vjust= 0.5, color = "black"),
+                 axis.text.y = element_text(size=12, angle = 0, color = "black", face = facet_features_tf),
+                 axis.title.x = element_blank(),
+                 axis.title.y = element_blank(),
+                 axis.ticks.x = element_blank(), 
+                 axis.ticks.y = element_blank(),
+                 legend.position = "top", legend.title.align=0.5, 
+                 legend.key = element_rect(color = 'black')) +
+  scale_x_discrete(expand=c(0,0)) + 
+  scale_y_discrete(expand=c(0,0)) 
+
+# Combine heatmaps in one page
+heatmaps <- ggarrange(gg_cellfrac, gg_pathways, gg_tfs, nrow = 3, ncol= 1, common.legend = TRUE, align = "v", heights = c(0.9,3,12))
+
+svglite(filename = "./iHet_ms/Figure3_iHet_features_immune_exclusion_heatmap.svg", width = 4, height = 8, 
+        fix_text_size = FALSE, scaling = 0.6)
+heatmaps
+dev.off()
+
+cat("Proportion of the features that are higher in fibrotic tumors:", (table(facet_features)[1]/ length(facet_features)) * 100, "%")
+
+# -------------------------------------------- #
+## Volcano plots: IE vs IE/F and IE vs F ##
+# -------------------------------------------- #
+
+colors_palette <- brewer.pal(9, "RdBu")
+colors_sign <- c(colors_palette[9], colors_palette[1]); names(colors_sign) <- c("-1","1")
+
+## F vs IE ##
+test_w_df$sign_weight <- factor(sign(test_w_df$weight), levels = c(-1,1))
+
+volcano_plot_FvsIE <- ggplot2::ggplot(
+  data = subset(test_w_df, comparison == "F>IE"),
+  ggplot2::aes(x = signedEffect, y = -log10(p_val), size = abs(weight), fill = sign_weight, color= sign_weight, shape = sign_weight)) +
+  ggplot2::geom_point() +
+  ggplot2::xlim(c(-xminmax, xminmax)) +
+  ggplot2::ylim(c(0, ymax)) +
+  ggplot2::xlab("higher in IE          effect size          higher in F") +
+  ggplot2::ylab("-log10 p-value") +
+  ggplot2::scale_fill_manual(labels = names(colors_sign), values = colors_sign, name = "Sign of MOFA weight") +
+  ggplot2::scale_color_manual(labels = names(colors_sign), values = colors_sign, name = "Sign of MOFA weight") +
+  ggplot2::scale_size_continuous(name = "MOFA weight", guide = "none") +
+  ggplot2::scale_shape_manual(values = c(25,24), labels= names(colors_sign), name = "Sign of MOFA weight") +
+  ggplot2::theme_bw() +
+  ggplot2::geom_hline(yintercept = -log10(0.05), linetype = "longdash", colour = "#9e9e9e") +
+  ggplot2::geom_vline(xintercept = 0, linetype = "solid", colour = "#9e9e9e") +
+  ggplot2::theme(axis.text = ggplot2::element_text(color = "black"),
+                 axis.ticks = ggplot2::element_line(color = "black")) +
+  ggplot2::theme(legend.position = "top") +
+  ggplot2::ggtitle("")
+
+# Add labels
+volcano_plot_FvsIE <- volcano_plot_FvsIE + ggrepel::geom_text_repel(
+  data = subset(test_w_df, threshold != "notSign" & comparison == "F>IE"),
+  ggplot2::aes(x = signedEffect, y = -log10(p_val), label = variable, size = .3),show.legend = NA, inherit.aes = FALSE, max.overlaps = 20)
+
+## IE/F vs IE ##
+test_w_df$sign <- factor(test_w_df$sign)
+test_w_df$sign_weight <- factor(sign(test_w_df$weight), levels = c(-1,1))
+
+volcano_plot_IEFvsIE <- ggplot2::ggplot(
+  data = subset(test_w_df, comparison == "IE/F>IE"),
+  ggplot2::aes(x = signedEffect, y = -log10(p_val), size = abs(weight), fill = sign_weight, color= sign_weight, shape=sign_weight)) +
+  ggplot2::geom_point() +
+  ggplot2::xlim(c(-xminmax, xminmax)) +
+  ggplot2::ylim(c(0, ymax)) +
+  ggplot2::xlab("higher in IE          effect size          higher in IE/F") +
+  ggplot2::ylab("-log10 p-value") +
+  ggplot2::scale_fill_manual(labels = names(colors_sign), values = colors_sign, name = "Sign of MOFA weight") +
+  ggplot2::scale_color_manual(labels = names(colors_sign), values = colors_sign, name = "Sign of MOFA weight") +
+  ggplot2::scale_size_continuous(name = "MOFA weight") +
+  ggplot2::scale_shape_manual(values = c(25,24), labels= names(colors_sign), name = "Sign of MOFA weight") +
+  ggplot2::theme_bw() +
+  ggplot2::geom_hline(yintercept = -log10(0.05), linetype = "longdash", colour = "#9e9e9e") +
+  ggplot2::geom_vline(xintercept = 0, linetype = "solid", colour = "#9e9e9e") +
+  ggplot2::theme(axis.text = ggplot2::element_text(color = "black"),
+                 axis.ticks = ggplot2::element_line(color = "black")) +
+  ggplot2::theme(legend.position = "top")
+
+# Add labels
+volcano_plot_IEFvsIE <- volcano_plot_IEFvsIE + ggrepel::geom_text_repel(
+  data = subset(test_w_df, threshold != "notSign" & comparison == "IE/F>IE"),
+  ggplot2::aes(x = signedEffect, y = -log10(p_val), label = variable, size = .3), show.legend = NA, inherit.aes = FALSE, max.overlaps = 20)
+
+# Combine volcano plots in one page
+volcano_plots <- ggarrange(volcano_plot_FvsIE, volcano_plot_IEFvsIE, nrow = 1, ncol= 2, common.legend = FALSE, align = "h")
+
+svglite(filename = "./iHet_ms/FigureSX_immune_exclusion_volcano_plot.svg", width = 16, height = 8, 
+        fix_text_size = FALSE, scaling = 0.6)
+volcano_plots
+dev.off()
+
+
+```
+
+## iHet is conserved across cancer types
+
+```{r}
+
+# -------------------------------------------- #
+## Barplot, correlation iHet from TCGA-NSCLC with other cancer types ##
+# -------------------------------------------- #
+
+# TCGA weights matrix
+weight_mat <- df_tcga_weights_median %>% pivot_wider(id_cols = feature, names_from = cancertype, values_from = weight)
+weight_mat <- weight_mat %>% tibble::column_to_rownames("feature")
+cancer_types <- unique(df_tcga_weights_median$cancertype)
+
+# Correlation matrix
+cor_res <- rstatix::cor_mat(weight_mat, method = "pearson")
+cor_mat <- cor_res %>%
+  tibble::column_to_rownames("rowname") %>%
+  as.matrix()
+cor_pmat <- rstatix::cor_get_pval(cor_res) %>%
+  tibble::column_to_rownames("rowname") %>%
+  as.matrix()
+
+# Assess correlation between TCGA cancer types and original iHet (based on TCGA-NSCLC)
+tmp <- cor_mat[-which(colnames(cor_mat) %in% c("LUAD", "LUSC", "NSCLC")), "NSCLC"]
+cat("Median Pearson correlation:", median(tmp))
+
+corrplot(cor_mat,
+         is.corr = TRUE,
+         tl.col = "black",
+         col = colorRampPalette(rev(rdbu10_palette))(1000),
+)
+
+# Median correlation to data.frame
+cor_df <- data.frame(PeCorr=tmp,
+                     CancerType = names(tmp))
+
+# retrieve iHet score TCGA patients (use scaled weights)
+npatients <- tcga_iHet_scores_median %>% filter(!model %in% c("LUAD", "LUSC", "NSCLC")) %>% group_by(model) %>% dplyr::summarise(n=n()/2)
+npatients <- npatients %>% dplyr::rename("CancerType" = "model")
+cor_df <- inner_join(cor_df, npatients)
+cor_df$CancerType_n <- paste0(cor_df$CancerType, "\n(n=", cor_df$n,")")
+
+barplot_PeCorr <- ggplot2::ggplot(cor_df, aes(x=CancerType_n, y=PeCorr)) +
+  geom_bar(stat = "identity", color = "black", fill = "#B2182B") + 
+  theme_classic() +
+  ylim(c(0, 1)) +
+  theme(axis.title.x = element_blank(), strip.background = element_blank(), 
+        axis.title.y = element_text(size = 14, face = "plain", color = "black"),
+        axis.text.x = element_text(size = 14, face = "plain", angle = 0, color = "black"),
+        axis.text.y = element_text(size = 14, face = "plain", hjust = 1, angle = 0, color = "black"),
+        legend.position = "top", 
+        legend.text = element_text(size = 14), 
+        legend.title = element_text(size = 14)) +
+  labs(y = "Pearson correlation")
+
+svglite(filename = "./iHet_ms/F1_factor_correlations_pancancer.svg", width = 12, height = 6, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+barplot_PeCorr
+
+dev.off()
+
+# -------------------------------------------- #
+## Boxplots, iHet and iHet_rev across cancer types ##
+# -------------------------------------------- #
+
+# Add Bagaev MFP
+colnames(Bagaev_mfp)[1] <- "pat_id"
+tcga_all_with_mfp <- inner_join(tcga_iHet_scores_median, Bagaev_mfp, by = "pat_id")
+tcga_all_with_mfp$method <- factor(tcga_all_with_mfp$method, levels = c("iHet", "iHet_inverted"))
+tcga_all_with_mfp$MFP <- factor(tcga_all_with_mfp$MFP, levels = c("D", "F", "IE/F", "IE"))
+
+# scale [-1, 1]
+hist(subset(tcga_all_with_mfp, method == "iHet")$score)
+hist(subset(tcga_all_with_mfp, method == "iHet_inverted")$score)
+
+tcga_all_with_mfp <- tcga_all_with_mfp %>% 
+  group_by(method) %>%
+  mutate(scaled_score = linear_func(score, range = "11"))
+
+hist(subset(tcga_all_with_mfp, method == "iHet")$scaled_score)
+hist(subset(tcga_all_with_mfp, method == "iHet_inverted")$scaled_score)
+
+# Pairwise statistical test #
+stat.test <- tcga_all_with_mfp %>%
+  group_by(method, model) %>%
+  wilcox_test(scaled_score ~ MFP) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance("p.adj")
+
+# Add p-values onto the box plots
+test_subtypes <- stat.test %>%
+  add_xy_position(x = "method", group = "MFP") %>%
+  filter(!p.adj.signif == "ns")
+
+tcga_all_with_mfp$method <- factor(tcga_all_with_mfp$method, levels = unique(test_subtypes$method))
+
+boxplots_mfp_tcga <- ggpubr::ggboxplot(
+  tcga_all_with_mfp, x = "method", y = "scaled_score",
+  fill = "MFP", color = "MFP", alpha = 0.8, palette = colors_mfp,
+  add = "jitter", add.params = list(size = 0.8, jitter = 0.08)
+  ) +
+  scale_x_discrete(labels= c("iHet", "iHet_rev")) +
+  facet_wrap(model ~ ., scales = "free") + 
+  theme_bw() +
+  ylim(c(-1,2)) +
+  theme(panel.grid = element_line(color = "grey", size = 0.25), 
+        panel.background = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "top", legend.direction = "horizontal",
+        axis.text = element_text(color="black"))
+
+boxplots_mfp_tcga + 
+  stat_pvalue_manual(test_subtypes, label = "p.adj.signif", label.size = 5, tip.length = 0.01)
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/tcga_scores_across_immune_subtypes_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+boxplots_mfp_tcga + 
+  stat_pvalue_manual(test_subtypes, label = "p.adj.signif", label.size = 5, tip.length = 0.01)
+
+dev.off()
+
+# -------------------------------------------- #
+## Scatterplot, correlation iHet with anticancer immune response ##
+# -------------------------------------------- #
+
+# Ensemble IR
+selscores <- colnames(IR$BLCA)[1:9]
+pancancer_IR <- lapply(names(IR), function(cancertype){
+   IR[[cancertype]]$response <- NULL
+   immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
+   response <- IR[[cancertype]][, match(selscores, colnames(IR[[cancertype]]))]
+   response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
+   response <- apply(response, 2, median)
+  return(as.matrix(t(response)))
+})
+names(pancancer_IR) <- names(IR)
+
+# to data.frame
+IR_df <- reshape2::melt(pancancer_IR)
+colnames(IR_df) <- c("method", "pat_id", "score", "model")
+IR_df$pat_id <- substr(gsub(".", "-", IR_df$pat_id, fixed = TRUE), 1, 12)
+IR_df$method <- "IR"
+IR_df <- IR_df[, colnames(tcga_iHet_scores_median)]
+
+# Join iHet and IR
+tcga_all <- union(tcga_iHet_scores_median, IR_df)
+
+# Pivot wider
+tcga_df <- tcga_all %>% 
+  filter(!method %in% c("iHet_inverted", "iHet_removed")) %>% 
+  tidyr::pivot_wider(names_from=method, values_from=score)
+
+scatterplot_IR_vs_iHet <- ggplot(tcga_df, aes(x = iHet, y = IR)) + 
+  geom_point(size = 0.8, color = "#333333") +
+  geom_smooth(method = "lm") +
+  facet_wrap(model ~ ., scales = "free") + 
+  theme_bw(base_size = 15) +
+  stat_cor(method="pearson")
+
+svglite(filename = "./iHet_ms/scatterplots_iHet_vs_IR_pancancer_using_scaled_weights.svg", width = 8, height = 8, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+scatterplot_IR_vs_iHet
+dev.off()
+
+# -------------------------------------------- #
+## Correlation plot ##
+# -------------------------------------------- #
+
+tcga_df <- tcga_all %>% 
+  filter(!method %in% c("iHet_inverted", "iHet_removed")) %>% 
+  pivot_wider(names_from=method, values_from=score) %>% 
+  select(iHet, IR,  model)
+
+tcga_all_cor <- tcga_df %>% 
+  group_by(model) %>% 
+  nest() %>%
+  mutate(corr = map(data, function(X) cor(X, method = "pearson")[1,2]))
+
+tcga_mat_cor <- tcga_all_cor %>% 
+  select(model, corr) %>% 
+  pivot_wider(names_from=model, values_from=corr) %>% 
+  unnest() %>% 
+  as.data.frame()
+
+rownames(tcga_mat_cor) <- "cor(iHet, IR)"
+
+corrplot(as.matrix(tcga_mat_cor[,cancer_types]),
+    is.corr = TRUE,
+    sig.level = 0.01,
+    tl.col = "black",
+    col = colorRampPalette(rev(rdbu10_palette))(1000)
+)
+
+# -------------------------------------------- #
+## Barplot, correlation iHet with anticancer immune response ##
+# -------------------------------------------- #
+
+cor_df <- data.frame(PeCorr=as.numeric(tcga_mat_cor[1,]),
+                     CancerType = colnames(tcga_mat_cor))
+
+cor_df <- inner_join(cor_df, npatients)
+cor_df$CancerType_n <- paste0(cor_df$CancerType, "\n(n=", cor_df$n,")")
+
+barplot_PeCorr <- ggplot2::ggplot(cor_df, aes(x=CancerType_n, y=PeCorr)) +
+  geom_bar(stat = "identity", color = "black", fill = "#B2182B") + 
+  theme_classic() +
+  theme(axis.title.x = element_blank(), strip.background = element_blank(), 
+        axis.title.y = element_text(size = 14, face = "plain", color = "black"),
+        axis.text.x = element_text(size = 14, face = "plain", angle = 45, color = "black", hjust = 0.5, vjust = 0.5),
+        axis.text.y = element_text(size = 14, face = "plain", hjust = 1, angle = 0, color = "black"),
+        legend.position = "top", 
+        legend.text = element_text(size = 14), 
+        legend.title = element_text(size = 14)) +
+  labs(y = "Pearson correlation")
+
+svglite(filename = "./iHet_ms/iHet_vs_IR_correlations_pancancer_using_scaled_weights.svg", width = 8, height = 4, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+barplot_PeCorr
+
+dev.off()
+
+```
+
+## iHet predictive value for anticancer immunotherapy in NSCLC
+
+```{r}
+
+datasets_bulk <-c("mariathasan" = "BLCA",
+                  "gideauslanderpd1" = "SKCM",
+                  "kim" =  "STAD",
+                  "jung.nsclc" = "NSCLC")
+
+dataset <- "jung.nsclc"
+hif_type <- "NSCLC"
+
+# data
+tmp_dataset <- sapply(strsplit(dataset, ".", fixed = TRUE), head , 1)
+tmp <- import_dataset(tmp_dataset)
+response <- tmp$response
+
+# -------------------------------------------- #
+## Compute iHet scores (using scaled weights) ##
+# -------------------------------------------- #
+
+# get cancer type
+model <- as.character(datasets_bulk[dataset])
+  
+all_dataset=tmp$all_dataset
+nR <- table(response)["R"]
+nNR <- table(response)["NR"]
+
+counts <- all_dataset$counts[,names(response)]
+tpm    <- all_dataset$tpm[,names(response)]
+
+# To list
+all_dataset <- list(counts = counts,
+                    tpm = tpm)
+# run iHet
+iHet_df <- compute_iHet(dataset = all_dataset,
+                        model = model, # specify cancer-type-specific MOFA model
+                        use_bootstrap_weights=TRUE, # indicate if bootstrap models should be used
+                        method = c("iHet", "iHet_inverted"),
+                        use_fibroblasts_hifs_tissue = c("tumor"),
+                        cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
+                        assess_cor_threshold = FALSE, # If TRUE, it assess the correlation threshold (0-0.3).
+                        approach = "standard",
+                        scaled = TRUE) # use all correlated features (not refined set)
+
+iHet_df$hif_model <- hif_type
+iHet_df$hif_model[iHet_df$method == "iHet"] <- "original"
+iHet_df$dataset <- dataset
+
+#saveRDS(iHet_df, paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+
+# -------------------------------------------- #
+## Plot ROC and PR curves ##
+# -------------------------------------------- #
+
+# Load iHet scores
+iHet_df <- readRDS(paste0(folderValidationiHet, dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+
+# Unknown histology, average LUAD and LUSC iHet scores is used
+if (dataset %in% "jung.nsclc") iHet_df <- aggregate(iHet_df, score ~ patient + method + run + hif_tissue + dataset, FUN = "mean")
+
+# Filter for patients with available response
+iHet_df <- iHet_df %>% filter(patient %in% names(response))
+
+PRcurve <- assess_predictive_performance(iHet=iHet_df,
+                                         response = response,
+                                         use_bootstrap_weights=TRUE,
+                                         method = c("iHet", "iHet_inverted"),
+                                         use_fibroblasts_hifs_tissue = c("tumor"),
+                                         assess_cor_threshold = FALSE,
+                                         plot_roc=TRUE,
+                                         metric="precision_recall")
+
+ROCcurve <- assess_predictive_performance(iHet=iHet_df,
+                                          response = response,
+                                          use_bootstrap_weights=TRUE, 
+                                          method = c("iHet", "iHet_inverted"),
+                                          use_fibroblasts_hifs_tissue = c("tumor"),
+                                          assess_cor_threshold = FALSE, 
+                                          plot_roc=TRUE,
+                                          metric="roc")
+
+pdf(file = paste0("./iHet_ms/iHet_iHetRev_PRcurve_", dataset, ".pdf"),
+    width = 8, height = 8)
+
+# svglite(filename = paste0("./iHet_ms/iHet_iHetRev_PRcurve_", dataset, ".svg"),
+#         width = 12, height = 12, fix_text_size = FALSE, scaling = 0.6)
+
+PRcurve
+dev.off()
+
+pdf(file = paste0("./iHet_ms/iHet_iHetRev_ROCcurve_", dataset, ".pdf"),
+    width = 8, height = 8)
+
+# svglite(filename = paste0("./iHet_ms/iHet_iHetRev_ROCcurve_", dataset, ".svg"),
+#         width = 12, height = 12, fix_text_size = FALSE, scaling = 0.6)
+
+ROCcurve
+dev.off()
+
+```
+
+## iHet and iHet_rev predictive value in BLCA, SKCM, NSCLC and STAD
+
+```{r}
+
+datasets_bulk <-c("mariathasan" = "BLCA",
+                  "gideauslanderpd1" = "SKCM",
+                  "kim" =  "STAD",
+                  "jung.nsclc" = "NSCLC")
+
+# NSCLC
+hif_type <- "NSCLC"
+
+# -------------------------------------------- #
+# Compute iHet scores # 
+# -------------------------------------------- #
+
+lapply(names(datasets_bulk), function(dataset){
+
+  # data
+  tmp_dataset <- sapply(strsplit(dataset, ".", fixed = TRUE), head , 1)
+  tmp <- import_dataset(tmp_dataset)
+  response <- tmp$response
+
+  # get cancer type
+  model <- as.character(datasets_bulk[dataset])
+  
+  all_dataset=tmp$all_dataset
+  nR <- table(response)["R"]
+  nNR <- table(response)["NR"]
+
+  counts <- all_dataset$counts[,names(response)]
+  tpm    <- all_dataset$tpm[,names(response)]
+  
+  if (dataset == "mariathasan"){
+    counts <- solve_annotation_issues(gene_expr = counts)
+    tpm <- solve_annotation_issues(gene_expr = tpm)
+  }
+
+  # To list
+  all_dataset <- list(counts = counts,
+                      tpm = tpm)
+  # run iHet
+  iHet_df <- compute_iHet(dataset = all_dataset,
+                          model = model, # specify cancer-type-specific MOFA model
+                          use_bootstrap_weights=TRUE, # indicate if bootstrap models should be used
+                          method = c("iHet", "iHet_inverted", "iHet_exclusion"),
+                          use_fibroblasts_hifs_tissue = c("tumor"),
+                          cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
+                          assess_cor_threshold = FALSE, # If TRUE, it assess the correlation threshold (0-0.3).
+                          approach = "standard",
+                          scaled = TRUE) # use all correlated features (not refined set)
+
+  iHet_df$hif_model <- hif_type
+  iHet_df$hif_model[iHet_df$method == "iHet"] <- "original"
+  iHet_df$dataset <- dataset
+
+  saveRDS(iHet_df, paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+
+})
+
+# Re-format iHet data.frame
+
+lapply(names(datasets_bulk), function(dataset){
+
+  tmp <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+  colnames(tmp) <- c("patient", "score", "hif_tissue", "method","run", "hif_model", "dataset")
+  saveRDS(tmp, paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+
+  return(tmp)
+})
+
+# -------------------------------------------- #
+## Compute performance 1. AUC, 2.PR ##
+# -------------------------------------------- #
+
+auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
+  cat("Dataset:", dataset, "\n")
+      cat("Cancer type hifs:", hif_type, "\n")
+
+      # data
+      tmp_dataset <- sapply(strsplit(dataset, ".", fixed = TRUE), head , 1)
+      tmp <- import_dataset(tmp_dataset)
+      response <- tmp$response
+
+      if (dataset %in% c("mariathasan", "gideauslanderpd1", "kim", "jung.nsclc")){
+        # iHet scores
+        iHet_df <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+        
+        # Unknown histology, average LUAD and LUSC iHet scores is used
+        if (dataset %in% "jung.nsclc") iHet_df <- aggregate(iHet_df, score ~ patient + method + run + hif_tissue + dataset, FUN = "mean")
+
+      }
+      
+      # Remove model variable
+      iHet_df$model <- NULL
+      
+      # Filter for patients with available response
+      iHet_df <- iHet_df %>% filter(patient %in% names(response))
+      
+      auc_df <- assess_predictive_performance(iHet=iHet_df,
+                                              response = response,
+                                              use_bootstrap_weights=TRUE, 
+                                              method = c("iHet", "iHet_inverted"),
+                                              use_fibroblasts_hifs_tissue = c("tumor"),
+                                              assess_cor_threshold = FALSE, 
+                                              plot_roc=FALSE,
+                                              metric="precision_recall") #roc
+      
+      nR <- table(response)["R"]
+      nNR <- table(response)["NR"]
+      auc_df$dataset <- paste0(dataset, "\n(R=", nR, "; NR=", nNR, ")")
+      
+      return(auc_df)
+}))
+
+# -------------------------------------------- #
+## Boxplots, AUC and AUCPR distributions
+# -------------------------------------------- #
+
+# iHet vs iHet_inverted (iHet_rev)
+auc_df$method <- factor(auc_df$method, levels = c("iHet", "iHet_inverted"))
+      
+# Sort datasets
+levels_datasets <- c("gideauslanderpd1\n(R=20; NR=30)", "mariathasan\n(R=25; NR=167)", 
+                     "kim\n(R=12; NR=33)", "jung.nsclc\n(R=8; NR=19)")
+auc_df$dataset <- factor(auc_df$dataset, levels = unique(levels_datasets))
+new_labels <- c(expression(SKCM^1), expression(BLCA^4), expression(STAD^3), expression(NSCLC^2))
+
+performance <- ggplot(auc_df, aes(x=dataset, y=auc, fill = method)) +
+  geom_boxplot() + #geom_sina(alpha=0.5) +
+  scale_y_continuous(limits=c(0, 1)) +
+  theme_bw() +
+  scale_x_discrete(labels= new_labels) +
+  scale_fill_manual(values = c("#aad52e","#d3002e")) +
+  theme(
+    axis.title.x = element_blank(), 
+    axis.title.y = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.text.x = element_text(size = 14, color = "black", angle = 45, hjust = 0.5, vjust = 0.5),
+    legend.direction = "horizontal", legend.position = "top", legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14)
+  ) +
+  #labs(y = "Area Under the ROC Curve (AUROC)", fill = "Method")
+  labs(y = "Area Under Precision-Recall Curve (AUPRC)", fill = "Method")
+
+svglite(filename = "./iHet_ms/iHet_iHetRev_bootstrap_AUCPR_using_scaled_weights.svg", width = 8, height = 8, 
+        fix_text_size = FALSE, scaling = 0.6)
+performance
+dev.off()
+
+```
+
+## Integration with TMB
+
+> Combining three aspects (presence and localization of immune response, and tumor antigenicity)
+
+```{r}
+
+# With available TMB
+datasets_bulk <-c("mariathasan" = "BLCA",
+                  "kim" =  "STAD",
+                  "jung.nsclc" = "NSCLC")
+
+# normalization unit scale first
+normalize = "01_first"
+hif_type = "NSCLC"
+
+plots <- lapply(names(datasets_bulk), function(dataset){
+  plots <- lapply(c("tumor"), function(tissue){
+    
+    # path to repo
+    repo_dir <- "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions"
+    cat("Dataset: ", dataset, "\n")
+    
+    # data
+    tmp_dataset <- sapply(strsplit(dataset, ".", fixed = TRUE), head , 1)
+    tmp <- import_dataset(tmp_dataset)
+    response <- tmp$response
+    
+    # iHet scores
+    iHet_df <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+    
+    if (dataset %in% c("jung.nsclc")){
+      # Unknown histology, average LUAD and LUSC iHet scores is used
+      iHet_df <- aggregate(iHet_df,
+                           score ~ patient + method + run + hif_tissue + dataset,
+                           FUN = "mean")
+    }
+ 
+
+    # Immune Exclusion
+    ## all runs
+    iHet_exclusion_df <- iHet_df %>% filter(method == "iHet_exclusion" &  
+                                              hif_tissue == tissue) %>%
+      group_by(patient, dataset, method, hif_tissue) %>%
+      dplyr::mutate(score = -score)
+    
+    ## median
+    iHet_exclusion_df_median <- iHet_df %>% filter(method == "iHet_exclusion" &  
+                                                     hif_tissue == tissue) %>%
+      group_by(patient, dataset, method, hif_tissue) %>%
+      dplyr::summarize(median_score = median(score))
+    
+    # iHet
+    ## all runs
+    iHet_original_df <- iHet_df %>% filter(method == "iHet") %>%
+      group_by(patient, dataset, method, hif_tissue)
+    
+    ## median
+    iHet_original_df_median <- iHet_df %>% filter(method == "iHet") %>%
+      group_by(patient, dataset, method, hif_tissue) %>%
+      dplyr::summarize(median_score = median(score))
+    
+    # data.frame
+    ## all
+    myscores_df <- rbind(iHet_original_df, iHet_exclusion_df)
+    myscores_df$threshold <- myscores_df$hif_tissue <- myscores_df$dataset <- myscores_df$hif_model <- NULL
+    myscores_df <- myscores_df %>% pivot_wider(names_from = "method", values_from = "score")
+
+    ## median
+    myscores_df_median <- data.frame(
+      patient = as.character(iHet_exclusion_df_median$patient),
+      iHet = iHet_original_df_median$median_score,
+      iHet_exclusion = - iHet_exclusion_df_median$median_score
+    )
+    
+    # response to treatment
+    response <- data.frame(response=tmp$response, patient = names(tmp$response))
+    
+    ## all
+    myscores_df <- inner_join(myscores_df, response, by = "patient")
+    if(anyNA(myscores_df$response)) myscores_df <- myscores_df[!is.na(myscores_df$response),]
+    ## median
+    myscores_df_median$response <- response[myscores_df_median$patient, "response"]
+    if(anyNA(myscores_df_median$response)) {
+      myscores_df_median <- myscores_df_median[!is.na(myscores_df_median$response),]
+    }
+    
+    # TMB
+    TMB <- data.frame(TMB=tmp$TMB, patient = names(tmp$TMB))
+    
+    ## all
+    myscores_df <- inner_join(myscores_df, TMB, by = "patient")
+    if (tmp_dataset %in% c("poplar", "oak")) myscores_df$TMB[myscores_df$TMB == ""] <- NA
+    if(anyNA(myscores_df$TMB) & !all(is.na(myscores_df$TMB))) {
+      myscores_df <- myscores_df[!is.na(myscores_df$TMB),]
+    }
+
+    ## median
+    myscores_df_median$TMB <- TMB[myscores_df_median$patient, "TMB"]
+    if (tmp_dataset %in% c("poplar", "oak")) myscores_df_median$TMB[myscores_df_median$TMB == ""] <- NA
+    if(anyNA(myscores_df_median$TMB) & !all(is.na(myscores_df_median$TMB))) {
+      myscores_df_median <- myscores_df_median[!is.na(myscores_df_median$TMB),]
+    } 
+    
+    n_NR <- table(myscores_df_median$response)["NR"]
+    n_R  <- table(myscores_df_median$response)["R"]
+    
+    myscores_df_median$dataset <- paste0(dataset, " (NR=", n_NR, ", R=", n_R, ")")
+    myscores_df$dataset <- paste0(dataset, " (NR=", n_NR, ", R=", n_R, ")")
+    
+    # Combine scores (-iHet_exclusion, iHet, TMB)
+    
+    if (!all(is.na(myscores_df$TMB))){
+      
+      ### bootstrap
+      final.scores_all <- integrated_score(myscores_df, with_TMB = TRUE, 
+                                           save_figure_format = c(".pdf"), 
+                                           tissue = tissue, normalize = normalize)
+      
+      ### median
+      final.scores_median <- integrated_score(myscores_df_median, with_TMB = TRUE, 
+                                              save_figure_format = c(".pdf"), 
+                                              tissue = tissue, normalize = normalize)
+      
+    }
+    return(list(median=final.scores_median, bootstrap=final.scores_all))
+  })
+  names(plots) <-c("tumor")
+  return(plots)
+})
+names(plots) <- names(datasets_bulk)
+
+# -------------------------------------------- #
+## Triangle plots, AUC for the weighted average (-iHet_exclusion, iHet, TMB) ##
+# -------------------------------------------- #
+
+D <- plots$mariathasan$tumor$bootstrap
+E <- plots$kim$tumor$bootstrap
+G <- plots$jung.nsclc$tumor$bootstrap
+
+layout_matrix <- matrix(c(1,2,3), nrow = 1, ncol=3, byrow = TRUE)
+ggtern::grid.arrange(D,E,G, layout_matrix = layout_matrix)
+
+svglite(filename = "./iHet_ms/integration_iHet_iHetExclusion_TMB_using_scaled_weights.svg", width = 14, height = 4, 
+        fix_text_size = FALSE, scaling = 0.6)
+ggtern::grid.arrange(D,E,G, layout_matrix = layout_matrix)
+dev.off()
+
+```
+
+## Poplar and Oak data analysis
+
+```{r}
+
+datasets_bulk <-c("poplar.luad" = "LUAD",
+                  "poplar.lusc" = "LUSC",
+                  "oak.luad" = "LUAD",
+                  "oak.lusc" = "LUSC")
+
+# NSCLC
+hif_type <- "NSCLC"
+
+# -------------------------------------------- #
+# Compute iHet scores #
+# -------------------------------------------- #
+
+lapply(names(datasets_bulk), function(dataset){
+
+  # data
+  tmp_dataset <- sapply(strsplit(dataset, ".", fixed = TRUE), head , 1)
+  tmp <- import_dataset(tmp_dataset)
+  response <- tmp$response
+
+  # get cancer type
+  model <- as.character(datasets_bulk[dataset])
+  
+  all_dataset=tmp$all_dataset
+  nR <- table(response)["R"]
+  nNR <- table(response)["NR"]
+
+  counts <- all_dataset$counts[,names(response)]
+  tpm    <- all_dataset$tpm[,names(response)]
+  
+  if (dataset == "mariathasan"){
+    counts <- solve_annotation_issues(gene_expr = counts)
+    tpm <- solve_annotation_issues(gene_expr = tpm)
+  }
+
+  # To list
+  all_dataset <- list(counts = counts,
+                      tpm = tpm)
+  # run iHet
+  iHet_df <- compute_iHet(dataset = all_dataset,
+                          model = model, # specify cancer-type-specific MOFA model
+                          use_bootstrap_weights=TRUE, # indicate if bootstrap models should be used
+                          method = c("iHet", "iHet_inverted", "iHet_exclusion"),
+                          use_fibroblasts_hifs_tissue = c("tumor"),
+                          cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
+                          assess_cor_threshold = TRUE, # If TRUE, it assess the correlation threshold (0-0.3).
+                          approach = "standard",
+                          scaled = TRUE) # use all correlated features (not refined set)
+
+  iHet_df$hif_model <- hif_type
+  iHet_df$hif_model[iHet_df$method == "iHet"] <- "original"
+  iHet_df$dataset <- dataset
+
+  saveRDS(iHet_df, paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+
+})
+
+# data
+poplar_data <- import_dataset("poplar")
+oak_data <- import_dataset("oak")
+
+##############
+## POPLAR ##
+##############
+
+HIST <- poplar_data$HIST
+
+# Filter for patients with available histology
+luad_patients <- names(HIST[HIST == "NON-SQUAMOUS"])
+lusc_patients <- names(HIST[HIST == "SQUAMOUS"])
+
+iHet_df_poplarluad <- readRDS(paste0("./iHet_ms/", "poplar.luad","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_inverted") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% luad_patients) %>%
+  select(patient, score, method, run, dataset)
+
+range(iHet_df_poplarluad$score)
+
+iHet_df_poplarlusc <- readRDS(paste0("./iHet_ms/", "poplar.lusc","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_inverted") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% lusc_patients) %>% 
+  select(patient, score, method, run, dataset)
+
+range(iHet_df_poplarlusc$score)
+
+# put together
+iHet_poplar <- rbind(iHet_df_poplarlusc, iHet_df_poplarluad)
+poplar_clinical <- poplar_data$all_dataset$clinical_response %>% 
+  select(OS_MONTHS, PFS_MONTHS, BCOR, OS_CENSOR, PFS_CENSOR) %>% 
+  mutate(patient=rownames(poplar_data$all_dataset$clinical_response))
+
+iHet_poplar <- inner_join(iHet_poplar, poplar_clinical, by = "patient")
+
+##############
+## OAK ##
+##############
+HIST <- oak_data$HIST
+
+# Filter for patients with available histology
+luad_patients <- names(HIST[HIST == "NON-SQUAMOUS"])
+lusc_patients <- names(HIST[HIST == "SQUAMOUS"])
+
+iHet_df_oakluad <- readRDS(paste0("./iHet_ms/", "oak.luad","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_inverted") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% luad_patients) %>%
+  select(patient, score, method, run, dataset)
+
+range(iHet_df_oakluad$score)
+
+iHet_df_oaklusc <- readRDS(paste0("./iHet_ms/", "oak.lusc","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_inverted") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% lusc_patients) %>%
+  select(patient, score, method, run, dataset)
+
+range(iHet_df_oaklusc$score)
+
+# put together
+iHet_oak <- rbind(iHet_df_oakluad, iHet_df_oaklusc)
+oak_clinical <- oak_data$all_dataset$clinical_response %>% 
+  select(OS_MONTHS, PFS_MONTHS, BCOR, OS_CENSOR, PFS_CENSOR) %>% 
+  mutate(patient=rownames(oak_data$all_dataset$clinical_response))
+
+iHet_oak <- inner_join(iHet_oak, oak_clinical, by = "patient")
+
+# -------------------------------------------- #
+## Boxplots, iHet and iHet_rev distribution ##
+# -------------------------------------------- #
+
+iHet_df <- rbind(iHet_oak, iHet_poplar)
+iHet_df$type <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), tail, 1)
+iHet_df$dataset <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), head, 1)
+iHet_df$response <- gsub("CR|PR","R", iHet_df$BCOR)
+iHet_df$response <- gsub("SD|PD","NR", iHet_df$response)
+
+# calculate median score across runs
+iHet_df_median <- iHet_df %>% 
+  group_by(patient, dataset, method, response, type) %>% 
+  dplyr::summarise(median_score = median(score))
+
+# normalize to -1,1
+iHet_df_median <- iHet_df_median %>% 
+  group_by(method) %>% 
+  dplyr::mutate(scaled_median_score = linear_func(median_score, "11"))
+
+iHet_df_median %>% ggplot(aes(x = response, y=scaled_median_score)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(aes(color=type, shape=dataset), position = position_jitterdodge()) +
+  theme_bw() +
+  facet_grid(. ~ method)
+
+# Pairwise statistical test #
+stat.test <- iHet_df_median %>%
+  group_by(method) %>%
+  wilcox_test(scaled_median_score ~ response) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance("p.adj")
+
+# Add p-values onto the box plots
+test_subtypes <- stat.test %>%
+  add_xy_position(x = "response", group = "method")
+
+test_subtypes$xmin[1] <- 0.2 + test_subtypes$xmin[1]
+test_subtypes$xmin[2] <- -0.2 + test_subtypes$xmin[2] 
+
+test_subtypes$xmax[1] <- 0.2 + test_subtypes$xmax[1]
+test_subtypes$xmax[2] <- -0.2 + test_subtypes$xmax[2] 
+
+iHet_df_median$method <- factor(iHet_df_median$method, levels = unique(test_subtypes$method))
+iHet_df_median$response <- factor(iHet_df_median$response, levels = c("NR", "R"))
+
+boxplots_iHet_poplaroak <- ggpubr::ggboxplot(
+  iHet_df_median, x = "response", y = "scaled_median_score", alpha = 0.8,
+  add = "jitter", add.params = list(color="dataset", shape="type", jitter = 0.08)
+  ) +
+  #scale_x_discrete(labels= c("iHet", "iHet_rev")) +
+  facet_grid(. ~ method) +
+  theme_bw() +
+  theme(panel.grid = element_line(color = "grey", size = 0.25), 
+        panel.background = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "top", legend.direction = "horizontal",
+        axis.text = element_text(color="black"))
+
+boxplots_iHet_poplaroak + 
+  stat_pvalue_manual(test_subtypes, label = "p.adj.signif", label.size = 5, tip.length = 0.01)
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/iHet_vs_iHetrev_poplaroak_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+boxplots_iHet_poplaroak + 
+  stat_pvalue_manual(test_subtypes, label = "p.adj.signif", label.size = 5, tip.length = 0.01)
+
+dev.off()
+
+pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/iHet_vs_iHetrev_poplaroak_using_scaled_weights.pdf",
+        width = 10, height = 10)
+
+boxplots_iHet_poplaroak + 
+  stat_pvalue_manual(test_subtypes, label = "p.adj.signif", label.size = 5, tip.length = 0.01)
+
+dev.off()
+
+# -------------------------------------------- #
+# Survival analysis #
+# -------------------------------------------- #
+
+iHet_df_rank <- iHet_df %>% 
+  group_by(run, method) %>% 
+  dplyr::mutate(rank = rank(score), inv_rank = rank(-score))
+
+iHet_df_rank_median <- do.call(
+  data.frame,
+  aggregate(inv_rank ~ dataset + type + patient + method + response + OS_MONTHS + PFS_MONTHS + OS_CENSOR + PFS_CENSOR, 
+            data = iHet_df_rank,
+            FUN = function(x) c(median = median(x), sd = sd(x))
+  )
+)
+
+iHet_df_rank_median$category <- as.numeric(cut_number(iHet_df_rank_median$inv_rank.median, 3))
+iHet_df_rank_median$category <- gsub(1, "Tertile 1", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(2, "Tertile 2", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(3, "Tertile 3", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- factor(iHet_df_rank_median$category, 
+                                        levels = c("Tertile 3", "Tertile 2", "Tertile 1"))
+
+tmp_luad <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & dataset == "oak.luad")
+tmp_lusc <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & dataset == "oak.lusc")
+
+tmp <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3"))
+tmp$category <- gsub("Tertile 1", "High resp", tmp$category)
+tmp$category <- gsub("Tertile 3", "Low resp", tmp$category)
+tmp$category <- factor(tmp$category, levels = c("Low resp", "High resp"))
+
+tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
+
+# OS #
+## iHet
+tmp2 <- tmp %>% filter(method == "iHet")
+fit_poplaroak <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+OS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                           conf.int = TRUE,          
+                           pval = TRUE,    
+                           data = tmp,
+                           risk.table = TRUE,        # Add risk table
+                           risk.table.col = "strata", h) # Risk table color by groups
+## iHet_rev
+tmp2 <- tmp %>% filter(method == "iHet_rev")
+fit_poplaroak <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+OS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                           conf.int = FALSE,          
+                           pval = TRUE,    
+                           data = tmp,
+                           risk.table = TRUE,        # Add risk table
+                           risk.table.col = "strata") # Risk table color by groups
+# PFS #
+## iHet
+tmp2 <- tmp %>% filter(method == "iHet")
+fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                            conf.int = FALSE,          
+                            pval = TRUE,    
+                            data = tmp,
+                            risk.table = TRUE,        # Add risk table
+                            risk.table.col = "strata") # Risk table color by groups
+
+## iHet_rev
+tmp2 <- tmp %>% filter(method == "iHet_rev")
+fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                            conf.int = FALSE,          
+                            pval = TRUE,    
+                            data = tmp,
+                            risk.table = TRUE,        # Add risk table
+                            risk.table.col = "strata") # Risk table color by groups
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/OS_iHetrev_poplaroak_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+OS_poplaroak
+
+dev.off()
+
+pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/OS_iHetrev_poplaroak_using_scaled_weights.pdf",
+        width = 10, height = 10)
+
+OS_poplaroak
+
+dev.off()
+
+##############################################
+# Predictive performance #
+##############################################
+
+# poplar patients with available response #
+poplar_response <- poplar_data$all_dataset$clinical_response %>% 
+  select(BCOR) %>% 
+  mutate(patient=rownames(poplar_data$all_dataset$clinical_response))  
+
+poplar_response$BCOR <- gsub("CR|PR","R", poplar_response$BCOR)
+poplar_response$BCOR <- gsub("SD|PD","NR", poplar_response$BCOR)
+  
+response_poplar <- poplar_response$BCOR[!poplar_response$BCOR %in% c("", "NE")]
+names(response_poplar) <- poplar_response$patient[!poplar_response$BCOR %in% c("", "NE")]
+
+# oak patients with available response #
+oak_response <- oak_data$all_dataset$clinical_response %>% 
+  select(BCOR) %>% 
+  mutate(patient=rownames(oak_data$all_dataset$clinical_response))  
+
+oak_response$BCOR <- gsub("CR|PR","R", oak_response$BCOR)
+oak_response$BCOR <- gsub("SD|PD","NR", oak_response$BCOR)
+  
+response_oak <- oak_response$BCOR[!oak_response$BCOR %in% c("", "NE")]
+names(response_oak) <- oak_response$patient[!oak_response$BCOR %in% c("", "NE")]
+
+# put together #
+iHet_poplaroak <- rbind(iHet_poplar, iHet_oak)
+response_poplaroak <- c(response_poplar, response_oak)
+response_poplaroak <- response_poplaroak[match(unique(iHet_poplaroak$patient), names(response_poplaroak))]
+
+iHet_poplaroak <- iHet_poplaroak %>%
+  select(patient, score, method, run) %>%
+  mutate(threshold="0", hif_tissue="tumor", hif_model="NSCLC")
+
+iHet_poplaroak <- iHet_poplaroak %>%
+  mutate(threshold=ifelse(method == "iHet", "original", "0"),
+         hif_tissue=ifelse(method == "iHet", "original", "tumor"),
+         hif_model=ifelse(method == "iHet", "original", "NSCLC"))
+
+# Filter for patients with available response
+iHet_poplaroak <- iHet_poplaroak %>% filter(patient %in% names(response_poplaroak))
+iHet_poplaroak$dataset <- "poplaroak"
+
+PRcurve <- assess_predictive_performance(iHet=iHet_poplaroak,
+                                         response = response_poplaroak,
+                                         use_bootstrap_weights=TRUE,
+                                         method = c("iHet", "iHet_inverted"),
+                                         use_fibroblasts_hifs_tissue = c("tumor"),
+                                         assess_cor_threshold=FALSE,
+                                         plot_roc=TRUE,
+                                         metric="precision_recall")
+
+ROCcurve <- assess_predictive_performance(iHet=iHet_poplaroak,
+                                          response = response_poplaroak,
+                                          use_bootstrap_weights=TRUE, 
+                                          method = c("iHet", "iHet_inverted"),
+                                          use_fibroblasts_hifs_tissue = c("tumor"),
+                                          assess_cor_threshold = FALSE, 
+                                          plot_roc=TRUE,
+                                          metric="roc")
+
+svglite(filename = paste0("./iHet_ms/iHet_iHetRev_PRcurve_", dataset, ".svg"),
+        width = 12, height = 12, fix_text_size = FALSE, scaling = 0.6)
+PRcurve
+dev.off()
+
+pdf(file = paste0("./iHet_ms/iHet_iHetRev_ROCcurve_", dataset, ".pdf"),
+    width = 8, height = 8)
+
+svglite(filename = paste0("./iHet_ms/iHet_iHetRev_ROCcurve_", dataset, ".svg"),
+        width = 12, height = 12, fix_text_size = FALSE, scaling = 0.6)
+ROCcurve
+dev.off()
+
+
+##############################################
+# Integration with TMB #
+##############################################
+
+## OAK ##
+oak_data <- import_dataset("oak")
+HIST <- oak_data$HIST
+
+# Filter for patients with available histology
+luad_patients <- names(HIST[HIST == "NON-SQUAMOUS"])
+lusc_patients <- names(HIST[HIST == "SQUAMOUS"])
+
+iHet_df_oakluad <- readRDS(paste0("./iHet_ms/", "oak.luad","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_exclusion") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% luad_patients) %>%
+  select(patient, score, method, run, dataset, hif_tissue)
+
+range(iHet_df_oakluad$score)
+
+iHet_df_oaklusc <- readRDS(paste0("./iHet_ms/", "oak.lusc","_iHet_scores_with_hifs_model_NSCLC_using_scaled_weights.RDS")) %>%
+  filter(method %in% c("iHet", "iHet_exclusion") & threshold %in% c("original", "0") & hif_tissue %in% c("original", "tumor") & patient %in% lusc_patients) %>%
+  select(patient, score, method, run, dataset, hif_tissue)
+
+range(iHet_df_oaklusc$score)
+
+iHet_oak <- rbind(iHet_df_oakluad, iHet_df_oaklusc)
+
+oak_clinical <- oak_data$all_dataset$clinical_response %>% 
+  select(tTMB, BCOR) %>% 
+  mutate(patient=rownames(oak_data$all_dataset$clinical_response))
+
+iHet_oak <- inner_join(iHet_oak, oak_clinical, by = "patient")
+
+# Immune Exclusion
+## all runs
+iHet_exclusion_df <- iHet_oak %>% filter(method == "iHet_exclusion" &  
+                                           hif_tissue == "tumor") %>%
+  group_by(patient, dataset, method, hif_tissue) %>%
+  dplyr::mutate(score = -score)
+
+## median
+iHet_exclusion_df_median <- iHet_oak %>% filter(method == "iHet_exclusion" &  
+                                                 hif_tissue == "tumor") %>%
+  group_by(patient, dataset, method, hif_tissue) %>%
+  dplyr::summarize(median_score = median(score))
+
+# iHet
+## all runs
+iHet_original_df <- iHet_oak %>% filter(method == "iHet") %>%
+  group_by(patient, dataset, method, hif_tissue)
+
+## median
+iHet_original_df_median <- iHet_oak %>% filter(method == "iHet") %>%
+  group_by(patient, dataset, method, hif_tissue) %>%
+  dplyr::summarize(median_score = median(score))
+
+# data.frame
+## all
+myscores_df <- rbind(iHet_original_df, iHet_exclusion_df)
+myscores_df$tTMB <- myscores_df$hif_tissue <- myscores_df$BCOR <- myscores_df$hif_model <- NULL
+myscores_df <- myscores_df %>% pivot_wider(names_from = "method", values_from = "score")
+
+## median
+myscores_df_median <- data.frame(
+  patient = as.character(iHet_exclusion_df_median$patient),
+  iHet = iHet_original_df_median$median_score,
+  iHet_exclusion = - iHet_exclusion_df_median$median_score
+)
+
+# response to treatment
+response <- data.frame(response=oak_data$response, patient = names(oak_data$response))
+
+## all
+myscores_df <- inner_join(myscores_df, response, by = "patient")
+if(anyNA(myscores_df$response)) myscores_df <- myscores_df[!is.na(myscores_df$response),]
+## median
+myscores_df_median$response <- response[myscores_df_median$patient, "response"]
+if(anyNA(myscores_df_median$response)) {
+  myscores_df_median <- myscores_df_median[!is.na(myscores_df_median$response),]
+}
+
+# TMB
+TMB <- data.frame(TMB=oak_data$TMB, patient = names(oak_data$TMB))
+
+## all
+myscores_df <- inner_join(myscores_df, TMB, by = "patient")
+myscores_df$TMB[myscores_df$TMB == ""] <- NA
+myscores_df <- myscores_df[!is.na(myscores_df$TMB),]
+
+## median
+myscores_df_median$TMB <- TMB[myscores_df_median$patient, "TMB"]
+myscores_df_median$TMB[myscores_df_median$TMB == ""] <- NA
+myscores_df_median <- myscores_df_median[!is.na(myscores_df_median$TMB),]
+
+n_NR <- table(myscores_df_median$response)["NR"]
+n_R  <- table(myscores_df_median$response)["R"]
+
+dataset <- "oak"
+myscores_df_median$dataset <- paste0(dataset, " (NR=", n_NR, ", R=", n_R, ")")
+myscores_df$dataset <- paste0(dataset, " (NR=", n_NR, ", R=", n_R, ")")
+
+# ---------------------------------------------- #
+# Combine scores (-iHet_exclusion, iHet, TMB)
+# ---------------------------------------------- #
+
+### bootstrap
+final.scores_all <- integrated_score(myscores_df, with_TMB = TRUE, 
+                                     save_figure_format = c(".pdf"), 
+                                     tissue = "tumor", normalize = "01_first")
+
+### median
+final.scores_median <- integrated_score(myscores_df_median, with_TMB = TRUE, 
+                                        save_figure_format = c(".pdf"), 
+                                        tissue = "tumor", normalize = "01_first")
+
+svglite(filename = "./iHet_ms/integration_iHet_iHetExclusion_TMB_using_scaled_weights_oak.svg", width = 14, height = 4, 
+        fix_text_size = FALSE, scaling = 0.6)
+final.scores_all
+dev.off()
+```
+
+## iHet pre vs post immunotherapy
+
+```{r}
+
+# PRE #
+dataset <- "gideauslanderpd1"
+iHet_pre <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+data_pre <- import_dataset(dataset)
+
+## features
+path_pre <- data_pre$all_dataset$computed_features$pathway_activity
+cellfrac_pre <- data_pre$all_dataset$computed_features$cell_fractions
+tf_pre <- data_pre$all_dataset$computed_features$tf_activity
+
+## clinical info
+clin_pre <- data_pre$all_dataset$clinical_response
+clin_pre$Timepoint_biopsy <- NULL
+clin_pre$Timepoint <- "pre"
+clin_pre$Progressed <- NULL
+
+## iHet
+iHet_median_pre <- iHet_pre %>% 
+  filter(method %in% c("iHet", "iHet_inverted")) %>%
+  group_by(patient, dataset, method) %>% 
+  dplyr::summarise(median_score = median(score))
+
+# POST #
+dataset <- "gideauslanderpd1on"
+iHet_on <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+colnames(iHet_on) <- c("patient", "score", "hif_tissue", "method","run", "hif_model", "dataset")
+data_on <- import_dataset(dataset)
+
+## features
+path_on <- data_on$all_dataset$computed_features$pathway_activity
+cellfrac_on <- data_on$all_dataset$computed_features$cell_fractions
+tf_on <- data_on$all_dataset$computed_features$tf_activity
+
+## clinical info
+clin_on <- data_on$all_dataset$clinical_response
+clin_on$Timepoint_biopsy <- NULL
+clin_on$Timepoint <- "on"
+clin_on$Progressed <- NULL
+
+## iHet
+iHet_median_on <- iHet_on %>% 
+  filter(method %in% c("iHet", "iHet_inverted")) %>%
+  group_by(patient, dataset, method) %>% 
+  dplyr::summarise(median_score = median(score))
+
+############################
+## put together pre vs on ##
+############################
+
+## features
+
+### path
+rownames(path_pre) <- paste0(rownames(path_pre), "_pre")
+rownames(path_on) <- paste0(rownames(path_on), "_on")
+path <- rbind(path_pre, path_on)
+
+### cellfrac
+rownames(cellfrac_pre) <- paste0(rownames(cellfrac_pre), "_pre")
+rownames(cellfrac_on) <- paste0(rownames(cellfrac_on), "_on")
+cellfrac <- rbind(cellfrac_pre, cellfrac_on)
+
+### tf
+rownames(tf_pre) <- paste0(rownames(tf_pre), "_pre")
+rownames(tf_on) <- paste0(rownames(tf_on), "_on")
+tf <- rbind(tf_pre, tf_on)
+
+features <- list(path=path,
+                 cellfrac=cellfrac,
+                 tf=tf)
+
+clin_info <- rbind(clin_pre, clin_on)
+clin_info$dataset <- "gide"
+clin_info$dataset[grep("SRR", clin_info$Sample)] <- "auslander"
+
+iHet_median_pre$patient <- paste0(iHet_median_pre$patient, "_pre")
+iHet_median_on$patient <- paste0(iHet_median_on$patient, "_on")
+
+iHet <- rbind(iHet_median_pre, iHet_median_on)
+iHet_mat <- iHet %>% pivot_wider(names_from = method, values_from = median_score)
+colnames(iHet_mat)[4] <- "iHet_rev"
+iHet_mat$dataset <- NULL
+
+gideauslander_pre_on <- list(
+  features = features,
+  clinical_info = clin_info,
+  iHet_scores = iHet_mat
+)
+
+saveRDS(object = gideauslander_pre_on, file = paste0("./iHet_ms/gideauslanderPreOn_iHet_scores_and_metadata.RDS"))
+
+# Add patient id
+load("~/ownCloud2/SystemsImmunoOncology/Mechanistic_signatures_project/data/Validation/prediction_files/gideauslanderpd1/Gide_sampleinfo.rdata")
+gide_sampleinfo <- sampleinfo
+gide_sampleinfo <- gide_sampleinfo[na.omit(match(gideauslander_pre_on$clinical_info$Sample, rownames(gide_sampleinfo))), ]
+  
+load("~/ownCloud2/SystemsImmunoOncology/Mechanistic_signatures_project/data/Validation/prediction_files/gideauslanderpd1/Auslander_sampleinfo.rdata")
+auslander_sampleinfo <- sampleinfo
+auslander_sampleinfo <- auslander_sampleinfo[na.omit(match(gideauslander_pre_on$clinical_info$Sample, auslander_sampleinfo$SRA)), ]
+
+gideauslander_pre_on$clinical_info$Patient_id <- NA
+gideauslander_pre_on$clinical_info$Patient_id[gideauslander_pre_on$clinical_info$Sample %in% rownames(gide_sampleinfo)] <- as.character(gide_sampleinfo$title)
+gideauslander_pre_on$clinical_info$Patient_id[gideauslander_pre_on$clinical_info$Sample %in% auslander_sampleinfo$SRA] <- as.character(auslander_sampleinfo$ID)
+
+saveRDS(object = gideauslander_pre_on, file = paste0("./iHet_ms/gideauslanderPreOn_iHet_scores_and_metadata.RDS"))
+
+
+
+
+
+```
