@@ -11,6 +11,7 @@ suppressPackageStartupMessages({
   library("reshape2")
   library("ggrepel")
   library("GGally")
+  remotes::install_github("olapuentesantana/easier", force = TRUE)
   library('easier')
   require('MOFA2') # read mofa models
   require('reshape2')
@@ -21,6 +22,7 @@ suppressPackageStartupMessages({
   library("ROCR")
   library('dplyr')
   library('ggpubr')
+  library('tibble')
   library('pheatmap')
   library('tidyr')
   library('plyr')
@@ -37,6 +39,7 @@ suppressPackageStartupMessages({
   library('survival')
   library('ggfortify')
   library('survminer')
+  library('gtsummary')
 })
 
 rdbu10_palette <- c(
@@ -329,6 +332,82 @@ categorize <- function(x, thresholds=NULL, labels = c(1,2,3)) {
   return(x.out)
 }
 
+get_iHet_associated_weights <- function(bootstrap_weights=TRUE, 
+                                        model="NSCLC",
+                                        use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
+                                        cancer_type_hifs = c("NSCLC", "pancancer")){
+  
+  feat_cor <- readRDS(paste0(repo_dir, "/data/correlation_features_fibroblasts_all_tissues.RDS"))
+  feat_cor_tmp <- feat_cor[[use_fibroblasts_hifs_tissue]][[cancer_type_hifs]]
+  rownames(feat_cor_tmp) <- feat_cor_tmp$feature
+  feat_cor_tmp <- feat_cor_tmp[!feat_cor_tmp$feature %in% c("Other", "DC", "Monocyte"),]
+  ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)
+  
+  # get MOFA weights
+  if (bootstrap_weights){
+    # Mofa bootstrap weights
+    which_files <- grep(model, utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[,1])
+    files_to_extract <- utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[which_files,1]
+    files_to_extract <- files_to_extract[grep("hdf5", files_to_extract)]
+    
+    all_weights_run <- lapply(1:length(files_to_extract), function(run){
+      # not load following 1:100 order
+      model_bootstrap_run <- MOFA2::load_model(utils::unzip(zipfile=zipMOFAmodels, 
+                                                            files=files_to_extract[run]))
+      weights_bootstrap_run <- MOFA2::get_weights(model_bootstrap_run, scale = scaled)
+      return(weights_bootstrap_run)
+    })
+    weights_df <- melt(all_weights_run)
+    colnames(weights_df) <- c("feature", "factor", "weight", "view", "run")
+    weights <- subset(weights_df, factor == "Factor1")
+    
+    # Adjust sign of the factor 1 to have consistent positive association with immune response
+    # across bootstrap runs
+    weights_runs_mat <- matrix(weights$weight, 
+                               nrow=length(unique(weights$feature)),
+                               ncol=length(unique(weights$run)))
+    
+    rownames(weights_runs_mat) <- unique(weights$feature)
+    colnames(weights_runs_mat) <- unique(weights$run)
+    
+    # Consistency across bootstrap runs:  reverse sign of those negative correlated runs
+    cor_1_vs_rest <- cor(weights_runs_mat)[,1]
+    if(any(sign(cor_1_vs_rest) == "-1")) {
+      weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] <- - weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] 
+    }
+    # Positive association with immune response (CD8 T cell best representative)
+    if (sign(median(weights_runs_mat["CD8 T",])) == "-1") weights_runs_mat <- - weights_runs_mat
+    # quick check that most CD8 T runs are positive
+    #apply(sign(weights_runs_mat) == 1, 1, sum)["CD8 T"] # = 100
+    weights$weight <- as.vector(weights_runs_mat)
+    
+  }else{
+    # Median weights iHet
+    weights <- readRDS(paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
+  }
+  
+  feat_cor_tmp <- feat_cor_tmp[levels(weights$feature),]
+  ix_sign <- rownames(feat_cor_tmp)[which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)]
+  
+  # iHet_excl (negate only cor features, and remove none cor features)
+  weights_excl <- weights %>%
+    filter(feature %in% ix_sign) %>%
+    mutate(weight=-weight, score = "iHet_rev")
+  
+  # iHet_rev (negate only cor features, and consider all weights)
+  weights_rev <- weights %>%
+    mutate(weight=ifelse(feature %in% ix_sign, -weight, weight), score = "iHet_excl")
+  
+  # iHet
+  weights_iHet <- weights %>%
+    mutate(score = "iHet")
+  
+  all_weights <- rbind(weights_iHet, weights_excl, weights_rev)
+  
+  return(all_weights)
+}
+  
+  
 #' Compute iHet scores
 compute_iHet <- function(dataset, 
                          model = c("BLCA", "BRCA", "CESC","CRC", "GBM", "HNSC", "KIRC", "KIRP", 
@@ -336,7 +415,7 @@ compute_iHet <- function(dataset,
                                    "SKCM", "STAD", "THCA", "UCEC"), 
                          use_bootstrap_weights=FALSE,
                          method=c("iHet", "iHet_removed", "iHet_inverted", "iHet_exclusion"),
-                         use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
+                         use_fibroblasts_hifs_tissue = c("none", "ESI", "tumor", "stroma", "epithelial"),
                          cancer_type_hifs = c("NSCLC", "pancancer"),
                          assess_cor_threshold = FALSE,
                          approach = c("standard", "refined"),
@@ -440,7 +519,7 @@ compute_iHet <- function(dataset,
         tf_centered <- sweep(tf, 2, mean_tf, FUN = "-")
         path_centered <- sweep(path, 2, boot_features_stats[[run]][[XX]]$path$mean, FUN = "-")
         path_scaled <- sweep(path_centered, 2, boot_features_stats[[run]][[XX]]$path$sd, FUN = "/")
-        return(list(path = path_scaled, cellfrac= cellfrac_centered, tf = tf_centered))
+        return(list(path = as.matrix(path_scaled), cellfrac = as.matrix(cellfrac_centered), tf = as.matrix(tf_centered)))
       })
       return(norm_boot_features)
     })
@@ -454,8 +533,30 @@ compute_iHet <- function(dataset,
       tf_centered <- sweep(tf, 2,mean_tf, FUN = "-")
       path_centered <- sweep(path, 2, boot_features_stats[[run]]$path$mean, FUN = "-")
       path_scaled <- sweep(path_centered, 2, boot_features_stats[[run]]$path$sd, FUN = "/")
-      return(list(path = path_scaled, cellfrac= cellfrac_centered, tf = tf_centered))
+      return(list(path = as.matrix(path_scaled), cellfrac= as.matrix(cellfrac_centered), tf = as.matrix(tf_centered)))
     })
+  }
+  
+  if (use_bootstrap_weights == FALSE){
+    
+    if (model == "NSCLC"){
+      
+      norm_boot_features <- reshape2::melt(norm_boot_features)
+      colnames(norm_boot_features) <- c("patient", "feature", "value", "view", "run", "model")
+      norm_boot_features <- norm_boot_features %>% 
+        group_by(patient, feature, view, model) %>%
+        dplyr::summarise(median_value = median(value)
+        )
+      
+    }else{
+      
+      norm_boot_features <- reshape2::melt(norm_boot_features)
+      colnames(norm_boot_features) <- c("patient", "feature", "value", "view", "run")
+      norm_boot_features <- norm_boot_features %>% 
+        group_by(patient, feature, view) %>%
+        dplyr::summarise(median_value = median(value)
+        )
+    }
   }
   
   feat_cor <- readRDS(paste0(repo_dir, "/data/correlation_features_fibroblasts_all_tissues.RDS"))
@@ -701,12 +802,17 @@ compute_iHet <- function(dataset,
         colnames(iHet_bootstrap_df) <- c("patient", "score", "threshold", "hif_tissue", "method", "run")
       }
     }else{
-      if ("iHet" %in% method) iHet_bootstrap_df[is.na(iHet_bootstrap_df[,3]), 3] <- "original"
-      if (model == "NSCLC"){
+      if(length(method)==1 & "iHet" %in% method & model == "NSCLC"){
+        colnames(iHet_bootstrap_df) <- c("patient", "score", "method", "run", "model")
+      }
+      if(length(method)>1 & "iHet" %in% method){
+        iHet_bootstrap_df[is.na(iHet_bootstrap_df[,3]), 3] <- "original"
+      }
+      if (length(method)>1 & model == "NSCLC"){
         colnames(iHet_bootstrap_df) <- c("patient", "score", "hif_tissue", "method", "run", "model")
-      }else{
+      }else if (length(method)>1 & model != "NSCLC"){
         iHet_bootstrap_df$patient <- names(iHet_bootstrap[[1]][[1]])
-        colnames(iHet_bootstrap_df) <- c("score", "hif_tissue", "method", "run", "patient")
+        colnames(iHet_bootstrap_df) <- c("patient", "score", "hif_tissue", "method", "run")
       }
     }
     return(iHet_bootstrap_df)
@@ -715,43 +821,117 @@ compute_iHet <- function(dataset,
     F1 <- weights[[model]][["factor 1"]]
     names(F1) <- weights[[model]]$feature
     
-    # combine features
-    features <- cbind(cellfrac, tf, path)
-    
-    # match features
-    cfeatures <- intersect(colnames(features), names(F1))
-    features <- features[, cfeatures]
-    F1 <- F1[cfeatures]
-    features <- t(features)
-    
-    iHet_method <- lapply(method, function(method_x){
-      # modify the F1 based on the defined method
-      if (method_x != "iHet") {
-        rownames(feat_cor_tmp) <- feat_cor_tmp$feature
-        feat_cor_tmp <- feat_cor_tmp[cfeatures,]
-        ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<0.05)
-        if (method_x == "iHet_inverted") {
-          F1[ix_sign] <- - F1[ix_sign]
-        } else if (method_x == "iHet_removed") {
-          F1[ix_sign] <- 0
-        }
+    if (model == "NSCLC"){
+      
+      iHet_median <- lapply(c("LUAD", "LUSC"), function(XX){
+      
+        # combine features
+        features_cellfrac <- norm_boot_features %>% 
+          dplyr::filter(view=="cellfrac" & model == XX) %>% 
+          tidyr::pivot_wider(id_cols = !c(view, model), names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features_tf <- norm_boot_features %>% 
+          dplyr::filter(view=="tf" & model == XX) %>% 
+          tidyr::pivot_wider(id_cols = !c(view, model), names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features_path <- norm_boot_features %>% 
+          filter(view=="path"& model == XX) %>% 
+          tidyr::pivot_wider(id_cols = !c(view, model), names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features <- cbind(features_cellfrac, 
+                          features_tf,
+                          features_path)
+        
+        # match features
+        cfeatures <- intersect(colnames(features), names(F1))
+        features <- features[, cfeatures]
+        F1_vec <- F1[cfeatures]
+        features <- t(features)
+        
+        iHet_method <- lapply(method, function(method_x){
+          # modify the F1 based on the defined method
+          if (method_x != "iHet") {
+            rownames(feat_cor_tmp) <- feat_cor_tmp$feature
+            feat_cor_tmp <- feat_cor_tmp[cfeatures,]
+            ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<0.05)
+            if (method_x == "iHet_inverted") {
+              F1_vec[ix_sign] <- - F1_vec[ix_sign]
+            } else if (method_x == "iHet_removed") {
+              F1_vec[ix_sign] <- 0
+            }
+          }
+          # Compute iHet
+          iHet <- F1_vec %*% features
+          iHet <- t(iHet[1,,drop=TRUE])
+          return(iHet)
+        })
+        names(iHet_method) <- method
+        return(iHet_method)
+      })
+      names(iHet_median) <- c("LUAD", "LUSC")
+      
+      }else{
+        
+        # combine features
+        features_cellfrac <- norm_boot_features %>% 
+          dplyr::filter(view=="cellfrac") %>% 
+          tidyr::pivot_wider(id_cols = !view, names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features_tf <- norm_boot_features %>% 
+          dplyr::filter(view=="tf") %>% 
+          tidyr::pivot_wider(id_cols = !view, names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features_path <- norm_boot_features %>% 
+          dplyr::filter(view=="path") %>% 
+          tidyr::pivot_wider(id_cols = !view, names_from = feature, values_from = median_value) %>%
+          tibble::column_to_rownames(var = "patient")
+        
+        features <- cbind(features_cellfrac, 
+                          features_tf,
+                          features_path)
+        
+        # match features
+        cfeatures <- intersect(colnames(features), names(F1))
+        features <- features[, cfeatures]
+        F1_vec <- F1[cfeatures]
+        features <- t(features)
+        
+        iHet_method <- lapply(method, function(method_x){
+          # modify the F1 based on the defined method
+          if (method_x != "iHet") {
+            rownames(feat_cor_tmp) <- feat_cor_tmp$feature
+            feat_cor_tmp <- feat_cor_tmp[cfeatures,]
+            ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<0.05)
+            if (method_x == "iHet_inverted") {
+              F1_vec[ix_sign] <- - F1_vec[ix_sign]
+            } else if (method_x == "iHet_removed") {
+              F1_vec[ix_sign] <- 0
+            }
+          }
+          # Compute iHet
+          iHet <- F1_vec %*% features
+          iHet <- t(iHet[1,,drop=TRUE])
+          return(iHet)
+        })
+        names(iHet_method) <- method
+        iHet_median <- iHet_method
       }
-      # Compute iHet
-      iHet <- F1 %*% features
-      iHet <- iHet[1,,drop=TRUE]
-      return(iHet)
-    })
-    names(iHet_method) <- method
+
     # to data.frame
-    iHet_method_df <- reshape2::melt(iHet_method)
+    iHet_median_df <- reshape2::melt(iHet_median)
+    iHet_median_df$Var1 <- NULL
     
     if (model == "NSCLC"){
-      colnames(iHet_method_df) <- c("score", "method", "model")
+      colnames(iHet_median_df) <- c("patient", "score", "method", "model")
     }else{
-      colnames(iHet_method_df) <- c("score", "method")
+      colnames(iHet_median_df) <- c("patient", "score", "method")
     }
-    iHet_method_df$patient <- names(iHet_method$iHet)
-    return(iHet_method_df)
+    return(iHet_median_df)
   }
 }
 

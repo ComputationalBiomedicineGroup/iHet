@@ -74,9 +74,15 @@ model = c("BLCA", "BRCA", "CESC","CRC", "GBM", "HNSC", "KIRC", "KIRP",
 
 # Compute iHet for each cancer type
 for (model_sel in model){
+  
+  if (model_sel == "NSCLC"){
+    # NSCLC TCGA data
+    all_tcga$count$NSCLC <- cbind(all_tcga$count$LUAD, all_tcga$count$LUSC)
+    all_tcga$tpm$NSCLC <- cbind(all_tcga$tpm$LUAD, all_tcga$tpm$LUSC)
+  }
 
-  counts <- solve_annotation_issues(gene_expr = tcga_features$count[[model_sel]])
-  tpm <- solve_annotation_issues(gene_expr = tcga_features$tpm[[model_sel]])
+  counts <- solve_annotation_issues(gene_expr = all_tcga$count[[model_sel]])
+  tpm <- solve_annotation_issues(gene_expr = all_tcga$tpm[[model_sel]])
 
   all_dataset <- list(counts = counts,
                       tpm = tpm)
@@ -84,7 +90,7 @@ for (model_sel in model){
   iHet_df <- compute_iHet(dataset = all_dataset,
                           model = model_sel,
                           use_bootstrap_weights=TRUE,
-                          method = c("iHet", "iHet_inverted"),
+                          method = c("iHet", "iHet_inverted", "iHet_exclusion"),
                           use_fibroblasts_hifs_tissue = "tumor",
                           cancer_type_hifs = "NSCLC",
                           assess_cor_threshold = FALSE,
@@ -115,8 +121,8 @@ iHet_df <- readRDS(file = paste0(repo_dir, "/data/tcga_ihet_scores/NSCLC_iHet_sc
 colnames(iHet_df)[1] <- "pat_id"
 iHet_df$pat_id <- gsub(".", "-", iHet_df$pat_id, fixed = TRUE)
 iHet_df$pat_id <- substr(iHet_df$pat_id, 1, 12)
-luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
-lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+luad_patients <- substr(gsub(".", "-", colnames(all_tcga$tpm$LUAD), fixed = TRUE), 1, 12)
+lusc_patients <- substr(gsub(".", "-", colnames(all_tcga$tpm$LUSC), fixed = TRUE), 1, 12)
 
 ## LUAD
 iHet_df_luad <- iHet_df %>% filter(model == "LUAD" & pat_id %in% luad_patients)
@@ -133,10 +139,23 @@ tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
 tcga_iHet_scores_median <- aggregate(tcga_iHet_scores, 
                               score ~ method + model + pat_id, 
                               FUN = "median")
-# Save iHet matrix
+
+# Save iHet scores matrix
 tcga_iHet_mat <- tcga_iHet_scores_median %>% pivot_wider(names_from = method, values_from = score)
-colnames(tcga_iHet_mat)[4] <- "iHet_rev"
+colnames(tcga_iHet_mat)[5] <- "iHet_rev"
 #saveRDS(object = tcga_iHet_mat, file = paste0("./iHet_ms/tcga_unified_iHet_scores.RDS"))
+
+# Save bootstrap iHet associated weights for NSCLC (supp table 2)
+
+## iHet
+iHet_bootstrap_weights_tcgaNSCLC <- get_iHet_associated_weights(bootstrap_weights = TRUE, 
+                                                                model = "NSCLC",
+                                                                use_fibroblasts_hifs_tissue = "tumor",
+                                                                cancer_type_hifs = "NSCLC")
+## .csv file
+write.csv(iHet_bootstrap_weights_tcgaNSCLC, 
+          file = paste0(repo_dir, "/analysis/iHet_ms/SupplementaryTable2.csv"),
+          col.names = TRUE, row.names = FALSE)
 
 ```
 
@@ -1314,40 +1333,66 @@ tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
 tmp2 <- tmp %>% filter(method == "iHet")
 fit_poplaroak <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
 OS_poplaroak <- ggsurvplot(fit_poplaroak, 
-                           conf.int = TRUE,          
-                           pval = TRUE,    
+                           conf.int = FALSE,          
+                           pval = FALSE,    
                            data = tmp,
                            risk.table = TRUE,        # Add risk table
-                           risk.table.col = "strata", h) # Risk table color by groups
+                           risk.table.col = "strata") # Risk table color by groups
+
+# Comparing survival times
+survdiff(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.67", " (95% CI: 0.47-0.95)")
+
+# PLOT: add HR and 95% CI
+OS_poplaroak$plot <- OS_poplaroak$plot +
+  ggplot2::annotate(
+    "text",
+    x = 40, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p < 0.05"),
+    size = 5
+  )
+
+
 ## iHet_rev
 tmp2 <- tmp %>% filter(method == "iHet_rev")
 fit_poplaroak <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
 OS_poplaroak <- ggsurvplot(fit_poplaroak, 
                            conf.int = FALSE,          
-                           pval = TRUE,    
+                           pval = FALSE,    
                            data = tmp,
                            risk.table = TRUE,        # Add risk table
                            risk.table.col = "strata") # Risk table color by groups
-# PFS #
-## iHet
-tmp2 <- tmp %>% filter(method == "iHet")
-fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
-PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
-                            conf.int = FALSE,          
-                            pval = TRUE,    
-                            data = tmp,
-                            risk.table = TRUE,        # Add risk table
-                            risk.table.col = "strata") # Risk table color by groups
 
-## iHet_rev
-tmp2 <- tmp %>% filter(method == "iHet_rev")
-fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
-PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
-                            conf.int = FALSE,          
-                            pval = TRUE,    
-                            data = tmp,
-                            risk.table = TRUE,        # Add risk table
-                            risk.table.col = "strata") # Risk table color by groups
+# Comparing surival times
+survdiff(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.70", " (95% CI: 0.49-1.01)")
+
+# PLOT: add HR and 95% CI
+OS_poplaroak$plot <- OS_poplaroak$plot +
+  ggplot2::annotate(
+    "text",
+    x = 40, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p = 0.05"),
+    size = 5
+  )
 
 svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/OS_iHetrev_poplaroak_using_scaled_weights.svg",
         width = 10, height = 10, 
@@ -1361,6 +1406,86 @@ pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/a
         width = 10, height = 10)
 
 OS_poplaroak
+
+dev.off()
+
+# PFS #
+## iHet
+tmp2 <- tmp %>% filter(method == "iHet")
+fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                            conf.int = FALSE,          
+                            pval = FALSE,    
+                            data = tmp,
+                            risk.table = TRUE,        # Add risk table
+                            risk.table.col = "strata") # Risk table color by groups
+
+# Comparing survival times
+survdiff(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.61", " (95% CI: 0.44-0.84)")
+
+# PLOT: add HR and 95% CI
+PFS_poplaroak$plot <- PFS_poplaroak$plot +
+  ggplot2::annotate(
+    "text",
+    x = 40, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p < 0.01"),
+    size = 5
+  )
+
+## iHet_rev
+tmp2 <- tmp %>% filter(method == "iHet_rev")
+fit_poplaroak <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS_poplaroak <- ggsurvplot(fit_poplaroak, 
+                            conf.int = FALSE,          
+                            pval = FALSE,    
+                            data = tmp,
+                            risk.table = TRUE,        # Add risk table
+                            risk.table.col = "strata") # Risk table color by groups
+
+# Comparing surival times
+survdiff(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.74", " (95% CI: 0.54-1.02)")
+
+# PLOT: add HR and 95% CI
+PFS_poplaroak$plot <- PFS_poplaroak$plot +
+  ggplot2::annotate(
+    "text",
+    x = Inf, y = Inf,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p > 0.05"),
+    size = 5
+  )
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/PFS_iHetrev_poplaroak_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+PFS_poplaroak
+
+dev.off()
+
+pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/PFS_iHetrev_poplaroak_using_scaled_weights.pdf",
+        width = 10, height = 10)
+
+PFS_poplaroak
 
 dev.off()
 
