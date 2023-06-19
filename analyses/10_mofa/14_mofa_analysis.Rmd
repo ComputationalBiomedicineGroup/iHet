@@ -225,17 +225,6 @@ plots <- lapply(names(factor_list), function(factors_name) {
 # Calculate factors for TRACERx data (Weighted sum of features)
 mofa_data_tracerx <- readRDS(file.path(params$features_dir, "mofa_TRACERx.rds"))
 
-tracerx_factors <- lapply(c("JiaSharma", "TCGA-NSCLC"), function(weights_source) {
-  mofa_data_tracerx %>%
-    inner_join(median_weights[[weights_source]]) %>%
-    select(-contains("mad")) %>%
-    mutate(across(starts_with("factor"), ~ .x * value)) %>%
-    group_by(sample) %>%
-    summarise(across(starts_with("factor"), sum)) %>%
-    pivot_longer(cols = -sample, names_to = "factor", values_to = "factor_value") %>%
-    mutate(dataset = "TRACERx", weights_source = weights_source)
-}) %>% bind_rows()
-
 factors_all <- lapply(names(median_factors), function(dataset_id) {
   median_factors[[dataset_id]] %>%
     select(-n, -contains("mad")) %>%
@@ -243,10 +232,9 @@ factors_all <- lapply(names(median_factors), function(dataset_id) {
     mutate(dataset = dataset_id)
 }) %>%
   bind_rows() %>%
-  # filter(dataset %in% SELECTED_DATASETS) %>%
-  bind_rows(tracerx_factors) %>%
   # special labels for tracerx data
-  mutate(dataset_label = if_else(is.na(weights_source), dataset, sprintf("%s (%s)", dataset, weights_source)))
+  # mutate(dataset_label = if_else(is.na(weights_source), dataset, sprintf("%s (%s)", dataset, weights_source)))
+  mutate(dataset_label = dataset)
 ```
 
 ```{r, fig.width=12, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
@@ -287,10 +275,10 @@ factors_all %>%
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg)
 ```
 
-```{r, fig.width=3, fig.height=5.5, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 # same for tracerx (once as derived by mofa, once as calculated using TCGA-NSCLC signatures)
 
-selected_datasets <- c("TRACERx", "TRACERx (TCGA-NSCLC)")
+selected_datasets <- c("TRACERx")
 factors_all %>%
   inner_join(immresp_all) %>%
   filter(dataset_label %in% selected_datasets, factor == "factor 1") %>%
@@ -321,6 +309,7 @@ factors_all %>%
     str_to_lower(metric) == "tmb"
   ) %>%
   mutate(dataset_label = factor(dataset_label, levels = dataset_list)) %>%
+  filter(!is.na(dataset_label)) %>% 
   ggplot(aes(x = factor_value, y = `tmb_value`)) +
   geom_point(size = 0.8, color = "#333333") +
   theme_bw(base_size = 17) +
