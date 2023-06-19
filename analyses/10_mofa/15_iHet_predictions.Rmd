@@ -4,6 +4,8 @@ params:
     repo_dir: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions"
     folderValidation: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/Mechanistic_signatures_project/data/Validation/prediction_files/"
     zipMOFAmodels: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/iHet_data/MOFA_noDCandMono/MOFA_out.zip"
+    TCGAbootstrapFeatureStats: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/TCGA_bootstrap_features_stats.rds"
+    corFibAllTissues: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/correlation_features_fibroblasts_all_tissues.RDS"
     weightsTCGAMOFA: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/all_tcga_iHet_weights_bootstrap_noDCandMono_scaled.RDS"
     dataBagaevMFP: "/Users/Oscar/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/data/immune_subtypes/bagaev_mfp_tcga.xlsx"
     dataTCGAfeatures: "/Users/Oscar/ownCloud2/SystemsImmunoOncology/iHet_data/features/TCGA_expr_data.features.rds"
@@ -19,8 +21,10 @@ params:
 ```{r setup, include = FALSE}
 
 repo_dir <- params$repo_dir
-folderValidation <- params$folderValidation
 zipMOFAmodels <- params$zipMOFAmodels
+TCGAbootstrapFeatureStats <- params$TCGAbootstrapFeatureStats
+corFibAllTissues <- params$corFibAllTissues
+folderValidation <- params$folderValidation
 folderValidationiHet <- params$folderValidationiHet
 
 # utils
@@ -61,6 +65,48 @@ IR <- all_tcga[["immresp"]]
 
 immscoreZ <- readRDS(params$dataImmscoreZ)
 
+# *********
+# packages
+# *********
+
+suppressPackageStartupMessages({
+  library("conflicted")
+  library("corrplot")
+  library("gplots")
+  library("RColorBrewer")
+  library("Matrix")
+  library("reshape2")
+  library("ggrepel")
+  library("GGally")
+  remotes::install_github("olapuentesantana/easier", force = TRUE, upgrade = "never")
+  library('easier')
+  require('MOFA2') # read mofa models
+  require('reshape2')
+  require('immunedeconv')
+  library('dorothea')
+  library("ROCR")
+  library('dplyr')
+  conflict_prefer("summarise", "dplyr")
+  conflict_prefer("mutate", "dplyr")
+  conflict_prefer("filter", "dplyr")
+  conflict_prefer("arrange", "dplyr")
+  library('ggpubr')
+  library('tibble')
+  library('magrittr')
+  library('ggtern')
+  library("ggplot2")
+  conflict_prefer("aes", "ggplot2")
+  library('ggforce')
+  library('svglite')
+  library('tidyr')
+  library('plyr')
+  library('purrr')
+  library('survival')
+  library('ggfortify')
+  library('survminer')
+  library('gtsummary')
+})
+
 ```
 
 ## Compute iHet for TCGA patients
@@ -94,7 +140,6 @@ for (model_sel in model){
                           use_fibroblasts_hifs_tissue = "tumor",
                           cancer_type_hifs = "NSCLC",
                           assess_cor_threshold = FALSE,
-                          approach = "standard",
                           scaled = TRUE)
 
   if (model_sel != "NSCLC") iHet_df$model <- model_sel
@@ -162,6 +207,8 @@ write.csv(iHet_bootstrap_weights_tcgaNSCLC,
 ## Examine TCGA-NSCLC features across microenvironment subtypes (Bagaev et al.)
 
 ```{r}
+
+library('rstatix')
 
 # Keep descriptors used as input for MOFA
 all_tcga <- all_tcga[c("pathway", "tf", "cellfrac")]
@@ -732,8 +779,13 @@ iHet_df <- compute_iHet(dataset = all_dataset,
                         use_fibroblasts_hifs_tissue = c("tumor"),
                         cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
                         assess_cor_threshold = FALSE, # If TRUE, it assess the correlation threshold (0-0.3).
-                        approach = "standard",
                         scaled = TRUE) # use all correlated features (not refined set)
+
+iHet_df <- compute_iHet(dataset = all_dataset,
+                        model = model, # specify cancer-type-specific MOFA model
+                        use_bootstrap_weights=TRUE, # indicate if bootstrap models should be used
+                        method = c("iHet"),
+                        scale_mofa_weights = TRUE)
 
 iHet_df$hif_model <- hif_type
 iHet_df$hif_model[iHet_df$method == "iHet"] <- "original"
@@ -841,7 +893,6 @@ lapply(names(datasets_bulk), function(dataset){
                           use_fibroblasts_hifs_tissue = c("tumor"),
                           cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
                           assess_cor_threshold = FALSE, # If TRUE, it assess the correlation threshold (0-0.3).
-                          approach = "standard",
                           scaled = TRUE) # use all correlated features (not refined set)
 
   iHet_df$hif_model <- hif_type
@@ -1142,7 +1193,6 @@ lapply(names(datasets_bulk), function(dataset){
                           use_fibroblasts_hifs_tissue = c("tumor"),
                           cancer_type_hifs = hif_type, # specify cancer-type specific hifs (NSCLC or pancancer)
                           assess_cor_threshold = TRUE, # If TRUE, it assess the correlation threshold (0-0.3).
-                          approach = "standard",
                           scaled = TRUE) # use all correlated features (not refined set)
 
   iHet_df$hif_model <- hif_type
@@ -1296,8 +1346,169 @@ boxplots_iHet_poplaroak +
 dev.off()
 
 # -------------------------------------------- #
+# Stacked barplots, fraction of R and NR per tertiles #
+# -------------------------------------------- #
+
+#######################################
+## BARPLOT - Dichotomized iHet ##
+#######################################
+
+## Two approaches: NR: SD vs R: SD & PFS >= 6 months;
+
+dataset <- "oak"
+
+iHet_df <- get(paste0("iHet_", dataset))
+iHet_df$type <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), tail, 1)
+iHet_df$dataset <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), head, 1)
+iHet_df$response <- gsub("CR|PR","R", iHet_df$BCOR)
+#iHet_df$response <- gsub("SD|PD","NR", iHet_df$response)
+iHet_df$response <- gsub("PD","NR", iHet_df$response)
+
+# SD that are responders
+tmp <- oak_data$all_dataset$clinical_response %>% 
+  filter(BCOR == "SD" & PFS_MONTHS >= 6) %>%
+  rownames_to_column(var = "patient") %>%
+  select(patient)
+
+SD_R <- tmp$patient
+
+iHet_df <- iHet_df %>%
+  mutate(response=ifelse(patient %in% SD_R, "R", "NR"))
+
+iHet_df_rank <- iHet_df %>% 
+  group_by(run, method) %>% 
+  dplyr::mutate(rank = rank(score), inv_rank = rank(-score))
+
+iHet_df_rank_median <- do.call(
+  data.frame,
+  aggregate(inv_rank ~ dataset + type + patient + method + response + OS_MONTHS + PFS_MONTHS + OS_CENSOR + PFS_CENSOR, 
+            data = iHet_df_rank,
+            FUN = function(x) c(median = median(x), sd = sd(x))
+  )
+)
+
+iHet_df_rank_median$category <- as.numeric(cut_number(iHet_df_rank_median$inv_rank.median, 3))
+iHet_df_rank_median$category <- gsub(1, "Tertile 1", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(2, "Tertile 2", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(3, "Tertile 3", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- factor(iHet_df_rank_median$category, 
+                                        levels = c("Tertile 3", "Tertile 2", "Tertile 1"))
+
+tmp_luad <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "luad")
+tmp_lusc <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "lusc")
+
+tmp <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3"))
+tmp$category <- gsub("Tertile 1", "High resp", tmp$category)
+tmp$category <- gsub("Tertile 3", "Low resp", tmp$category)
+tmp$category <- factor(tmp$category, levels = c("Low resp", "High resp"))
+tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
+
+frac_pat_response <- iHet_df_rank_median %>%
+  dplyr::mutate(category = ifelse(category %in% c("Tertile 1", "Tertile 2"), "T1-T2", "T3")) %>%
+  dplyr::group_by(dataset, method, response, category,) %>%
+  dplyr::summarise(counts = n()) %>%
+  dplyr::group_by(category, method, dataset) %>%
+  dplyr::mutate(frac = counts/sum(counts))
+
+gg_oak <- frac_pat_response %>%
+  ggplot2::ggplot(aes(x = category, y = frac, fill = response, label = counts)) +
+  ggplot2::geom_bar(position="fill", stat="identity") +
+  geom_text(size = 3, position = position_stack(vjust = 0.5), color = "white") +
+  #ggplot2::scale_fill_manual(values = c()) +
+  ggplot2::facet_grid(. ~ method) +
+  theme_bw()
+
+dataset <- "poplar"
+
+iHet_df <- get(paste0("iHet_", dataset))
+iHet_df$type <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), tail, 1)
+iHet_df$dataset <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), head, 1)
+iHet_df$response <- gsub("CR|PR","R", iHet_df$BCOR)
+#iHet_df$response <- gsub("SD|PD","NR", iHet_df$response)
+iHet_df$response <- gsub("PD","NR", iHet_df$response)
+
+# SD that are responders
+tmp <- poplar_data$all_dataset$clinical_response %>% 
+  filter(BCOR == "SD" & PFS_MONTHS >= 6) %>%
+  rownames_to_column(var = "patient") %>%
+  select(patient)
+
+SD_R <- tmp$patient
+
+iHet_df <- iHet_df %>%
+  mutate(response=ifelse(patient %in% SD_R, "R", "NR"))
+
+iHet_df_rank <- iHet_df %>% 
+  group_by(run, method) %>% 
+  dplyr::mutate(rank = rank(score), inv_rank = rank(-score))
+
+iHet_df_rank_median <- do.call(
+  data.frame,
+  aggregate(inv_rank ~ dataset + type + patient + method + response + OS_MONTHS + PFS_MONTHS + OS_CENSOR + PFS_CENSOR, 
+            data = iHet_df_rank,
+            FUN = function(x) c(median = median(x), sd = sd(x))
+  )
+)
+
+iHet_df_rank_median$category <- as.numeric(cut_number(iHet_df_rank_median$inv_rank.median, 3))
+iHet_df_rank_median$category <- gsub(1, "Tertile 1", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(2, "Tertile 2", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(3, "Tertile 3", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- factor(iHet_df_rank_median$category, 
+                                        levels = c("Tertile 3", "Tertile 2", "Tertile 1"))
+
+tmp_luad <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "luad")
+tmp_lusc <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "lusc")
+
+tmp <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3"))
+tmp$category <- gsub("Tertile 1", "High resp", tmp$category)
+tmp$category <- gsub("Tertile 3", "Low resp", tmp$category)
+tmp$category <- factor(tmp$category, levels = c("Low resp", "High resp"))
+tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
+
+frac_pat_response <- iHet_df_rank_median %>%
+  dplyr::group_by(dataset, method, response, category) %>%
+  dplyr::mutate(category = ifelse(category %in% c("Tertile 1", "Tertile 2"), "T1-T2", "T3")) %>%
+  dplyr::summarise(counts = n()) %>%
+  dplyr::group_by(category, method, dataset) %>%
+  dplyr::mutate(frac = counts/sum(counts))
+
+gg_poplar <- frac_pat_response %>%
+  ggplot2::ggplot(aes(x = category, y = frac, fill = response, label = counts)) +
+  ggplot2::geom_bar(position="fill", stat="identity") +
+  geom_text(size = 3, position = position_stack(vjust = 0.5), color = "white") +
+  #ggplot2::scale_fill_manual(values = c()) +
+  ggplot2::facet_grid(. ~ method) +
+  theme_bw()
+
+## TGFb ##
+
+a <- cbind(rownames(oak_data[["all_dataset"]][["clinical_response"]]), oak_data[["all_dataset"]][["clinical_response"]][["BCOR"]], oak_data$TGFb, oak_data$prediction_easier)
+colnames(a) <- c("patient", "BCOR", "TGFb", "easier")
+a <- as.data.frame(a)
+a = a[a$BCOR != "",]
+a = a[a$BCOR != "NE",]
+a$TGFb <- as.numeric(a$TGFb)
+a$easier <- as.numeric(a$easier)
+
+a %>% 
+  ggplot2::ggplot(aes(x = BCOR, y = easier)) +
+  ggplot2::geom_boxplot(outlier.shape = NA)
+
+
+# -------------------------------------------- #
 # Survival analysis #
 # -------------------------------------------- #
+
+###
+### POPLAR and OAK together ###
+###
+
+iHet_df <- rbind(iHet_oak, iHet_poplar)
+iHet_df$type <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), tail, 1)
+iHet_df$dataset <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), head, 1)
+iHet_df$response <- gsub("CR|PR","R", iHet_df$BCOR)
+iHet_df$response <- gsub("SD|PD","NR", iHet_df$response)
 
 iHet_df_rank <- iHet_df %>% 
   group_by(run, method) %>% 
@@ -1325,8 +1536,8 @@ tmp <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3"))
 tmp$category <- gsub("Tertile 1", "High resp", tmp$category)
 tmp$category <- gsub("Tertile 3", "Low resp", tmp$category)
 tmp$category <- factor(tmp$category, levels = c("Low resp", "High resp"))
-
 tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
+
 
 # OS #
 ## iHet
@@ -1488,6 +1699,208 @@ pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/a
 PFS_poplaroak
 
 dev.off()
+
+###
+### POPLAR and OAK separated ###
+###
+
+dataset <- "poplar"
+
+iHet_df <- get(paste0("iHet_", dataset))
+iHet_df$type <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), tail, 1)
+iHet_df$dataset <- sapply(strsplit(iHet_df$dataset, split = ".", fixed = TRUE), head, 1)
+iHet_df$response <- gsub("CR|PR","R", iHet_df$BCOR)
+iHet_df$response <- gsub("SD|PD","NR", iHet_df$response)
+
+iHet_df_rank <- iHet_df %>% 
+  group_by(run, method) %>% 
+  dplyr::mutate(rank = rank(score), inv_rank = rank(-score))
+
+iHet_df_rank_median <- do.call(
+  data.frame,
+  aggregate(inv_rank ~ dataset + type + patient + method + response + OS_MONTHS + PFS_MONTHS + OS_CENSOR + PFS_CENSOR, 
+            data = iHet_df_rank,
+            FUN = function(x) c(median = median(x), sd = sd(x))
+  )
+)
+
+iHet_df_rank_median$category <- as.numeric(cut_number(iHet_df_rank_median$inv_rank.median, 3))
+iHet_df_rank_median$category <- gsub(1, "Tertile 1", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(2, "Tertile 2", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- gsub(3, "Tertile 3", iHet_df_rank_median$category)
+iHet_df_rank_median$category <- factor(iHet_df_rank_median$category, 
+                                        levels = c("Tertile 3", "Tertile 2", "Tertile 1"))
+
+tmp_luad <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "luad")
+tmp_lusc <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3") & type == "lusc")
+
+tmp <- iHet_df_rank_median %>% filter(category %in% c("Tertile 1", "Tertile 3"))
+tmp$category <- gsub("Tertile 1", "High resp", tmp$category)
+tmp$category <- gsub("Tertile 3", "Low resp", tmp$category)
+tmp$category <- factor(tmp$category, levels = c("Low resp", "High resp"))
+tmp$method <- gsub("iHet_inverted", "iHet_rev", tmp$method)
+
+# OS #
+## iHet
+tmp2 <- tmp %>% filter(method == "iHet")
+fit <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+OS <- ggsurvplot(fit, 
+                 conf.int = FALSE,          
+                 pval = FALSE,    
+                 data = tmp,
+                 risk.table = TRUE,        # Add risk table
+                 risk.table.col = "strata") # Risk table color by groups
+
+# Comparing survival times
+survdiff(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.81", " (95% CI: 0.39-1.70)")
+
+# PLOT: add HR and 95% CI
+OS$plot <- OS$plot +
+  ggplot2::annotate(
+    "text",
+    x = 40, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p > 0.05"),
+    size = 5
+  )
+
+
+## iHet_rev
+tmp2 <- tmp %>% filter(method == "iHet_rev")
+fit <- survfit(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+OS <- ggsurvplot(fit, 
+                 conf.int = FALSE,          
+                 pval = FALSE,    
+                 data = tmp,
+                 risk.table = TRUE,        # Add risk table
+                 risk.table.col = "strata") # Risk table color by groups
+
+# Comparing surival times
+survdiff(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(OS_MONTHS, OS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.86", " (95% CI: 0.39-1.87)")
+
+# PLOT: add HR and 95% CI
+OS$plot <- OS$plot +
+  ggplot2::annotate(
+    "text",
+    x = 30, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p > 0.05"),
+    size = 5
+  )
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/OS_iHet_rev_poplar_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+OS
+
+dev.off()
+
+pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/OS_iHet_poplar_using_scaled_weights.pdf",
+        width = 10, height = 10)
+
+OS
+
+dev.off()
+
+# PFS #
+## iHet
+tmp2 <- tmp %>% filter(method == "iHet")
+fit <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS <- ggsurvplot(fit, 
+                  conf.int = FALSE,          
+                  pval = FALSE,    
+                  data = tmp,
+                  risk.table = TRUE,        # Add risk table
+                  risk.table.col = "strata") # Risk table color by groups
+
+# Comparing survival times
+survdiff(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.57", " (95% CI: 0.33-1.38)")
+
+# PLOT: add HR and 95% CI
+PFS$plot <- PFS$plot +
+  ggplot2::annotate(
+    "text",
+    x = 30, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p > 0.05"),
+    size = 5
+  )
+
+## iHet_rev
+tmp2 <- tmp %>% filter(method == "iHet_rev")
+fit <- survfit(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+PFS <- ggsurvplot(fit, 
+                  conf.int = FALSE,          
+                  pval = FALSE,    
+                  data = tmp,
+                  risk.table = TRUE,        # Add risk table
+                  risk.table.col = "strata") # Risk table color by groups
+
+# Comparing surival times
+survdiff(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) 
+
+# Calculating hazard ratio (with cox regression)
+coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2) %>% 
+  tbl_regression(exp = TRUE) 
+
+cox_object <- coxph(Surv(PFS_MONTHS, PFS_CENSOR) ~ category, data=tmp2)
+summary(cox_object)
+  
+HR_text <- paste0("HR=0.76", " (95% CI: 0.37-1.57)")
+
+# PLOT: add HR and 95% CI
+PFS$plot <- PFS$plot +
+  ggplot2::annotate(
+    "text",
+    x = 30, y = 0.7,
+    vjust = 1, hjust = 1,
+    label = paste0(HR_text, "\n", "p > 0.05"),
+    size = 5
+  )
+
+svglite(filename = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/PFS_iHet_rev_poplar_using_scaled_weights.svg",
+        width = 10, height = 10, 
+        fix_text_size = FALSE, scaling = 0.6)
+
+PFS
+
+dev.off()
+
+pdf(file = "~/Desktop/PhD_TU:e/Projects/iHet/repo_predictions/iHet_predictions/analysis/iHet_ms/PFS_iHet_rev_poplar_using_scaled_weights.pdf",
+        width = 10, height = 10)
+
+PFS
+
+dev.off()
+
 
 ##############################################
 # Predictive performance #
@@ -1794,8 +2207,82 @@ gideauslander_pre_on$clinical_info$Patient_id[gideauslander_pre_on$clinical_info
 
 saveRDS(object = gideauslander_pre_on, file = paste0("./iHet_ms/gideauslanderPreOn_iHet_scores_and_metadata.RDS"))
 
+```
 
+> Understand iHet_rev in Poplar-Oak patients
 
+```{r}
+# data
+poplar_data <- import_dataset("poplar")
+oak_data <- import_dataset("oak")
 
+## features
 
+path     <- poplar_data$all_dataset$computed_features$pathway_activity
+cellfrac <- poplar_data$all_dataset$computed_features$cell_fractions
+tfs      <- poplar_data$all_dataset$computed_features$tf_activity
+
+# Normalize scores as in MOFA
+
+## Pathways
+path <- scale(path)
+
+## Cell fractions
+cellfrac <- log10(cellfrac[, -c(4,10)]*100+0.001)
+cellfrac <- cellfrac[,!colnames(cellfrac) == "Other"]
+cellfrac[, "CD4 T"] <- cellfrac[, "CD4 T"] + cellfrac[, "Treg"]
+colnames(cellfrac)[colnames(cellfrac) == "CD8+ T"] <- "CD8 T"
+
+input_features <- cbind(path, cellfrac, tfs)
+tissue <- "tumor"
+
+# Filter for FDR <= 0.05 & corr > 0)
+cancer_type <- "NSCLC"
+feat_cor_hif <- feat_cor_hifs[[tissue]][[cancer_type]] %>% 
+  group_by(feature, cancertype, hif) %>%
+  filter(FDR <= 0.05 && cor > 0 && cancertype == cancer_type)
+
+yes_hif <- unique(feat_cor_hif$feature)
+not_hif <- setdiff(colnames(input_features), unique(feat_cor_hif$feature))
+
+features_df <- reshape2::melt(as.matrix(input_features))
+colnames(features_df) <- c("patient", "feature", "value")
+
+# Add view information
+features_df$view <- "TFs"
+features_df$view[features_df$feature %in% colnames(path)] <- "Pathways"
+features_df$view[features_df$feature %in% colnames(cellfrac)] <- "Cell fractions"
+features_df$feature <- as.character(features_df$feature)
+
+# Add response info
+clinical_poplar <- poplar_data$all_dataset$clinical_response
+clinical_poplar$patient <- rownames(clinical_poplar)
+
+features_df <- inner_join(clinical_poplar, features_df, by = "patient")
+features_df <- features_df %>%
+  filter(!BCOR %in% c("NE",""))
+
+# Keep only correlated features
+features_df_yes <- subset(features_df, feature %in% yes_hif)
+features_df_no <- subset(features_df, feature %in% not_hif)
+
+# Calculate median feature values across patients
+features_df_yes_median <- features_df_yes %>%
+  group_by(feature, view, BCOR, HIST) %>%
+  dplyr::summarise(median_value=median(value))
+
+gg <- features_df_yes_median %>%
+  ggplot(aes(x=BCOR, y=feature, fill = median_value)) +
+  geom_tile() +
+  ggplot2::scale_fill_distiller(palette="RdBu", direction=-1, name = "Normalized quantification \n", guide = "none") +
+  ggplot2::theme_bw() +
+  ggplot2::facet_grid(. ~ HIST) + 
+  ggplot2::theme(axis.text.x = element_text(size=12, angle = 0, color = "black"),
+                 axis.text.y = element_text(size=12, angle = 0, color = "black"),
+                 axis.title.x = element_blank(),
+                 axis.title.y = element_blank(),
+                 axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
+                 legend.position = "none") +
+    scale_x_discrete(expand=c(0,0)) + 
+    scale_y_discrete(expand=c(0,0))
 ```

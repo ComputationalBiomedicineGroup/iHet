@@ -1,45 +1,31 @@
 
 # packages
 suppressPackageStartupMessages({
-  library("corrplot")
-  library("gplots")
-  library("RColorBrewer")
+  library("conflicted")
   library("Matrix")
-  library("ggridges")
-  library("ggplot2")
-  library("ggpubr")
   library("reshape2")
-  library("ggrepel")
-  library("GGally")
-  remotes::install_github("olapuentesantana/easier", force = TRUE)
+  remotes::install_github("olapuentesantana/easier", force = TRUE, upgrade = "never")
   library('easier')
   require('MOFA2') # read mofa models
   require('reshape2')
   require('immunedeconv')
-  # last version of dorothea
-  #BiocManager::install("dorothea")
   library('dorothea')
   library("ROCR")
   library('dplyr')
-  library('ggpubr')
+  conflict_prefer("summarise", "dplyr")
+  conflict_prefer("mutate", "dplyr")
+  conflict_prefer("filter", "dplyr")
+  conflict_prefer("arrange", "dplyr")
   library('tibble')
-  library('pheatmap')
+  library('magrittr')
+  library('ggtern')
+  library("ggplot2")
+  conflict_prefer("aes", "ggplot2")
+  library('ggforce')
   library('tidyr')
   library('plyr')
-  library('magrittr')
-  library('multipanelfigure')
-  library('ggtern')
-  library('viridis')
-  library('ggforce')
-  library('svglite')
-  library('plyr')
   library('purrr')
-  library('rstatix')
-  library('cowplot')
-  library('survival')
-  library('ggfortify')
-  library('survminer')
-  library('gtsummary')
+  library('stringr')
 })
 
 rdbu10_palette <- c(
@@ -50,6 +36,11 @@ rdbu10_palette <- c(
 
 colors_mfp <- c("#64a860", "#9970c1", "#cc545e", "#b98d3e")
 names(colors_mfp) <- c("D", "F", "IE/F", "IE")
+
+#' Rotate factors such that they are positively associated with CD8+ T-cell infiltration.
+get_rotation <- function(weights) {
+  diag(sign(weights[["Immune cells quantification"]]["CD8 T", ]))
+}
 
 #' Pre-process gene names
 solve_annotation_issues <- function(gene_expr){
@@ -270,9 +261,9 @@ import_dataset <- function(dataset) {
     names(response) <- rownames(all_dataset$clinical_response)
     
     # remove NE, SD, ""
-    response <- response[!response %in% c("NE", "SD", "")]
+    response <- response[!response %in% c("NE", "")]
     response <- gsub("CR|PR","R", response)
-    response <- gsub("SD|PD","NR", response)
+    response <- gsub("PD","NR", response)
     
     TMB <- all_dataset$TMB[, "tTMB"]
     names(TMB) <- rownames(all_dataset$TMB)
@@ -343,9 +334,12 @@ get_iHet_associated_weights <- function(bootstrap_weights=TRUE,
   feat_cor_tmp <- feat_cor_tmp[!feat_cor_tmp$feature %in% c("Other", "DC", "Monocyte"),]
   ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)
   
-  # get MOFA weights
-  if (bootstrap_weights){
-    # Mofa bootstrap weights
+  # 1. get MOFA weights
+  # 2. Adjust sign of the factor 1 to have consistent positive 
+  # association with immune response across bootstrap runs (get_rotation())
+  
+  ## Bootstrap
+  if (use_bootstrap_weights){
     which_files <- grep(model, utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[,1])
     files_to_extract <- utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[which_files,1]
     files_to_extract <- files_to_extract[grep("hdf5", files_to_extract)]
@@ -354,52 +348,74 @@ get_iHet_associated_weights <- function(bootstrap_weights=TRUE,
       # not load following 1:100 order
       model_bootstrap_run <- MOFA2::load_model(utils::unzip(zipfile=zipMOFAmodels, 
                                                             files=files_to_extract[run]))
-      weights_bootstrap_run <- MOFA2::get_weights(model_bootstrap_run, scale = scaled)
+      weights_bootstrap_run <- MOFA2::get_weights(model_bootstrap_run, scale = scale_mofa_weights)
       return(weights_bootstrap_run)
     })
-    weights_df <- melt(all_weights_run)
-    colnames(weights_df) <- c("feature", "factor", "weight", "view", "run")
-    weights <- subset(weights_df, factor == "Factor1")
     
-    # Adjust sign of the factor 1 to have consistent positive association with immune response
-    # across bootstrap runs
-    weights_runs_mat <- matrix(weights$weight, 
-                               nrow=length(unique(weights$feature)),
-                               ncol=length(unique(weights$run)))
+    F1_weights_df <- lapply(1:length(all_weights_run), function(dataset_id) {
+      weights <- all_weights_run[[dataset_id]]
+      tmp <- lapply(names(weights), function(modality) {
+        weights[[modality]] %*% get_rotation(weights) %>%
+          as_tibble(rownames = "feature") %>%
+          mutate(view = modality, run = dataset_id) %>%
+          rename_with(function(x) {
+            str_replace(x, "V", "factor ")
+          }, starts_with("V"))
+      }) %>%
+        bind_rows() %>%
+        arrange(view, feature)
+    }) %>%
+      bind_rows() %>% select("feature", "factor 1", "view", "run")
     
-    rownames(weights_runs_mat) <- unique(weights$feature)
-    colnames(weights_runs_mat) <- unique(weights$run)
+    F1_weights_mat <- F1_weights_df %>% 
+      pivot_wider(id_cols = !c("view"), 
+                  names_from = "run", values_from = "factor 1") %>%
+      column_to_rownames("feature") %>% 
+      as.matrix()
     
-    # Consistency across bootstrap runs:  reverse sign of those negative correlated runs
-    cor_1_vs_rest <- cor(weights_runs_mat)[,1]
-    if(any(sign(cor_1_vs_rest) == "-1")) {
-      weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] <- - weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] 
-    }
-    # Positive association with immune response (CD8 T cell best representative)
-    if (sign(median(weights_runs_mat["CD8 T",])) == "-1") weights_runs_mat <- - weights_runs_mat
-    # quick check that most CD8 T runs are positive
-    #apply(sign(weights_runs_mat) == 1, 1, sum)["CD8 T"] # = 100
-    weights$weight <- as.vector(weights_runs_mat)
+    F1_weights_df$weight <- as.vector(F1_weights_mat)
     
+    ## Median  
   }else{
-    # Median weights iHet
-    weights <- readRDS(paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
+    ## FF provided file: (paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
+    ## r=0.92 between these computed weights and FF's
+    median_weights <- lapply(1:length(all_weights_run), function(dataset_id) {
+      weights <- all_weights_run[[dataset_id]]
+      tmp <- lapply(names(weights), function(modality) {
+        weights[[modality]] %*% get_rotation(weights) %>%
+          as_tibble(rownames = "feature") %>%
+          mutate(view = modality) %>%
+          rename_with(function(x) {
+            str_replace(x, "V", "factor ")
+          }, starts_with("V"))
+      }) %>%
+        bind_rows() %>%
+        arrange(view, feature)
+    }) %>%
+      bind_rows() %>%
+      group_by(view, feature) %>%
+      summarise_all(list(median = median, mad = mad)) %>%
+      ungroup() %>%
+      rename_with(~ gsub("_median", "", .x), ends_with("_median"))
+    
+    F1_weights_df <- median_weights$`factor 1`
+    names(F1_weights_df) <- median_weights$feature
   }
   
-  feat_cor_tmp <- feat_cor_tmp[levels(weights$feature),]
+  feat_cor_tmp <- feat_cor_tmp[levels(F1_weights_df$feature),]
   ix_sign <- rownames(feat_cor_tmp)[which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)]
   
   # iHet_excl (negate only cor features, and remove none cor features)
-  weights_excl <- weights %>%
+  weights_excl <- F1_weights_df %>%
     filter(feature %in% ix_sign) %>%
     mutate(weight=-weight, score = "iHet_rev")
   
   # iHet_rev (negate only cor features, and consider all weights)
-  weights_rev <- weights %>%
+  weights_rev <- F1_weights_df %>%
     mutate(weight=ifelse(feature %in% ix_sign, -weight, weight), score = "iHet_excl")
   
   # iHet
-  weights_iHet <- weights %>%
+  weights_iHet <- F1_weights_df %>%
     mutate(score = "iHet")
   
   all_weights <- rbind(weights_iHet, weights_excl, weights_rev)
@@ -415,11 +431,10 @@ compute_iHet <- function(dataset,
                                    "SKCM", "STAD", "THCA", "UCEC"), 
                          use_bootstrap_weights=FALSE,
                          method=c("iHet", "iHet_removed", "iHet_inverted", "iHet_exclusion"),
-                         use_fibroblasts_hifs_tissue = c("none", "ESI", "tumor", "stroma", "epithelial"),
+                         use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
                          cancer_type_hifs = c("NSCLC", "pancancer"),
                          assess_cor_threshold = FALSE,
-                         approach = c("standard", "refined"),
-                         scaled = FALSE){
+                         scale_mofa_weights = FALSE){
   
   # match arguments
   model <- match.arg(model, c("BLCA", "BRCA", "CESC","CRC", "GBM", "HNSC", "KIRC", "KIRP", 
@@ -428,9 +443,12 @@ compute_iHet <- function(dataset,
   
   # use_fibroblasts_hifs_tissue <- match.arg(use_fibroblasts_hifs_tissue, c("ESI", "tumor", "stroma", "epithelial"))
   
-  # get MOFA weights
+  # 1. get MOFA weights
+  # 2. Adjust sign of the factor 1 to have consistent positive 
+  # association with immune response across bootstrap runs (get_rotation())
+  
+  ## Bootstrap
   if (use_bootstrap_weights){
-    # Mofa bootstrap weights
     which_files <- grep(model, utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[,1])
     files_to_extract <- utils::unzip(zipfile=zipMOFAmodels, list=TRUE)[which_files,1]
     files_to_extract <- files_to_extract[grep("hdf5", files_to_extract)]
@@ -439,38 +457,60 @@ compute_iHet <- function(dataset,
       # not load following 1:100 order
       model_bootstrap_run <- MOFA2::load_model(utils::unzip(zipfile=zipMOFAmodels, 
                                                             files=files_to_extract[run]))
-      weights_bootstrap_run <- MOFA2::get_weights(model_bootstrap_run, scale = scaled)
+      weights_bootstrap_run <- MOFA2::get_weights(model_bootstrap_run, scale = scale_mofa_weights)
       return(weights_bootstrap_run)
     })
-    weights_df <- melt(all_weights_run)
-    colnames(weights_df) <- c("feature", "factor", "weight", "view", "run")
-    weights <- subset(weights_df, factor == "Factor1")
+
+    F1_weights_df <- lapply(1:length(all_weights_run), function(dataset_id) {
+      weights <- all_weights_run[[dataset_id]]
+      tmp <- lapply(names(weights), function(modality) {
+        weights[[modality]] %*% get_rotation(weights) %>%
+          as_tibble(rownames = "feature") %>%
+          mutate(view = modality, run = dataset_id) %>%
+          rename_with(function(x) {
+            str_replace(x, "V", "factor ")
+          }, starts_with("V"))
+      }) %>%
+        bind_rows() %>%
+        arrange(view, feature)
+    }) %>%
+      bind_rows() %>% select("feature", "factor 1", "view", "run")
     
-    # Adjust sign of the factor 1 to have consistent positive association with immune response
-    # across bootstrap runs
-    weights_runs_mat <- matrix(weights$weight, 
-                               nrow=length(unique(weights$feature)),
-                               ncol=length(unique(weights$run)))
+    F1_weights_mat <- F1_weights_df %>% 
+      pivot_wider(id_cols = !c("view"), 
+                  names_from = "run", values_from = "factor 1") %>%
+      column_to_rownames("feature") %>% 
+      as.matrix()
     
-    rownames(weights_runs_mat) <- unique(weights$feature)
-    colnames(weights_runs_mat) <- unique(weights$run)
+    F1_weights_df$weight <- as.vector(F1_weights_mat)
     
-    # Consistency across bootstrap runs:  reverse sign of those negative correlated runs
-    cor_1_vs_rest <- cor(weights_runs_mat)[,1]
-    if(any(sign(cor_1_vs_rest) == "-1")) {
-      weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] <- - weights_runs_mat[,sign(cor_1_vs_rest) == "-1"] 
-    }
-    # Positive association with immune response (CD8 T cell best representative)
-    if (sign(median(weights_runs_mat["CD8 T",])) == "-1") weights_runs_mat <- - weights_runs_mat
-    # quick check that most CD8 T runs are positive
-    #apply(sign(weights_runs_mat) == 1, 1, sum)["CD8 T"] # = 100
-    weights$weight <- as.vector(weights_runs_mat)
-    
+  ## Median  
   }else{
-    # Median weights iHet
-    weights <- readRDS(paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
+    ## FF provided file: (paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
+    ## r=0.92 between these computed weights and FF's
+    median_weights <- lapply(1:length(all_weights_run), function(dataset_id) {
+      weights <- all_weights_run[[dataset_id]]
+      tmp <- lapply(names(weights), function(modality) {
+        weights[[modality]] %*% get_rotation(weights) %>%
+          as_tibble(rownames = "feature") %>%
+          mutate(view = modality) %>%
+          rename_with(function(x) {
+            str_replace(x, "V", "factor ")
+          }, starts_with("V"))
+      }) %>%
+        bind_rows() %>%
+        arrange(view, feature)
+    }) %>%
+      bind_rows() %>%
+      group_by(view, feature) %>%
+      summarise_all(list(median = median, mad = mad)) %>%
+      ungroup() %>%
+      rename_with(~ gsub("_median", "", .x), ends_with("_median"))
+    
+    F1_weights_df <- median_weights$`factor 1`
+    names(F1_weights_df) <- median_weights$feature
   }
-  
+
   # ---
   # immune cell fractions
   ## quantiseq (easier returns already CD4 T = CD4 T + Treg)
@@ -506,7 +546,7 @@ compute_iHet <- function(dataset,
                                            remove_sig_genes_immune_response = FALSE)
   # ---
   # scale features according to TCGA feature values from MOFA training
-  boot_features_stats <- readRDS(paste0(repo_dir, "/data/prior_checks/TCGA_bootstrap_features_stats.rds"))
+  boot_features_stats <- readRDS(TCGAbootstrapFeatureStats)
   boot_features_stats <- boot_features_stats[[model]]
   
   if (model == "NSCLC"){
@@ -538,9 +578,7 @@ compute_iHet <- function(dataset,
   }
   
   if (use_bootstrap_weights == FALSE){
-    
     if (model == "NSCLC"){
-      
       norm_boot_features <- reshape2::melt(norm_boot_features)
       colnames(norm_boot_features) <- c("patient", "feature", "value", "view", "run", "model")
       norm_boot_features <- norm_boot_features %>% 
@@ -549,7 +587,6 @@ compute_iHet <- function(dataset,
         )
       
     }else{
-      
       norm_boot_features <- reshape2::melt(norm_boot_features)
       colnames(norm_boot_features) <- c("patient", "feature", "value", "view", "run")
       norm_boot_features <- norm_boot_features %>% 
@@ -559,9 +596,10 @@ compute_iHet <- function(dataset,
     }
   }
   
-  feat_cor <- readRDS(paste0(repo_dir, "/data/correlation_features_fibroblasts_all_tissues.RDS"))
-  feat_cor_refined <- readRDS(paste0(repo_dir, "/data/refined_correlation_features_HIF_tumor_stroma_esi_NSCLC.RDS"))
+  # Load knowledge of features correlated with information about the density of fibroblasts in tumor region 
+  feat_cor <- readRDS(corFibAllTissues)
 
+  cat("Computing iHet score... \n")
   if (use_bootstrap_weights){
     
     # Just for NSCLC mofa model
@@ -571,8 +609,8 @@ compute_iHet <- function(dataset,
         
         # compute iHet score
         iHet_bootstrap <- lapply(1:length(files_to_extract), function(bot_sample){
-          F1 <- subset(weights, run %in% bot_sample)$weight
-          names(F1) <- subset(weights, run %in% bot_sample)$feature
+          F1 <- subset(F1_weights_df, run %in% bot_sample)$weight
+          names(F1) <- subset(F1_weights_df, run %in% bot_sample)$feature
           
           # combine features
           features <- cbind(norm_boot_features[[XX]][[bot_sample]]$cellfrac, 
@@ -608,15 +646,7 @@ compute_iHet <- function(dataset,
                     cat("Threshold", thr, ": \n")
                     F1[[as.character(thr)]] <- F1_vec
                     if (any(feat_cor_tmp$cor>=thr)){
-                      
-                      if (approach == "refined") {
-                        feat_cor_tmp <- feat_cor_refined[[tissue]]
-                        tmp <- feat_cor_tmp$feature[feat_cor_tmp$cor>thr & feat_cor_tmp$FDR<=0.05]
-                        ix_sign[[as.character(thr)]] <- match(tmp, cfeatures)
-
-                      }else{
-                        ix_sign[[as.character(thr)]] <- which(feat_cor_tmp$cor>thr & feat_cor_tmp$FDR<=0.05)
-                      }
+                      ix_sign[[as.character(thr)]] <- which(feat_cor_tmp$cor>thr & feat_cor_tmp$FDR<=0.05)
                       
                       if (method_x == "iHet_exclusion") {
                         iHet[[as.character(thr)]] <- F1[[as.character(thr)]][ix_sign[[as.character(thr)]]] %*% features[ix_sign[[as.character(thr)]], , drop=FALSE]
@@ -681,8 +711,8 @@ compute_iHet <- function(dataset,
       
       # compute iHet score
       iHet_bootstrap <- lapply(1:length(files_to_extract), function(bot_sample){
-        F1 <- subset(weights, run %in% bot_sample)$weight
-        names(F1) <- subset(weights, run %in% bot_sample)$feature
+        F1 <- subset(F1_weights_df, run %in% bot_sample)$weight
+        names(F1) <- subset(F1_weights_df, run %in% bot_sample)$feature
         
         # combine features
         features <- cbind(norm_boot_features[[bot_sample]]$cellfrac, 
@@ -720,16 +750,8 @@ compute_iHet <- function(dataset,
                   F1[[as.character(thr)]] <- F1_vec
                   
                   if (any(feat_cor_tmp$cor>=thr)){
-                    
-                    if (approach == "refined") {
-                      feat_cor_tmp <- feat_cor_refined[[tissue]]
-                      tmp <- feat_cor_tmp$feature[feat_cor_tmp$cor>thr & feat_cor_tmp$FDR<=0.05]
-                      ix_sign[[as.character(thr)]] <- match(tmp, cfeatures)
-                      
-                    }else{
                       ix_sign[[as.character(thr)]] <- which(feat_cor_tmp$cor>thr & feat_cor_tmp$FDR<=0.05)
-                    }
-                    
+    
                     if (method_x == "iHet_exclusion") {
                       iHet[[as.character(thr)]] <- F1[[as.character(thr)]][ix_sign[[as.character(thr)]]] %*% features[ix_sign[[as.character(thr)]], , drop=FALSE]
 
@@ -818,9 +840,7 @@ compute_iHet <- function(dataset,
     return(iHet_bootstrap_df)
     
   }else{
-    F1 <- weights[[model]][["factor 1"]]
-    names(F1) <- weights[[model]]$feature
-    
+    # Median
     if (model == "NSCLC"){
       
       iHet_median <- lapply(c("LUAD", "LUSC"), function(XX){
@@ -846,9 +866,9 @@ compute_iHet <- function(dataset,
                           features_path)
         
         # match features
-        cfeatures <- intersect(colnames(features), names(F1))
+        cfeatures <- intersect(colnames(features), names(F1_weights_df))
         features <- features[, cfeatures]
-        F1_vec <- F1[cfeatures]
+        F1_vec <- F1_weights_df[cfeatures]
         features <- t(features)
         
         iHet_method <- lapply(method, function(method_x){
@@ -1412,7 +1432,7 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     if(length(myscores_df$patient) > length(unique(myscores_df$patient))){
       ## bootstrap
       
-      g <- ggtern(data=data.tri,aes(x = Left, y = Top, z = Right)) +
+      g <- ggtern(data=data.tri, ggtern::aes(x = Left, y = Top, z = Right)) +
         theme_bw() + theme_hidetitles() + theme_hidearrows() +
         geom_point(shape=21,size=5, aes(fill=mean_value, col=is.max, alpha=is.max)) +
         geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
@@ -1458,7 +1478,7 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     }else{
       ## median
       
-      g <- ggtern(data=data.tri,aes(x = Left, y = Top, z = Right)) +
+      g <- ggtern(data=data.tri,ggtern::aes(x = Left, y = Top, z = Right)) +
         theme_bw() + theme_hidetitles() + theme_hidearrows() +
         geom_point(shape=21,size=5, aes(fill=value, col=is.max, alpha=is.max)) +
         geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
