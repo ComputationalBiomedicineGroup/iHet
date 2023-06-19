@@ -4,7 +4,7 @@ suppressPackageStartupMessages({
   library("conflicted")
   library("Matrix")
   library("reshape2")
-  remotes::install_github("olapuentesantana/easier", force = TRUE, upgrade = "never")
+  # remotes::install_github("olapuentesantana/easier", force = TRUE, upgrade = "never")
   library('easier')
   require('MOFA2') # read mofa models
   require('reshape2')

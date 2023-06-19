@@ -3,28 +3,34 @@ title: iHet predictions on tracerx data
 params:
     cpus: 1
     meta: NULL
-    mofa_models_zip: /data/projects/2021/nsclc_heterogeneity/from_oscar/MOFA_out.zip
+    mofa_models_zip: /data/projects/2021/nsclc_heterogeneity/from_oscar/MOFA_out.zip # zip file containing the MOFA models
+    tcga_boostrap_stats: /data/projects/2021/nsclc_heterogeneity/from_oscar/TCGA_bootstrap_feature_stats.rds # TCGA overall mean and standard deviation
+    cor_fib_all_tissues: /data/projects/2021/nsclc_heterogeneity/from_oscar/correlation_features_fibroblasts_all_tissues.RDS # - Easier features correlated with imaging features
     artifact_dir: "/home/sturm/Downloads/ihet"
+    tracerx_expr_data: /data/projects/2021/nsclc_heterogeneity/01_processed/bulk_rna_seq/TRACERx_expr_data.rds
 ---
 
-
-# required data
-zipMOFAmodels <- "data_iHet_predictions/MOFA_out.zip” # zip file containing the MOFA models
-TCGAbootstrapFeatureStats <- "data_iHet_predictions/TCGA_bootstrap_features_stats.rds” # TCGA overall mean and standard deviation:
-corFibAllTissues <- "data_iHet_predictions/correlation_features_fibroblasts_all_tissues.RDS” # - Easier features correlated with imaging features
-
-# utils (function available in github: analyses/10_mofa/
+```{r}
+library(conflicted)
 source("./helper_iHet_predictions.R")
+library(readr)
+```
 
-# RNA-seq
-all_dataset <- list(counts = counts, tpm = tpm) 
+```{r}
+tracerx_expr_data = read_rds(params$tracerx_expr_data)
+```
 
-# Compute iHet
+```{r}
+all_dataset = tracerx_expr_data
+zipMOFAmodels = params$mofa_models_zip
+TCGAbootstrapFeatureStats <- params$tcga_boostrap_stats
+corFibAllTissues <- params$cor_fib_all_tissues
 iHet_df <- compute_iHet(
-dataset = all_dataset, 
-model = "NSCLC”, 
-use_bootstrap_weights=TRUE, 
-method = "iHet", 
-scale_mofa_weights = TRUE
+  dataset = all_dataset, 
+  model = "NSCLC", 
+  use_bootstrap_weights=TRUE, 
+  method = "iHet", 
+  scale_mofa_weights = TRUE
 )
 
+```
