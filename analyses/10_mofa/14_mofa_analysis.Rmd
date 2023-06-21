@@ -33,6 +33,12 @@ tmb_tcga <- read_tsv(file.path(params$tmb_dir, "TCGA_mutation-load_updated.txt")
   select(sample = Tumor_Sample_ID, tmb, tmb_non_silent) %>%
   mutate(sample = str_replace_all(sample, "-", ".")) %>%
   pivot_longer(-sample, names_to = "metric", values_to = "tmb_value")
+tmb_tracerx = read_tsv(file.path(params$tmb_dir, "TRACERx100_Mut_per_Mb.tsv")) %>%
+  mutate(sample = str_replace(str_replace(str_replace(CRUK_RegionID, fixed("SU_"), ""), fixed(":"), "_"), "T\\d\\.", "")) %>%
+  mutate(sample = paste0("TRACERx-", sample), metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
+  select(sample, metric, tmb_value) %>%
+  semi_join(feature_data, by="sample")
+assertthat::assert_that(length(tmb_tracerx$sample) == length(unique(tmb_tracerx$sample)))
 tmb_all <- bind_rows(tmb_jia_sharma, tmb_tcga)
 ```
 
@@ -276,7 +282,7 @@ ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_respo
 ```
 
 ```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
-# same for tracerx (once as derived by mofa, once as calculated using TCGA-NSCLC signatures)
+# same for tracerx (as derived by MOFA)
 
 selected_datasets <- c("TRACERx")
 factors_all %>%
