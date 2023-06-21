@@ -39,7 +39,7 @@ tmb_tracerx = read_tsv(file.path(params$tmb_dir, "TRACERx100_Mut_per_Mb.tsv")) %
   select(sample, metric, tmb_value) %>%
   semi_join(feature_data, by="sample")
 assertthat::assert_that(length(tmb_tracerx$sample) == length(unique(tmb_tracerx$sample)))
-tmb_all <- bind_rows(tmb_jia_sharma, tmb_tcga)
+tmb_all <- bind_rows(tmb_jia_sharma, tmb_tcga, tmb_tracerx)
 ```
 
 ```{r, include=FALSE}
@@ -328,7 +328,27 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_tmb.svg"), device = svg)
 ```
+Extra plot for tracerx: 
 
+```{r, fig.width=3, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+factors_all %>%
+  inner_join(tmb_all) %>%
+  filter(
+    factor == "factor 1",
+    dataset == "TRACERx"
+  ) %>%
+  ggplot(aes(x = factor_value, y = `tmb_value`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  theme_bw(base_size = 12) +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~dataset_label, scales = "free_x", ncol = 6) +
+  scale_y_log10() +
+  xlab("iHet signature (MOFA F1)") +
+  ylab("TMB")
+
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_tmb_tracerx.svg"), device = svg)
+```
 
 ### Weight scatter TCGA-NSCLC / JiaSharma
 
