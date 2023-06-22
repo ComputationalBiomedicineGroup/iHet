@@ -4,27 +4,32 @@ params:
     cpus: 1
     meta: NULL
     mofa_models_zip: /data/projects/2021/nsclc_heterogeneity/from_oscar/MOFA_out.zip # zip file containing the MOFA models
-    tcga_boostrap_stats: /data/projects/2021/nsclc_heterogeneity/from_oscar/TCGA_bootstrap_feature_stats.rds # TCGA overall mean and standard deviation
+    tcga_boostrap_stats: /data/projects//2021/nsclc_heterogeneity/from_oscar/TCGA_bootstrap_features_stats.rds  # TCGA overall mean and standard deviation
     cor_fib_all_tissues: /data/projects/2021/nsclc_heterogeneity/from_oscar/correlation_features_fibroblasts_all_tissues.RDS # - Easier features correlated with imaging features
-    artifact_dir: "/home/sturm/Downloads/ihet"
     tracerx_expr_data: /data/projects/2021/nsclc_heterogeneity/01_processed/bulk_rna_seq/TRACERx_expr_data.rds
+    feature_data: /home/sturm/projects/2021/nsclc_heterogeneity/results/10_mofa/12_prepare_mofa_data/artifacts/data_all_tidy.rds
+    tracerx_tmb_data: ../../data/01_processed/bulk_rna_seq/TRACERx100_Mut_per_Mb.tsv
+    artifact_dir: "/home/sturm/Downloads/ihet/"
+
 ---
 
 ```{r}
 library(conflicted)
-source("./helper_iHet_predictions.R")
 library(readr)
+library(ggpubr)
+library(dplyr)
 ```
 
+## Compute iHet score on TracerX data
 ```{r}
 tracerx_expr_data = read_rds(params$tracerx_expr_data)
-```
-
-```{r}
-all_dataset = tracerx_expr_data
 zipMOFAmodels = params$mofa_models_zip
 TCGAbootstrapFeatureStats <- params$tcga_boostrap_stats
 corFibAllTissues <- params$cor_fib_all_tissues
+source("./helper_iHet_predictions.R")
+
+all_dataset = list(counts=tracerx_expr_data$count$TRACERx, tpm=tracerx_expr_data$tpm$TRACERx)
+weights = NULL
 iHet_df <- compute_iHet(
   dataset = all_dataset, 
   model = "NSCLC", 
@@ -32,5 +37,64 @@ iHet_df <- compute_iHet(
   method = "iHet", 
   scale_mofa_weights = TRUE
 )
+iHet_df = as_tibble(iHet_df) |> mutate(patient = paste0("TRACERx-", patient)) |> dplyr::rename(sample=patient)
+median_ihet = iHet_df |> 
+  # compute mean across LUAD/LUSC model
+  group_by(sample, method, run) |>
+  dplyr::summarize(score = mean(score)) |>
+  # compute median across bootstrap runs 
+  group_by(sample, method) |> 
+  dplyr::summarize(score = median(score)) |> ungroup()
+```
+
+## Correlation with immune response
+
+```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
+feature_data = read_rds(params$feature_data)
+immresp = feature_data |> 
+  dplyr::filter(dataset == "TRACERx", view == "immune response", feature == "response") |>
+  dplyr::rename(`immune response` = value) |> 
+  select(sample, `immune response`, dataset)
+
+median_ihet %>%
+  inner_join(immresp) %>%
+  mutate(dataset_label = "TRACERx (TCGA-NSCLC)") %>%
+  ggplot(aes(x = score, y = `immune response`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  ggplot2::theme_bw(base_size = 15) +
+  stat_cor() +
+  facet_wrap(~dataset_label, scales = "free_x", ncol = 1) +
+  geom_smooth(method = "lm") +
+  ylim(c(-2, 3)) +
+  xlab("iHet") + 
+  ylab("immune response")
+
+ggplot2::ggsave(file.path(params$artifact_dir, "plots", "correlation_iHet_computed_immune_response_tracerx.svg"), device = svg)
 
 ```
+
+## Correlation with TMB
+```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
+tmb_tracerx = read_tsv(params$tracerx_tmb_data) %>%
+  mutate(sample = str_replace(str_replace(str_replace(CRUK_RegionID, fixed("SU_"), ""), fixed(":"), "_"), "T\\d\\.", "")) %>%
+  mutate(sample = paste0("TRACERx-", sample), metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
+  select(sample, metric, tmb_value) %>%
+  semi_join(feature_data, by="sample")
+
+median_ihet %>%
+  inner_join(tmb_tracerx) %>%
+  mutate(dataset_label = "TRACERx (TCGA-NSCLC)") %>%
+  ggplot(aes(x = score, y = `tmb_value`)) +
+  geom_point(size = 0.8, color = "#333333") +
+  ggplot2::theme_bw(base_size = 15) +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~dataset_label, scales = "free_x", ncol = 6) +
+  scale_y_log10() +
+  xlab("iHet") +
+  ylab("TMB")
+
+ggplot2::ggsave(file.path(params$artifact_dir, "plots", "correlation_iHet_computed_tmb_tracerx.svg"), device = svg)
+
+```
+
