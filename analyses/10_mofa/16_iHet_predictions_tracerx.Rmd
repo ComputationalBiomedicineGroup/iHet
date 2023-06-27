@@ -49,7 +49,7 @@ median_ihet = iHet_df |>
 
 ## Correlation with immune response
 
-```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=2.95, fig.height=2.8, echo=FALSE, message=FALSE, warning=FALSE}
 feature_data = read_rds(params$feature_data)
 immresp = feature_data |> 
   dplyr::filter(dataset == "TRACERx", view == "immune response", feature == "response") |>
@@ -58,10 +58,11 @@ immresp = feature_data |>
 
 median_ihet %>%
   inner_join(immresp) %>%
-  mutate(dataset_label = "TRACERx (TCGA-NSCLC)") %>%
+  dplyr::mutate(dataset_label = "TRACERx (TCGA-NSCLC)") %>%
   ggplot(aes(x = score, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
-  ggplot2::theme_bw(base_size = 15) +
+  ggplot2::theme_bw(base_size = 17) +
+  ggplot2::theme(strip.text=element_text(size=12)) +
   stat_cor() +
   facet_wrap(~dataset_label, scales = "free_x", ncol = 1) +
   geom_smooth(method = "lm") +
@@ -74,7 +75,7 @@ ggplot2::ggsave(file.path(params$artifact_dir, "plots", "correlation_iHet_comput
 ```
 
 ## Correlation with TMB
-```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=3.12, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 tmb_tracerx = read_tsv(params$tracerx_tmb_data) %>%
   mutate(sample = str_replace(str_replace(str_replace(CRUK_RegionID, fixed("SU_"), ""), fixed(":"), "_"), "T\\d\\.", "")) %>%
   mutate(sample = paste0("TRACERx-", sample), metric="Mut_per_Mb", tmb_value=TMBperMb) %>%

@@ -281,7 +281,7 @@ factors_all %>%
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg)
 ```
 
-```{r, fig.width=3, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=2.95, fig.height=2.8, echo=FALSE, message=FALSE, warning=FALSE}
 # same for tracerx (as derived by MOFA)
 
 selected_datasets <- c("TRACERx")
@@ -291,7 +291,7 @@ factors_all %>%
   mutate(dataset_label = factor(dataset_label, levels = selected_datasets)) %>%
   ggplot(aes(x = factor_value, y = `immune response`)) +
   geom_point(size = 0.8, color = "#333333") +
-  theme_bw(base_size = 15) +
+  theme_bw(base_size = 17) +
   stat_cor() +
   geom_smooth(method = "lm") +
   facet_wrap(~dataset_label, scales = "free_x", ncol = 1) +
@@ -312,7 +312,7 @@ factors_all %>%
   inner_join(tmb_all) %>%
   filter(
     factor == "factor 1",
-    str_to_lower(metric) == "tmb"
+    str_to_lower(metric) == "tmb"1
   ) %>%
   mutate(dataset_label = factor(dataset_label, levels = dataset_list)) %>%
   filter(!is.na(dataset_label)) %>% 
@@ -330,7 +330,7 @@ ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_tmb.svg"), d
 ```
 Extra plot for tracerx: 
 
-```{r, fig.width=3, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=3.12, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 factors_all %>%
   inner_join(tmb_all) %>%
   filter(
@@ -339,7 +339,7 @@ factors_all %>%
   ) %>%
   ggplot(aes(x = factor_value, y = `tmb_value`)) +
   geom_point(size = 0.8, color = "#333333") +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = 15) +
   stat_cor() +
   geom_smooth(method = "lm") +
   facet_wrap(~dataset_label, scales = "free_x", ncol = 6) +
