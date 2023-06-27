@@ -399,7 +399,7 @@ all_weights %>%
   filter(
     feature %in% selected_features,
     factor == "factor 1",
-    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
+    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "TRACERx")
   ) %>%
   ggplot(aes(y = factor_weight, x = feature)) +
   geom_boxplot(aes(fill = dataset), outlier.size = .5) +
