@@ -312,7 +312,7 @@ factors_all %>%
   inner_join(tmb_all) %>%
   filter(
     factor == "factor 1",
-    str_to_lower(metric) == "tmb"1
+    str_to_lower(metric) == "tmb"
   ) %>%
   mutate(dataset_label = factor(dataset_label, levels = dataset_list)) %>%
   filter(!is.na(dataset_label)) %>% 
@@ -410,6 +410,34 @@ all_weights %>%
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
 ggsave(file.path(params$artifact_dir, "plots", "bootstrap_feature_stability.svg"), device = svg)
+```
+
+
+### Variability of factors between bootstrap samples
+```{r, include=FALSE}
+all_factors <- lapply(SELECTED_DATASETS, function(dataset_id) {
+  lapply(bootstrap_models[[dataset_id]], get_factor_df) %>%
+    bind_rows() %>%
+    mutate(dataset = dataset_id)
+}) %>%
+  bind_rows() %>%
+  pivot_longer(cols = c(-sample, -dataset), names_to = "factor", values_to = "factor_value") %>%
+  filter(factor %in% c("factor 1", "factor 2", "factor 3"))
+```
+
+```{r, fig.height=3, fig.width=4, echo=FALSE, message=FALSE, warning=FALSE}
+all_factors %>%
+  filter(
+    dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "TRACERx")
+  ) %>%
+  ggplot(aes(y = factor_value, x = dataset)) +
+  geom_boxplot(aes(fill = dataset), outlier.size = .5) +
+  facet_wrap(~factor, ncol = 3) +
+  scale_fill_brewer(type = "qual", palette = "Set2") +
+  theme_bw() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+ggsave(file.path(params$artifact_dir, "plots", "bootstrap_factor_stability.svg"), device = svg)
 ```
 
 
