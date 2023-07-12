@@ -210,6 +210,106 @@ fig = sc.pl.dotplot(
 fig.savefig(f"{artifact_dir}/myeloid_dotplot.svg")
 
 # %%
+fig = sc.pl.dotplot(
+    adata_m,
+    groupby="cell_type_macro",
+    var_names={
+        "FN-TAMs": [
+            "CCL2",
+            "CCL8",
+            "CXCL10",
+            "CXCL11",
+            "IFIT1",
+            "IFIT2",
+            "IFIT3",
+            "IFITM1",
+            "IFITM3",
+            "ISG15",
+        ],
+        "Inflammatory-TAMs": [
+       #      "CCL3L1",
+            "CCL4L2",
+            "CXCL1",
+            "CXCL2",
+            "CXCL5",
+            "IL1B",
+            "IL1RN",
+            "IL6",
+        ],
+        "Lipid_Associated-TAMs": [
+            "ACP5",
+            "APOE",
+            "CCL18",
+            "C1QA",
+            "LGALS3",
+            "SPP1",
+            "TREM2",
+        ],
+        "Angio_TAMs": ["AREG", "CD163", "FCN1", "FN1", "THBS1", "TIMP1"],
+        "Alveolar": ["CCL18", "FABP4", "MARCO"],
+        "Classic_TAM": ["CD14", "CCR2", "FCN1", "LGALS2", "SELL"],
+        "Non_classical": ["CX3CR1", "FCGR3A", "FCGR3B"],
+        "Reg-TAM": ["CD274"],
+    },
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/tam_dotplot.svg")
+
+# %%
+adata_m.layers
+
+# %%
+pb_m = sh.pseudobulk.pseudobulk(adata_m[adata_m.obs["cell_type_macro"].str.startswith("TAM"), :], groupby=["cell_type_macro"], aggr_fun=np.sum)
+sc.pp.normalize_total(pb_m)
+sc.pp.log1p(pb_m)
+import scipy.stats
+pb_m.X = scipy.stats.zscore(pb_m.X)
+fig = sc.pl.matrixplot(
+    pb_m,
+    groupby="cell_type_macro",
+    var_names={
+        "FN-TAMs": [
+            "CCL2",
+            "CCL8",
+            "CXCL10",
+            "CXCL11",
+            "IFIT1",
+            "IFIT2",
+            "IFIT3",
+            "IFITM1",
+            "IFITM3",
+            "ISG15",
+        ],
+        "Inflammatory-TAMs": [
+       #      "CCL3L1",
+            "CCL4L2",
+            "CXCL1",
+            "CXCL2",
+            "CXCL5",
+            "IL1B",
+            "IL1RN",
+            "IL6",
+        ],
+        "Lipid_Associated-TAMs": [
+            "ACP5",
+            "APOE",
+            "CCL18",
+            "C1QA",
+            "LGALS3",
+            "SPP1",
+            "TREM2",
+        ],
+        "Angio_TAMs": ["AREG", "CD163", "FCN1", "FN1", "THBS1", "TIMP1"],
+        "Alveolar": ["CCL18", "FABP4", "MARCO"],
+        "Classic_TAM": ["CD14", "CCR2", "FCN1", "LGALS2", "SELL"],
+        "Non_classical": ["CX3CR1", "FCGR3A", "FCGR3B"],
+        "Reg-TAM": ["CD274"],
+    },
+    cmap="bwr",
+)
+
+
+# %%
 sc.pl.umap(
     adata_nsclc,
     color=["CD14", "CD68", "CD163", "CSF1R", "FCGR3A", "CD84", "MS4A4A", "MS4A2"],
