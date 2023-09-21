@@ -89,7 +89,7 @@ ah.annotate_cell_types(
     {
         "Macrophage alveolar": [0],
         "DC mature": [10],
-        "dividing": [6],
+        "cycling": [6],
         "Monocyte classical": [2],
         "Monocyte non-classical": [5],
         "cDC1": [9],
@@ -101,11 +101,11 @@ ah.annotate_cell_types(
 )
 
 # %% [markdown]
-# ## Dividing
+# ## cycling
 # -> subdivide into alveolar/ other
 
 # %%
-adata_div = adata_m[adata_m.obs["cell_type"] == "dividing", :].copy()
+adata_div = adata_m[adata_m.obs["cell_type"] == "cycling", :].copy()
 
 # %%
 ah.reprocess_adata_subset_scvi(adata_div, use_rep="X_scANVI", leiden_res=0.5)
@@ -120,9 +120,9 @@ ah.plot_umap(adata_div, filter_cell_type=["DC", "macro", "mono", "div"])
 ah.annotate_cell_types(
     adata_div,
     {
-        "cDC dividing": [0, 9],
-        "Macrophage alveolar dividing": [5, 1],
-        "Macrophage dividing": [4, 2, 3, 8, 6, 7],
+        "cDC cycling": [0, 9],
+        "Macrophage alveolar cycling": [5, 1],
+        "Macrophage cycling": [4, 2, 3, 8, 6, 7],
     },
 )
 
@@ -280,7 +280,11 @@ fix_cell_type_names = lambda x: {
     "Neutrophils": "Neutrophil",
     "transitional club/AT2": "Transitional club/AT2",
     "Tumor cells": "Tumor cell",
-    "stromal dividing": "Stromal dividing",
+    "stromal dividing": "Stromal cycling",
+    "B cell dividing": "B cell cycling",
+    "Plasma cell dividing": "Plasma cell cycling",
+    "T cell dividing": "T cell cycling",
+    "cDC dividing": "cDC cycling",
 }.get(x, x)
 adata_nsclc.obs["cell_type_macro"] = adata_nsclc.obs["cell_type_macro"].map(
     fix_cell_type_names
@@ -291,13 +295,13 @@ adata_m.obs["cell_type"] = adata_m.obs["cell_type"].map(fix_cell_type_names)
 # %%
 make_coarse_cell_types = {
     "Plasma cell": "Plasma cell",
-    "Plasma cell dividing": "Plasma cell",
+    "Plasma cell cycling": "Plasma cell",
     "B cell": "B cell",
-    "B cell dividing": "B cell",
+    "B cell cycling": "B cell",
     "T cell CD4": "T cell",
     "T cell regulatory": "T cell",
     "T cell CD8": "T cell",
-    "T cell dividing": "T cell",
+    "T cell cycling": "T cell",
     "NK cell": "NK cell",
     "Mast cell": "Mast cell",
     "pDC": "pDC",
@@ -305,12 +309,12 @@ make_coarse_cell_types = {
     "cDC1": "cDC",
     "cDC2": "cDC",
     "cDC2 CD1A+": "cDC",
-    "cDC dividing": "cDC",
+    "cDC cycling": "cDC",
     "Monocyte classical": "Macrophage/Monocyte",
     "Monocyte non-classical": "Macrophage/Monocyte",
     "Macrophage alveolar": "Macrophage/Monocyte",
-    "Macrophage alveolar dividing": "Macrophage/Monocyte",
-    "Macrophage dividing": "Macrophage/Monocyte",
+    "Macrophage alveolar cycling": "Macrophage/Monocyte",
+    "Macrophage cycling": "Macrophage/Monocyte",
     "TAM": "Macrophage/Monocyte",
     "Neutrophil": "Neutrophil",
     "Alveolar cell type 1": "Epithelial cell",
@@ -330,7 +334,7 @@ make_coarse_cell_types = {
     "Mesothelial": "Stromal cell",
     "Pericyte": "Stromal cell",
     "Smooth muscle cell": "Stromal cell",
-    "Stromal dividing": "Stromal cell",
+    "Stromal cycling": "Stromal cell",
 }
 adata_nsclc.obs["cell_type"] = (
     adata_nsclc.obs["cell_type"]
