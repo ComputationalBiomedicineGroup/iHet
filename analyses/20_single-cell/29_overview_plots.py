@@ -60,6 +60,9 @@ adata_nsclc.obs["study"].unique().tolist()
 adata_nsclc.shape
 
 # %%
+adata_nsclc.obs["sample"].nunique()
+
+# %%
 adata_nsclc.obs["patient"].nunique()
 
 # %%
@@ -356,33 +359,36 @@ fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
 # %%
 m_counts = (
     adata_m.obs.groupby(
-        ["cell_type_macro", "dataset", "study", "patient"], observed=True
+        ["cell_type", "dataset", "study", "patient"], observed=True
     )
     .size()
     .reset_index(name="n_cells")
-    .groupby(["cell_type_macro", "dataset"])
+    .groupby(["cell_type", "dataset"])
     .apply(lambda x: x.assign(n_cells_cell_type_dataset=lambda k: k["n_cells"].sum()))
     .groupby("patient")
     .apply(lambda x: x.assign(n_cells_patient=lambda k: k["n_cells"].sum()))
 ).query("n_cells_patient >= 10")
 
 # %%
+m_counts
+
+# %%
 patient_cell_type_combs = (
     m_counts.loc[:, ["dataset", "study", "patient"]]
-    .merge(m_counts.loc[:, ["cell_type_macro"]], how="cross")
+    .merge(m_counts.loc[:, ["cell_type"]], how="cross")
     .drop_duplicates()
 )
 
 # %%
 tmp_df = m_counts.merge(
     patient_cell_type_combs,
-    on=["dataset", "study", "patient", "cell_type_macro"],
+    on=["dataset", "study", "patient", "cell_type"],
     how="outer",
 )
 
 # %%
 tmp_df2 = (
-    tmp_df.groupby(["study", "cell_type_macro"], observed=True)
+    tmp_df.groupby(["study", "cell_type"], observed=True)
     .agg(n_cells=("n_cells", np.sum))
     .reset_index()
 )
@@ -400,7 +406,7 @@ heatmp = (
     alt.Chart(tmp_df2)
     .mark_rect()
     .encode(
-        x="cell_type_macro",
+        x="cell_type",
         y=alt.Y("study", axis=None),
         color=alt.Color("n_cells", scale=alt.Scale(scheme="inferno", reverse=True)),
     )
@@ -409,7 +415,7 @@ txt = (
     alt.Chart(tmp_df2)
     .mark_text()
     .encode(
-        x="cell_type_macro",
+        x="cell_type",
         y=alt.Y("study", axis=None),
         text="n_cells",
         color=alt.condition(
@@ -433,7 +439,7 @@ studies_txt = (
 )
 
 # %%
-ch = ((studies + studies_txt) | (heatmp + txt).properties(width=500)).configure_concat(
+ch = ((studies + studies_txt) | (heatmp + txt).properties(width=450)).configure_concat(
     spacing=0
 )
 ch.display()
