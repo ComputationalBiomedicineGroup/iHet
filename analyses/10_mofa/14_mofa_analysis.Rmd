@@ -85,6 +85,22 @@ saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rd
 saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
 ```
 
+## Summary stats
+```{r}
+filter_nsclc = function(x) filter(x, dataset %in% c("Jia", "Sharma", "TRACERx", "LUAD", "LUSC"))
+filter_other = function(x) filter(x, !dataset %in% c("Jia", "Sharma", "TRACERx", "LUAD", "LUSC", "JiaSharma", "GTEx", "TCGA-NSCLC"))
+._ = lapply(list(NSCLC=filter_nsclc, other=filter_other), function(f) {
+  sample_tab = feature_data %>% f() %>% select(sample, patient, dataset) %>% distinct()
+  sample_count = sample_tab %>% group_by(dataset) %>% count()
+  print(sample_count)
+  print(sum(sample_count$n))
+  
+  patient_count = sample_tab %>% select(-sample) %>% distinct() %>% group_by(dataset) %>% count()
+  print(patient_count)
+  print(sum(patient_count$n))
+})
+```
+
 ## Variance Plots
 ```{r, results='hide', echo=FALSE}
 variance_explained_bootstrap <- lapply(names(bootstrap_models), function(dataset_id) {
