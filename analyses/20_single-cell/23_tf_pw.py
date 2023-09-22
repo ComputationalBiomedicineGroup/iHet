@@ -138,36 +138,36 @@ fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")
 
 # %%
 pb_progeny = sh.pseudobulk.pseudobulk(
-    adatas["nsclc"]["progeny"], groupby=["patient", "cell_type_macro"], aggr_fun=np.mean
+    adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean
 )
-pb_progeny.obs["cell_type_macro"] = pb_progeny.obs["cell_type_macro"].astype(
-    adatas["nsclc"]["progeny"].obs["cell_type_macro"].dtype
+pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(
+    adatas["nsclc"]["progeny"].obs["cell_type"].dtype
 )
 
 # %%
 pb_dorothea = sh.pseudobulk.pseudobulk(
     adatas["nsclc"]["dorothea"],
-    groupby=["patient", "cell_type_macro"],
+    groupby=["patient", "cell_type"],
     aggr_fun=np.mean,
 )
-pb_dorothea.obs["cell_type_macro"] = pb_dorothea.obs["cell_type_macro"].astype(
-    adatas["nsclc"]["dorothea"].obs["cell_type_macro"].dtype
+pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(
+    adatas["nsclc"]["dorothea"].obs["cell_type"].dtype
 )
 
 # %%
 fig = sc.pl.matrixplot(
     pb_progeny[
-        pb_progeny.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+        pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
     ],
     var_names=pws_of_interest,
-    groupby="cell_type_macro",
+    groupby="cell_type",
     cmap="coolwarm",
     swap_axes=True,
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
 )
-fig.savefig(f"{artifact_dir}/heatmap_progeny_tam.svg")
+fig.savefig(f"{artifact_dir}/heatmap_progeny_myeloid.svg")
 
 # %%
 pb_progeny.layers["zscore"] = scipy.stats.zscore(pb_progeny.X, axis=1)
@@ -175,10 +175,10 @@ pb_progeny.layers["zscore"] = scipy.stats.zscore(pb_progeny.X, axis=1)
 # %%
 fig = sc.pl.matrixplot(
     pb_progeny[
-        pb_progeny.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+        pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
     ],
     var_names=pws_of_interest,
-    groupby="cell_type_macro",
+    groupby="cell_type",
     cmap="coolwarm",
     swap_axes=True,
     vmin=-2.5,
@@ -186,22 +186,22 @@ fig = sc.pl.matrixplot(
     return_fig=True,
     layer="zscore",
 )
-fig.savefig(f"{artifact_dir}/heatmap_progeny_tam_zscore.svg")
+fig.savefig(f"{artifact_dir}/heatmap_progeny_myeloid_zscore.svg")
 
 # %%
 fig = sc.pl.matrixplot(
     pb_dorothea[
-        pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+        pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
     ],
     var_names=tfs_of_interest,
-    groupby="cell_type_macro",
+    groupby="cell_type",
     cmap="coolwarm",
     swap_axes=True,
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
 )
-fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam.svg")
+fig.savefig(f"{artifact_dir}/heatmap_dorothea_myeloid.svg")
 
 # %%
 pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
@@ -209,10 +209,10 @@ pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
 # %%
 fig = sc.pl.matrixplot(
     pb_dorothea[
-        pb_dorothea.obs["cell_type_macro"].isin(adata_m.obs["cell_type_macro"]), :
+        pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
     ],
     var_names=tfs_of_interest,
-    groupby="cell_type_macro",
+    groupby="cell_type",
     cmap="coolwarm",
     swap_axes=True,
     vmin=-2.5,
@@ -220,7 +220,7 @@ fig = sc.pl.matrixplot(
     return_fig=True,
     layer="zscore",
 )
-fig.savefig(f"{artifact_dir}/heatmap_dorothea_tam_zscore.svg")
+fig.savefig(f"{artifact_dir}/heatmap_dorothea_myeloid_zscore.svg")
 
 # %% [markdown]
 # ## UMAP plots of selected features
