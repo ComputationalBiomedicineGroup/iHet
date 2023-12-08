@@ -38,20 +38,22 @@ workflow W20_single_cell {
     }
 
 
-    JUPYTER_TF_PW(
-        get_notebook_channel("23_tf_pw"),
-        Channel.value([
-            "adata_m": "adata_myeloid_reannotated.h5ad",
-            "adata_nsclc": "adata_nsclc_reannotated.h5ad"
-        ]),
-        ch_adata_annotated
-    )
+    // JUPYTER_TF_PW(
+    //     get_notebook_channel("23_tf_pw"),
+    //     Channel.value([
+    //         "adata_m": "adata_myeloid_reannotated.h5ad",
+    //         "adata_nsclc": "adata_nsclc_reannotated.h5ad"
+    //     ]),
+    //     ch_adata_annotated
+    // )
     JUPYTER_OVERVIEW_PLOTS(
         get_notebook_channel("29_overview_plots"),
         Channel.value([
             "adata_m": "adata_myeloid_reannotated.h5ad",
             "adata_nsclc": "adata_nsclc_reannotated.h5ad"
         ]),
-        ch_adata_annotated
+        // hack: include injection to make centos7 container work
+        // see `lib/inject/README.md`
+        ch_adata_annotated.concat(Channel.fromPath("$baseDir/lib/inject/inject.so")).collect()
     )
 }
