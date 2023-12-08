@@ -94,7 +94,7 @@ filter_other = function(x) filter(x, !dataset %in% c("Jia", "Sharma", "TRACERx",
   sample_count = sample_tab %>% group_by(dataset) %>% count()
   print(sample_count)
   print(sum(sample_count$n))
-  
+
   patient_count = sample_tab %>% select(-sample) %>% distinct() %>% group_by(dataset) %>% count()
   print(patient_count)
   print(sum(patient_count$n))
@@ -331,7 +331,7 @@ factors_all %>%
     str_to_lower(metric) == "tmb"
   ) %>%
   mutate(dataset_label = factor(dataset_label, levels = dataset_list)) %>%
-  filter(!is.na(dataset_label)) %>% 
+  filter(!is.na(dataset_label)) %>%
   ggplot(aes(x = factor_value, y = `tmb_value`)) +
   geom_point(size = 0.8, color = "#333333") +
   theme_bw(base_size = 17) +
@@ -344,7 +344,7 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_tmb.svg"), device = svg)
 ```
-Extra plot for tracerx: 
+Extra plot for tracerx:
 
 ```{r, fig.width=3.12, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 factors_all %>%
@@ -461,8 +461,8 @@ ggsave(file.path(params$artifact_dir, "plots", "bootstrap_factor_stability.svg")
 sample_to_patient_mapping = feature_data %>% select(sample, patient) %>% distinct()
 lapply(c("JiaSharma", "TRACERx"), function(dataset_id) {
   median_factors[[dataset_id]] %>% inner_join(sample_to_patient_mapping, by="sample") %>%
-    select(patient, `factor 1`) %>% 
-    ggplot(aes(x=`factor 1`, y=`patient`)) + geom_boxplot(width=0.5, color="grey") + geom_point() + 
+    select(patient, `factor 1`) %>%
+    ggplot(aes(x=`factor 1`, y=`patient`)) + geom_boxplot(width=0.5, color="grey") + geom_point() +
     ggtitle(dataset_id)
 })
 
@@ -505,7 +505,7 @@ intra_sample <- feature_data %>%
 variability_df <- inter_sample %>%
   inner_join(intra_sample, by = c("view", "feature", "dataset")) %>%
   filter(view != "immune response") %>%
-  mutate(ratio = log2(mad_intra / mad_inter))
+  mutate(ratio = log2(mad_inter / mad_intra))
 ```
 
 ```{r, fig.width=14, fig.height=10}
@@ -520,19 +520,6 @@ variability_df %>%
   geom_abline(slope = 1, intercept = 0, color = "red") +
   geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features)) +
   facet_wrap(~dataset)
-
-
-# tmp_scatter_data %>%
-#   ggplot(aes(x = JiaSharma, y = TCGA-NSCLC)) +
-#   geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
-#   geom_point(aes(color = view)) +
-#   geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(JiaSharma > 0.5 | TCGA-NSCLC > 0.5 | TCGA-NSCLC < -0.3 | JiaSharma < -0.3), aes(label = feature)) +
-#   scale_color_brewer(type = "qual", palette = "Dark2") +
-#   xlim(c(-1, 1)) +
-#   ylim(c(-1, 1)) +
-#   theme_cowplot() +
-#   background_grid() +
-#   stat_cor()
 ```
 
 ```{r, fig.width=10, fig.height=7}
@@ -591,6 +578,8 @@ lapply(c("Jia", "Sharma", "JiaSharma", "TRACERx"), function(dataset) {
 }) %>% ggarrange(plotlist = ., ncol = 2, nrow = 2, common.legend = TRUE)
 ggsave(file.path(params$artifact_dir, "plots", "feature_stability_score_barchart.svg"), device = svg)
 ```
+
+Correlation between rank-based and inter-intra-ratio based measures
 
 ```{r, fig.width=10, fig.height=7}
 corr_df <- feature_stability_df %>%

@@ -14,3 +14,4 @@ results
 containers
 analyses/**/figures
 analyses/**/MOFA_out
+analyses/.r_console_wrapper.sh
