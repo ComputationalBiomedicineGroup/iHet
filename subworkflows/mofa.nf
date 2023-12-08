@@ -49,7 +49,7 @@ workflow W10_mofa {
     def dir = "analyses/10_mofa"
     P11_easier(
         file_tuple("$dir/11_easier.R"),
-        Channel.fromPath("data/01_processed/bulk_rna_seq/*_expr_data*.rds")
+        Channel.fromPath("${ params.bulk_input_dir }/*_expr_data*.rds")
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
@@ -68,7 +68,7 @@ workflow W10_mofa {
         P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it}.mix(
             Channel.of(file("$dir/helper_functions.R")),
             P11_easier.out.collect(),
-            Channel.fromPath("data/01_processed/bulk_rna_seq/*.{txt,tsv}").collect(),
+            Channel.fromPath("${ params.bulk_input_dir }/*.{txt,tsv}").collect(),
             P13_run_mofa.out.models.collect()
         ).collect()
     )
