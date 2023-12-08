@@ -84,9 +84,7 @@ adata_nsclc.obs["cell_type"].nunique()
 # ## Cell-type stats
 
 # %%
-n_myel = np.sum(
-    adata_nsclc.obs["cell_type_coarse"].isin(["Macrophage/Monocyte", "cDC"])
-)
+n_myel = np.sum(adata_nsclc.obs["cell_type_coarse"].isin(["Macrophage/Monocyte", "cDC"]))
 n_myel, n_myel / adata_nsclc.shape[0]
 
 # %%
@@ -158,9 +156,7 @@ for scope, tmp_adata in {"m": adata_m, "nsclc": adata_nsclc}.items():
                 return_fig=True,
                 frameon=False,
             )
-            fig.savefig(
-                f"{artifact_dir}/umap_{color}_{scope}.svg", bbox_inches="tight", dpi=600
-            )
+            fig.savefig(f"{artifact_dir}/umap_{color}_{scope}.svg", bbox_inches="tight", dpi=600)
 
 # %% [markdown]
 # ## Dotplots
@@ -204,8 +200,8 @@ fig = sc.pl.dotplot(
         "cDC2": ["CD1C", "FCER1A", "CLEC10A"],
         "cDC2 CD1A-hi": ["CD1A", "CD207"],
         "Monocytes": ["FCN1"],
-        "Monocyte contentional": ["S100A12", "CD14", "VCAN"],
-        "Monocyte non-conventional": ["FCGR3A", "LST1"],
+        "Monocyte classical": ["S100A12", "CD14", "VCAN"],
+        "Monocyte non-classical": ["FCGR3A", "LST1"],
         "dividing": ["CDK1", "MKI67"],
     },
     return_fig=True,
@@ -230,7 +226,7 @@ fig = sc.pl.dotplot(
             "ISG15",
         ],
         "Inflammatory-TAMs": [
-       #      "CCL3L1",
+            #      "CCL3L1",
             "CCL4L2",
             "CXCL1",
             "CXCL2",
@@ -262,10 +258,13 @@ fig.savefig(f"{artifact_dir}/tam_dotplot.svg")
 adata_m.layers
 
 # %%
-pb_m = sh.pseudobulk.pseudobulk(adata_m[adata_m.obs["cell_type_macro"].str.startswith("TAM"), :], groupby=["cell_type_macro"], aggr_fun=np.sum)
+pb_m = sh.pseudobulk.pseudobulk(
+    adata_m[adata_m.obs["cell_type_macro"].str.startswith("TAM"), :], groupby=["cell_type_macro"], aggr_fun=np.sum
+)
 sc.pp.normalize_total(pb_m)
 sc.pp.log1p(pb_m)
 import scipy.stats
+
 pb_m.X = scipy.stats.zscore(pb_m.X)
 fig = sc.pl.matrixplot(
     pb_m,
@@ -284,7 +283,7 @@ fig = sc.pl.matrixplot(
             "ISG15",
         ],
         "Inflammatory-TAMs": [
-       #      "CCL3L1",
+            #      "CCL3L1",
             "CCL4L2",
             "CXCL1",
             "CXCL2",
@@ -348,9 +347,7 @@ marker_dict = {
     "Tumor cells LUAD": ["KRT7", "CD24"],
     "Tumor cells LUSC": ["SOX2", "KRT17"],
 }
-fig = sc.pl.dotplot(
-    adata_nsclc, groupby="cell_type", var_names=marker_dict, return_fig=True
-)
+fig = sc.pl.dotplot(adata_nsclc, groupby="cell_type", var_names=marker_dict, return_fig=True)
 fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
 
 # %% [markdown]
@@ -358,9 +355,7 @@ fig.savefig(f"{artifact_dir}/nsclc_dotplot.svg")
 
 # %%
 m_counts = (
-    adata_m.obs.groupby(
-        ["cell_type", "dataset", "study", "patient"], observed=True
-    )
+    adata_m.obs.groupby(["cell_type", "dataset", "study", "patient"], observed=True)
     .size()
     .reset_index(name="n_cells")
     .groupby(["cell_type", "dataset"])
@@ -387,11 +382,7 @@ tmp_df = m_counts.merge(
 )
 
 # %%
-tmp_df2 = (
-    tmp_df.groupby(["study", "cell_type"], observed=True)
-    .agg(n_cells=("n_cells", np.sum))
-    .reset_index()
-)
+tmp_df2 = tmp_df.groupby(["study", "cell_type"], observed=True).agg(n_cells=("n_cells", np.sum)).reset_index()
 
 # %%
 tmp_df2_study = (
@@ -418,9 +409,7 @@ txt = (
         x="cell_type",
         y=alt.Y("study", axis=None),
         text="n_cells",
-        color=alt.condition(
-            alt.datum.n_cells < 10000, alt.value("black"), alt.value("white")
-        ),
+        color=alt.condition(alt.datum.n_cells < 10000, alt.value("black"), alt.value("white")),
     )
 )
 studies = (
@@ -433,15 +422,11 @@ studies = (
     )
 )
 studies_txt = (
-    alt.Chart(tmp_df2_study)
-    .mark_text()
-    .encode(y="study", x=alt.X("x", title=None), text="n_patients_ge_10_cells")
+    alt.Chart(tmp_df2_study).mark_text().encode(y="study", x=alt.X("x", title=None), text="n_patients_ge_10_cells")
 )
 
 # %%
-ch = ((studies + studies_txt) | (heatmp + txt).properties(width=450)).configure_concat(
-    spacing=0
-)
+ch = ((studies + studies_txt) | (heatmp + txt).properties(width=450)).configure_concat(spacing=0)
 ch.display()
 
 # %%

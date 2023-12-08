@@ -89,15 +89,11 @@ tfs_of_interest = [
 pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
 
 # %%
-pb_progeny = sh.pseudobulk.pseudobulk(
-    adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean
-)
-pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(
-    adatas["nsclc"]["progeny"].obs["cell_type"].dtype
-)
+pb_progeny = sh.pseudobulk.pseudobulk(adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
+pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(adatas["nsclc"]["progeny"].obs["cell_type"].dtype)
 
 # %% [markdown]
-# Note: another round of z-scoreing after pseudobulking hardly makes any difference. 
+# Note: another round of z-scoreing after pseudobulking hardly makes any difference.
 
 # %%
 fig = sc.pl.matrixplot(
@@ -105,20 +101,17 @@ fig = sc.pl.matrixplot(
     var_names=pws_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
-    swap_axes=True,
+    swap_axes=False,
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_progeny.svg")
+pb_progeny.to_df().to_csv(f"{artifact_dir}/table_progeny.csv")
 
 # %%
-pb_dorothea = sh.pseudobulk.pseudobulk(
-    adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean
-)
-pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(
-    adatas["nsclc"]["dorothea"].obs["cell_type"].dtype
-)
+pb_dorothea = sh.pseudobulk.pseudobulk(adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
+pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(adatas["nsclc"]["dorothea"].obs["cell_type"].dtype)
 
 # %%
 fig = sc.pl.matrixplot(
@@ -126,23 +119,20 @@ fig = sc.pl.matrixplot(
     var_names=tfs_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
-    swap_axes=True,
+    swap_axes=False,
     vmin=-2.5,
     vmax=2.5,
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")
+pb_dorothea.to_df().to_csv(f"{artifact_dir}/table_dorothea.csv")
 
 # %% [markdown]
 # ## Including myeloid subclusters
 
 # %%
-pb_progeny = sh.pseudobulk.pseudobulk(
-    adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean
-)
-pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(
-    adatas["nsclc"]["progeny"].obs["cell_type"].dtype
-)
+pb_progeny = sh.pseudobulk.pseudobulk(adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
+pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(adatas["nsclc"]["progeny"].obs["cell_type"].dtype)
 
 # %%
 pb_dorothea = sh.pseudobulk.pseudobulk(
@@ -150,15 +140,11 @@ pb_dorothea = sh.pseudobulk.pseudobulk(
     groupby=["patient", "cell_type"],
     aggr_fun=np.mean,
 )
-pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(
-    adatas["nsclc"]["dorothea"].obs["cell_type"].dtype
-)
+pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(adatas["nsclc"]["dorothea"].obs["cell_type"].dtype)
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_progeny[
-        pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
-    ],
+    pb_progeny[pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
     var_names=pws_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
@@ -174,9 +160,7 @@ pb_progeny.layers["zscore"] = scipy.stats.zscore(pb_progeny.X, axis=1)
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_progeny[
-        pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
-    ],
+    pb_progeny[pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
     var_names=pws_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
@@ -190,9 +174,7 @@ fig.savefig(f"{artifact_dir}/heatmap_progeny_myeloid_zscore.svg")
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[
-        pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
-    ],
+    pb_dorothea[pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
     var_names=tfs_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
@@ -208,9 +190,7 @@ pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
 
 # %%
 fig = sc.pl.matrixplot(
-    pb_dorothea[
-        pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :
-    ],
+    pb_dorothea[pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
     var_names=tfs_of_interest,
     groupby="cell_type",
     cmap="coolwarm",
