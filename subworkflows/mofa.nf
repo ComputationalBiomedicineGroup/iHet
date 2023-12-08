@@ -15,8 +15,6 @@ include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkd
 )
 
 process P11_easier {
-    publishDir "${params.outdir}/10_mofa/${meta.id}", mode: params.publish_dir_mode
-
     input:
         tuple val(meta), path(script)
         path(expr_data)
@@ -34,8 +32,6 @@ process P11_easier {
 }
 
 process P13_run_mofa {
-    publishDir "${params.outdir}/10_mofa/${meta.id}", mode: params.publish_dir_mode
-
     input:
         tuple val(meta), path(script)
         each path(dataset)
