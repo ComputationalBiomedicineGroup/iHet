@@ -53,7 +53,7 @@ workflow W10_mofa {
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
-        [:],
+        ["include_tracerx": String.valueOf(params.include_tracerx)],
         P11_easier.out.collect()
     )
     P13_run_mofa(
@@ -64,7 +64,7 @@ workflow W10_mofa {
     )
     P14_mofa_analysis(
         file_tuple("$dir/14_mofa_analysis.Rmd"),
-        [features_dir: "./", easier_dir: "./", tmb_dir: "./"],
+        [features_dir: "./", easier_dir: "./", tmb_dir: "./", include_tracerx: String.valueOf(params.include_tracerx)],
         P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it}.mix(
             Channel.of(file("$dir/helper_functions.R")),
             P11_easier.out.collect(),

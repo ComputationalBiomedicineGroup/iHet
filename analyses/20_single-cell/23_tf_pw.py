@@ -107,7 +107,16 @@ fig = sc.pl.matrixplot(
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_progeny.svg")
-pb_progeny.to_df().to_csv(f"{artifact_dir}/table_progeny.csv")
+
+
+# %%
+def _export_df(pb):
+    df = pb.to_df()
+    df["cell_type"] = pb.obs["cell_type"]
+    return df.groupby("cell_type").agg("mean").T
+
+
+_export_df(pb_progeny).to_csv(f"{artifact_dir}/table_progeny.csv")
 
 # %%
 pb_dorothea = sh.pseudobulk.pseudobulk(adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
@@ -125,7 +134,8 @@ fig = sc.pl.matrixplot(
     return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")
-pb_dorothea.to_df().to_csv(f"{artifact_dir}/table_dorothea.csv")
+
+_export_df(pb_dorothea).to_csv(f"{artifact_dir}/table_dorothea.csv")
 
 # %% [markdown]
 # ## Including myeloid subclusters
