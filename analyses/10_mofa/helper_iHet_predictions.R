@@ -1,10 +1,15 @@
 
-# packages
+# packages #
 suppressPackageStartupMessages({
+  library("remotes")
   library("conflicted")
+  library("corrplot")
+  library("gplots")
+  library("RColorBrewer")
   library("Matrix")
   library("reshape2")
-  # remotes::install_github("olapuentesantana/easier", force = TRUE, upgrade = "never")
+  library("ggrepel")
+  library("GGally")
   library('easier')
   require('MOFA2') # read mofa models
   require('reshape2')
@@ -16,16 +21,24 @@ suppressPackageStartupMessages({
   conflict_prefer("mutate", "dplyr")
   conflict_prefer("filter", "dplyr")
   conflict_prefer("arrange", "dplyr")
+  library('ggpubr')
   library('tibble')
   library('magrittr')
   library('ggtern')
   library("ggplot2")
   conflict_prefer("aes", "ggplot2")
+  conflict_prefer("theme_bw", "ggplot2")
   library('ggforce')
+  library('svglite')
   library('tidyr')
   library('plyr')
   library('purrr')
+  library('survival')
+  library('ggfortify')
+  library('survminer')
+  library('gtsummary')
   library('stringr')
+  library('rstatix')
 })
 
 rdbu10_palette <- c(
@@ -323,17 +336,19 @@ categorize <- function(x, thresholds=NULL, labels = c(1,2,3)) {
   return(x.out)
 }
 
-get_iHet_associated_weights <- function(bootstrap_weights=TRUE, 
+get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE, 
                                         model="NSCLC",
                                         use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
-                                        cancer_type_hifs = c("NSCLC", "pancancer")){
+                                        cancer_type_hifs = c("NSCLC", "pancancer"),
+                                        scale_mofa_weights = FALSE){
   
-  feat_cor <- readRDS(paste0(repo_dir, "/data/correlation_features_fibroblasts_all_tissues.RDS"))
+  # Load knowledge of features correlated with information about the density of fibroblasts in tumor region 
+  feat_cor <- readRDS(corFibAllTissues)
   feat_cor_tmp <- feat_cor[[use_fibroblasts_hifs_tissue]][[cancer_type_hifs]]
   rownames(feat_cor_tmp) <- feat_cor_tmp$feature
   feat_cor_tmp <- feat_cor_tmp[!feat_cor_tmp$feature %in% c("Other", "DC", "Monocyte"),]
-  ix_sign <- which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)
-  
+  feat_sign <- feat_cor_tmp$feature[which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)]
+
   # 1. get MOFA weights
   # 2. Adjust sign of the factor 1 to have consistent positive 
   # association with immune response across bootstrap runs (get_rotation())
@@ -367,13 +382,7 @@ get_iHet_associated_weights <- function(bootstrap_weights=TRUE,
     }) %>%
       bind_rows() %>% select("feature", "factor 1", "view", "run")
     
-    F1_weights_mat <- F1_weights_df %>% 
-      pivot_wider(id_cols = !c("view"), 
-                  names_from = "run", values_from = "factor 1") %>%
-      column_to_rownames("feature") %>% 
-      as.matrix()
-    
-    F1_weights_df$weight <- as.vector(F1_weights_mat)
+    colnames(F1_weights_df)[2] <- "weight"
     
     ## Median  
   }else{
@@ -398,29 +407,38 @@ get_iHet_associated_weights <- function(bootstrap_weights=TRUE,
       ungroup() %>%
       rename_with(~ gsub("_median", "", .x), ends_with("_median"))
     
-    F1_weights_df <- median_weights$`factor 1`
-    names(F1_weights_df) <- median_weights$feature
+    F1_weights_df <- median_weights %>% select(view, feature, "factor 1")
+    
   }
+  colnames(F1_weights_df)[3] <- "weight"
   
-  feat_cor_tmp <- feat_cor_tmp[levels(F1_weights_df$feature),]
-  ix_sign <- rownames(feat_cor_tmp)[which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)]
-  
-  # iHet_excl (negate only cor features, and remove none cor features)
+  # iHet_excl weights (set cor features to 0)
   weights_excl <- F1_weights_df %>%
-    filter(feature %in% ix_sign) %>%
-    mutate(weight=-weight, score = "iHet_rev")
+    filter(feature %in% feat_sign) %>%
+    mutate(weight=0, score = "iHet_excl")
   
-  # iHet_rev (negate only cor features, and consider all weights)
+  # iHet_rev (negate only cor features)
   weights_rev <- F1_weights_df %>%
-    mutate(weight=ifelse(feature %in% ix_sign, -weight, weight), score = "iHet_excl")
+    filter(feature %in% feat_sign) %>%
+    mutate(weight=-weight, score = "iHet_rev")
   
   # iHet
   weights_iHet <- F1_weights_df %>%
     mutate(score = "iHet")
   
   all_weights <- rbind(weights_iHet, weights_excl, weights_rev)
+  all_weights_df <- all_weights %>% pivot_wider(id_cols = c(feature, view), names_from = score, values_from = weight)
+  all_weights_df <- all_weights_df %>% 
+    dplyr::rename("feature_type" = "view",
+                  "iHet_weights" = "iHet",
+                  "iHet_excl_weights" = "iHet_excl",
+                  "iHet_rev_weights" = "iHet_rev")
   
-  return(all_weights)
+  all_weights_df <- all_weights_df %>%
+    dplyr::mutate(iHet_excl_weights=ifelse(is.na(iHet_excl_weights), iHet_weights, iHet_excl_weights),
+                  iHet_rev_weights=ifelse(is.na(iHet_rev_weights), iHet_weights, iHet_rev_weights))
+  
+  return(all_weights_df)
 }
   
   
@@ -475,15 +493,9 @@ compute_iHet <- function(dataset,
         arrange(view, feature)
     }) %>%
       bind_rows() %>% select("feature", "factor 1", "view", "run")
-    
-    F1_weights_mat <- F1_weights_df %>% 
-      pivot_wider(id_cols = !c("view"), 
-                  names_from = "run", values_from = "factor 1") %>%
-      column_to_rownames("feature") %>% 
-      as.matrix()
-    
-    F1_weights_df$weight <- as.vector(F1_weights_mat)
-    
+  
+    colnames(F1_weights_df)[2] <- "weight"
+
   ## Median  
   }else{
     ## FF provided file: (paste0(repo_dir, "/data/iHet_data/median_weights.rds"))
@@ -511,7 +523,8 @@ compute_iHet <- function(dataset,
     names(F1_weights_df) <- median_weights$feature
   }
 
-  # ---
+  #  --- compute features --- #
+  
   # immune cell fractions
   ## quantiseq (easier returns already CD4 T = CD4 T + Treg)
   cellfrac <- easier::compute_cell_fractions(RNA_tpm = dataset$tpm)
@@ -519,7 +532,7 @@ compute_iHet <- function(dataset,
   cellfrac <- cellfrac %>% dplyr::rename("CD8 T" = "CD8+ T")
   
   ## Remove some cell types
-  if(all(c("DC", "Monocyte") %in% weights$feature)){
+  if(all(c("DC", "Monocyte") %in% F1_weights_df$feature)){
     cellfrac <- cellfrac[,colnames(cellfrac) != "Other"]
   }else{
     cellfrac <- cellfrac[,!(colnames(cellfrac) %in% c("Other", "DC", "Monocyte"))]
@@ -1009,6 +1022,9 @@ assess_predictive_performance <- function(iHet,
   
   rp_df <- list()
   
+  ## sort iHet (for correct transformation into matrix, prior to predict response) ##
+  iHet <- iHet %>% group_by(patient) %>% arrange(patient)
+  
   # select common samples
   if(use_bootstrap_weights) {
     
@@ -1022,6 +1038,12 @@ assess_predictive_performance <- function(iHet,
     
     rp_df$iHet <- iHet
     rp_df$iHet$run <- 1
+    
+    # creating a response matrix to evaluate bootstrap performance
+    rp_df$response <- matrix(response, 
+                             nrow = length(response), 
+                             ncol= 1)
+    rownames(rp_df$response) <- names(response)
   }
   
   # predict with iHet 
@@ -1037,16 +1059,17 @@ assess_predictive_performance <- function(iHet,
           
           perf_thr <- lapply(unique(iHet_sel$threshold), function(zz){
             iHet_method_thr <- subset(iHet_sel, threshold == zz)
-            iHet_mat <- matrix(iHet_method_thr$score, nrow=length(unique(iHet_method_thr$patient)),
-                               ncol=length(unique(iHet_method_thr$run)))
+            iHet_mat <- matrix(iHet_method_thr$score, 
+                               nrow=length(unique(iHet_method_thr$patient)),
+                               ncol=length(unique(iHet_method_thr$run)),
+                               byrow = TRUE)
             
             rownames(iHet_mat) <- unique(iHet_method_thr$patient)
             colnames(iHet_mat) <- unique(iHet_method_thr$run)
             
             # if (yy == "iHet_exclusion") pred <- ROCR::prediction(-iHet_mat, rp_df$response, label.ordering = c("NR", "R"))
             pred <- ROCR::prediction(iHet_mat, rp_df$response, label.ordering = c("NR", "R"))
-            roc_perf <- ROCR::performance(pred,yaxis, xaxis)
-            roc_perf <- ROCR::performance(pred, yaxis, xaxis)
+            roc_perf <- ROCR::performance(pred,measure = yaxis, x.measure = xaxis)
             auc_perf <- unlist(ROCR::performance(pred, auc_metric)@y.values)
             auc_perf <- matrix(auc_perf); rownames(auc_perf) <- 1:100 
             return(list(auc_perf=auc_perf))
@@ -1059,13 +1082,14 @@ assess_predictive_performance <- function(iHet,
           # iHet_sel <- subset(iHet_sel, threshold == 0)
           iHet_mat <- matrix(iHet_sel$score, 
                              nrow=length(unique(iHet_sel$patient)),
-                             ncol=length(unique(iHet_sel$run)))
+                             ncol=length(unique(iHet_sel$run)),
+                             byrow = TRUE)
           
           rownames(iHet_mat) <- unique(iHet_sel$patient)
           colnames(iHet_mat) <- unique(iHet_sel$run)
           
-          pred <- ROCR::prediction(iHet_mat, rp_df$response)
-          roc_perf <- ROCR::performance(pred, yaxis, xaxis)
+          pred <- ROCR::prediction(iHet_mat, rp_df$response, label.ordering = c("NR","R"))
+          roc_perf <- ROCR::performance(pred, measure = yaxis, x.measure = xaxis)
           auc_perf <- unlist(ROCR::performance(pred, auc_metric)@y.values)
           auc_perf <- matrix(auc_perf); rownames(auc_perf) <- 1:100 
           return(list(roc_perf=roc_perf, auc_perf=auc_perf))
@@ -1077,12 +1101,13 @@ assess_predictive_performance <- function(iHet,
       iHet_sel <- subset(rp_df$iHet, method == "iHet")
       iHet_mat <- matrix(iHet_sel$score, 
                          nrow=length(unique(iHet_sel$patient)),
-                         ncol=length(unique(iHet_sel$run)))
+                         ncol=length(unique(iHet_sel$run)),
+                         byrow = TRUE)
       
       rownames(iHet_mat) <- unique(iHet_sel$patient)
       colnames(iHet_mat) <- unique(iHet_sel$run)
       pred <- ROCR::prediction(iHet_mat, rp_df$response, label.ordering = c("NR", "R"))
-      roc_perf <- ROCR::performance(pred, yaxis, xaxis)
+      roc_perf <- ROCR::performance(pred, measure = yaxis, x.measure = xaxis)
       auc_perf <- unlist(ROCR::performance(pred, auc_metric)@y.values)
       auc_perf <- matrix(auc_perf); rownames(auc_perf) <- 1:100 
       return(list(roc_perf=roc_perf, auc_perf=auc_perf))
@@ -1094,30 +1119,53 @@ assess_predictive_performance <- function(iHet,
   
   if (plot_roc==TRUE){
     
-    legend_text <- sapply(method, function(xx){
-      # confidence intervals
-      if(xx != "iHet") tmp <- as.vector(ROC_data[[xx]]$tumor$auc_perf)
-      if(xx == "iHet") tmp <- ROC_data[[xx]]$auc_perf
-      mean <- mean(tmp)
-      stdev <-  sqrt(var(tmp))
-      n     <- 100
-      ciw   <- qt(0.975, n) * stdev / sqrt(n) # 95% CI
+    if(use_bootstrap_weights) {
       
-      # using ROCR package
-      if(xx != "iHet") ROCR::plot(ROC_data[[xx]]$tumor$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
-      if(xx == "iHet") ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+      legend_text <- sapply(method, function(xx){
+        # confidence intervals
+        if(xx != "iHet") tmp <- as.vector(ROC_data[[xx]]$tumor$auc_perf)
+        if(xx == "iHet") tmp <- ROC_data[[xx]]$auc_perf
+        mean <- mean(tmp)
+        stdev <-  sqrt(var(tmp))
+        n     <- 100
+        ciw   <- qt(0.975, n) * stdev / sqrt(n) # 95% CI
+        
+        # using ROCR package
+        if(xx != "iHet") ROCR::plot(ROC_data[[xx]]$tumor$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+        if(xx == "iHet") ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+        
+        if(metric=="precision_recall"){
+          legend_text <- paste0(xx,", AUCPR=", round(mean, 3), 
+                                " (95% CI: ", round(mean-ciw,3), ", ", 
+                                round(mean+ciw,3), ")")
+        }else{
+          legend_text <- paste0(xx,", AUC=", round(mean, 3), 
+                                " (95% CI: ", round(mean-ciw,3), ", ", 
+                                round(mean+ciw,3), ")")
+        }
+        return(legend_text)
+      })
       
-      if(metric=="precision_recall"){
-        legend_text <- paste0(xx,", AUCPR=", round(mean, 3), 
-                              " (95% CI: ", round(mean-ciw,3), ", ", 
-                              round(mean+ciw,3), ")")
-      }else{
-        legend_text <- paste0(xx,", AUC=", round(mean, 3), 
-                              " (95% CI: ", round(mean-ciw,3), ", ", 
-                              round(mean+ciw,3), ")")
-      }
-      return(legend_text)
-    })
+    }else{
+      
+      legend_text <- sapply(method, function(xx){
+        if(xx != "iHet") tmp <- as.vector(ROC_data[[xx]]$tumor$auc_perf)
+        if(xx == "iHet") tmp <- ROC_data[[xx]]$auc_perf
+        
+        # using ROCR package
+        if(xx != "iHet") ROCR::plot(ROC_data[[xx]]$tumor$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+        if(xx == "iHet") ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+        
+        if(metric=="precision_recall"){
+          legend_text <- paste0(xx,", AUCPR=", round(tmp, 3))
+        }else{
+          legend_text <- paste0(xx,", AUC=", round(tmp, 3))
+        }
+        return(legend_text)
+      })
+      
+    }
+    
     if(metric=="precision_recall"){
       legend(x=0.35, y=1.05, xjust = 0,
              legend = c(legend_text),
@@ -1160,15 +1208,14 @@ assess_predictive_performance <- function(iHet,
     
     ROC_data$iHet_inverted$tumor$roc_perf <- NULL
     auc_df_iHetinverted <- melt(ROC_data)
-    auc_df_iHet$Var2 <- auc_df$Var2 <- auc_df_iHetinverted$Var2 <- auc_df_iHetinverted$Var2 <- NULL
+    auc_df_iHet$Var2 <- auc_df_iHetinverted$Var2 <- NULL
     
-    auc_df_iHet[,3] <- NULL; auc_df_iHetinverted[,c(3,4)] <- NULL
+    auc_df_iHet[,c(3,4)] <- NULL; auc_df_iHetinverted[,c(3,4)] <- NULL
     colnames(auc_df_iHet) <- c("run", "auc")
     auc_df_iHet$method <- "iHet"
     colnames(auc_df_iHetinverted) <- c("run", "auc", "method")
     
     auc_df <- rbind(auc_df_iHet, auc_df_iHetinverted)
-    
     AUC <- auc_df
     
     # AUC <- NULL
