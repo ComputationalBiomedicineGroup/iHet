@@ -5,7 +5,6 @@ params:
     folderValidation: "../../../../../iHet/Validation/prediction_files/"
     zipMOFAmodels: "../../../../../iHet/iHet_data/MOFA_noDCandMono/MOFA_out.zip"
     TCGAbootstrapFeatureStats: "../../../../repo_pred/iHet_predictions/data/TCGA_bootstrap_features_stats.rds"
-    corFibAllTissues: "../../../../repo_pred/iHet_predictions/data/correlation_features_fibroblasts_all_tissues.RDS"
     weightsTCGAMOFA: "../../../../repo_pred/iHet_predictions/data/all_tcga_iHet_weights_bootstrap_noDCandMono_scaled.RDS"
     dataBagaevMFP: "../../../../repo_pred/iHet_predictions/data/immune_subtypes/bagaev_mfp_tcga.xlsx"
     dataTCGAfeatures: "../../../../iHet_data/features/TCGA_expr_data.features.rds"
@@ -24,7 +23,6 @@ params:
 repo_dir <- params$repo_dir
 zipMOFAmodels <- params$zipMOFAmodels
 TCGAbootstrapFeatureStats <- params$TCGAbootstrapFeatureStats
-corFibAllTissues <- params$corFibAllTissues
 folderValidation <- params$folderValidation
 folderValidationiHet <- params$folderValidationiHet
 
@@ -139,7 +137,8 @@ lusc_patients <- substr(gsub(".", "-", colnames(all_tcga$tpm$LUSC), fixed = TRUE
 iHet_df_luad <- iHet_df %>% filter(model == "LUAD" & pat_id %in% luad_patients)
 
 ## LUSC
-iHet_df_lusc <- iHet_df %>% filter(model == "LUSC" & pat_id %in% lusc_patients)
+iHet_df_lusc <- iHet_df %>% 
+  filter(model == "LUSC" & pat_id %in% lusc_patients)
 iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
 iHet_df$model <- "NSCLC"
 tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
@@ -148,11 +147,12 @@ tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
 
 # Compute median iHet (one value per patient)
 tcga_iHet_scores_median <- aggregate(tcga_iHet_scores, 
-                              score ~ method + model + pat_id, 
-                              FUN = "median")
+                                     score ~ method + model + pat_id, 
+                                     FUN = "median")
 
 # Save iHet scores matrix
-tcga_iHet_mat <- tcga_iHet_scores_median %>% pivot_wider(names_from = method, values_from = score)
+tcga_iHet_mat <- tcga_iHet_scores_median %>% 
+  pivot_wider(names_from = method, values_from = score)
 colnames(tcga_iHet_mat)[5] <- "iHet_rev"
 #saveRDS(object = tcga_iHet_mat, file = paste0("./iHet_ms/tcga_unified_iHet_scores.RDS"))
 
@@ -167,7 +167,7 @@ iHet_median_weights_tcga_NSCLC <- get_iHet_associated_weights(use_bootstrap_weig
 
 ## write into .csv file
 write.csv(iHet_median_weights_tcga_NSCLC, 
-          file = paste0(repo_dir, "/analysis/iHet_ms/SupplementaryTable2.csv"),
+          file = paste0(repo_dir, "../../../../SupplementaryTable2.csv"),
           col.names = TRUE, row.names = FALSE)
 
 
@@ -292,11 +292,6 @@ mofa_nsclc_w_df <- df_tcga_weights_median %>%
   dplyr::rename('variable' = 'feature')
 
 test_w_df <- inner_join(mofa_nsclc_w_df, test, by = "variable")
-
-# Visualize range of values per view
-range(subset(features_df_mfp_main_median, view == "Cell fractions")$median_value)
-range(subset(features_df_mfp_main_median, view == "Pathways")$median_value)
-range(subset(features_df_mfp_main_median, view == "TFs")$median_value)
 
 # -------------------------------------------- #
 ## Heatmap: features across molecular subtypes ##
@@ -592,7 +587,6 @@ tcga_iHet_scores$pat_id <- substr(tcga_iHet_scores$pat_id, 1, 12)
 tcga_iHet_scores <- aggregate(tcga_iHet_scores, score ~ method + model + pat_id, FUN = "median")
 
 # Immune response score
-#all_tcga <- readRDS("/Users/Oscar/ownCloud2/SystemsImmunoOncology/iHet_data/features/TCGA_expr_data.features.rds")
 all_tcga <- readRDS("../../../iHet_data/features/TCGA_expr_data.features.rds")
 #all_tcga[["immresp"]][["GBM"]] <- NULL
 all_tcga[["immresp"]][["NSCLC"]] <- rbind(all_tcga[["immresp"]][["LUAD"]], all_tcga[["immresp"]][["LUSC"]])
