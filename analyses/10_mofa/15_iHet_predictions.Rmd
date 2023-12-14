@@ -890,7 +890,8 @@ auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
 
       if (dataset %in% c("mariathasan", "gideauslanderpd1", "kim", "jung.nsclc")){
         # iHet scores
-        iHet_df <- readRDS(paste0("./iHet_ms/", dataset,"_iHet_scores_with_hifs_model_", tolower(hif_type),"_using_scaled_weights.RDS"))
+        iHet_df <- readRDS(paste0("../../../../repo_pred/iHet_predictions/analysis/iHet_ms/", dataset,"_iHet_scores_with_hifs_model_",
+                                  tolower(hif_type),"_using_scaled_weights.RDS"))
         
         # Unknown histology, average LUAD and LUSC iHet scores is used
         if (dataset %in% "jung.nsclc") iHet_df <- aggregate(iHet_df, score ~ patient + method + run + hif_tissue + dataset, FUN = "mean")
@@ -910,7 +911,7 @@ auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
                                               use_fibroblasts_hifs_tissue = c("tumor"),
                                               assess_cor_threshold = FALSE, 
                                               plot_roc=FALSE,
-                                              metric="precision_recall") #roc
+                                              metric="roc") #roc, precision_recall
       
       nR <- table(response)["R"]
       nNR <- table(response)["NR"]
@@ -932,12 +933,19 @@ levels_datasets <- c("gideauslanderpd1\n(R=20; NR=30)", "mariathasan\n(R=25; NR=
 auc_df$dataset <- factor(auc_df$dataset, levels = unique(levels_datasets))
 new_labels <- c(expression(SKCM^1), expression(BLCA^4), expression(STAD^3), expression(NSCLC^2))
 
+# Statistical test
+stat.test <- auc_df %>%
+  group_by(dataset) %>%
+  rstatix::wilcox_test(auc ~ method, ref.group = "iHet", paired = TRUE, alternative = "less") %>%
+  add_significance() %>% 
+  add_xy_position(x = "dataset")
+
 performance <- ggplot(auc_df, aes(x=dataset, y=auc, fill = method)) +
   geom_boxplot() + #geom_sina(alpha=0.5) +
   scale_y_continuous(limits=c(0, 1)) +
   theme_bw() +
   scale_x_discrete(labels= new_labels) +
-  scale_fill_manual(values = c("#aad52e","#d3002e")) +
+  scale_fill_manual(values = c("#7570B3","#D95F02")) +
   theme(
     axis.title.x = element_blank(), 
     axis.title.y = element_text(size = 14, color = "black"),
@@ -949,11 +957,19 @@ performance <- ggplot(auc_df, aes(x=dataset, y=auc, fill = method)) +
   #labs(y = "Area Under the ROC Curve (AUROC)", fill = "Method")
   labs(y = "Area Under Precision-Recall Curve (AUPRC)", fill = "Method")
 
+
 svglite(filename = "../../../../Figure3E.svg", width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 # svglite(filename = "../../../../Figure3F.svg", width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 performance
 dev.off()
 
+## Median AUC values
+tmp <- auc_df %>%
+  group_by(method, dataset) %>%
+  summarise(median_auc = median(auc))
+
+## Statistical comparison
+stat.test
 ```
 
 ## Integration with TMB
