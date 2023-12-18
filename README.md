@@ -45,9 +45,14 @@ curl TODO
 ```
 
 Note that some results depend on the [TRACERx data](https://pubmed.ncbi.nlm.nih.gov/31591602/) (EGAS00001003458, EGAD00001003206)
-which is not publicly available. The workflow is configured, by default, to run without these data. 
+which is not publicly available. The workflow is configured, by default, to run without these data.
 
-## Launch the workflow
+Briefly, the input data contains
+ * Gene expression data for each dataset
+ * Tumor mutational burden data for each dataset
+ * Single-cell data ([LuCA version 2022.05.10](https://doi.org/10.5281/zenodo.6411868))
+
+### Run nextflow
 
 ```bash
 # newer versions of nextflow are incompatible with the workflow. By setting this variable
@@ -67,15 +72,6 @@ nextflow run main.nf --outdir data/results
 * `subworkflows`: nextflow subworkflows
 * `tables`: contains static content that should be under version control (e.g. manually created tables)
 
-## Input data
-
-### Bulk RNA-seq
- * Gene expression data for each dataset
- * Tumor mutational burden data for each dataset
-
-### scRNA-seq 
- * TODO
-
 
 ## Output documentation
 
@@ -87,8 +83,12 @@ The analysis pipeline generates the following directory structure:
   12_prepare_mofa_data
   13_run_mofa
   14_mofa_analysis
+  15_iHet_predictions
 20_annotate_cell_types
-  ... # TODO
+  21_subset_atlas
+  22_annotate_myeloid
+  23_tf_pw
+  29_overview_plots
 ```
 
 In this section, we describe the directories and their contents in more detail.
@@ -134,4 +134,31 @@ notebook is in the main directory, all generated filesl are in the `artifacts` d
   different datasets and the associated p-values. 
 * `plots/`: Various plots
 
+### 15_iHet_predictions
+
+TODO
+
+### 21_subset_atlas 
+
+Subset the full LuCA atlas to only contain primary tumor samples from either LUAD or LUSC. Creates two h5ad files:
+ * `adata_m.h5ad`: Subset of myeloid cell-types
+ * `adata_nsclc.h5ad`: The full custom subset of the atlas. 
+
+### 22_annotate_myeloid
+
+Re-annotate myeloid cell-types at a better resolution than LuCA. Generates updated h5ad files:
+ * `adata_nsclc_reannotated.h5ad`
+ * `adata_myeloid_reannotated.h5ad`
+
+### 23_tf_pw
+
+Execute Dorothea and Progeny on the single-cell data. Generates heatmaps and summary tables. 
+
+### 29_overview_plots
+
+Generate single-cell related figures for the manuscript. 
+
+## Contact
+
+For reproducibility issues or any other requests regarding single-cell data analysis, please use the [issue tracker](https://github.com/ComputationalBiomedicineGroup/iHet/issues). For anything else, you can reach out to the corresponding author(s) as indicated in the manuscript.
 
