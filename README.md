@@ -7,17 +7,65 @@ This repository holds the code for all analyses related to
 All analyses are integrated into a nextflow pipeline and all dependencies are packaged as singularity containers.
 The pipeline consists of the following subworkflows
 
- * **MOFA**. Runs unsupervised multi-omics factorial analysis (MOFA) of bulk RNA-seq data from Jia, Sharma, TracerX and pan-cancer datasets from TCGA
- * **single-cell**. TODO
+ * **MOFA**. Run unsupervised multi-omics factorial analysis (MOFA) of bulk RNA-seq data from Jia, Sharma, TRACERx and 
+   pan-cancer datasets from TCGA
+ * **single-cell**. Create a custom subset of the [Lung Cancer Atlas](https://doi.org/10.1016/j.ccell.2022.10.008), 
+   re-annotate myeloid subtypes and perform transcription factor and pathway analysis. 
 
-## Usage
+## Launching the workflow
 
-To reproduce the analyses, run
+### Prerequisites
+* [Nextflow](https://www.nextflow.io/index.html#GetStarted), version 22.04.5
+* [Singularity/Apptainer](https://apptainer.org/), version 3.7 or higher (tested with 3.7.0-1.el7)
+* A machine with at least 200GB of memory
 
+### Obtaining data
+
+Before launching the workflow, you need to obtain input data and singularity containers from zenodo.
+First of all, clone this repository:
+
+```bash
+git clone https://github.com/ComputationalBiomedicineGroup/iHet.git
+cd iHet
 ```
-#TODO
-nextflow run main.nf
+
+Then, within the repository, download the data archives and extract then to the corresponding directories:
+
+```bash
+# singularity containers
+curl TODO
+
+# input data
+curl TODO
 ```
+
+Additionally, you can obtain the pre-computed results without running the workflow using
+```bash
+curl TODO
+```
+
+Note that some results depend on the [TRACERx data](https://pubmed.ncbi.nlm.nih.gov/31591602/) (EGAS00001003458, EGAD00001003206)
+which is not publicly available. The workflow is configured, by default, to run without these data. 
+
+## Launch the workflow
+
+```bash
+# newer versions of nextflow are incompatible with the workflow. By setting this variable
+# the correct version will be used automatically.
+export NXF_VER=22.04.5
+
+nextflow run main.nf --outdir data/results
+```
+
+## Structure of this repository
+
+* `analyses`: Place for e.g. jupyter/rmarkdown notebooks, gropued by their respective (sub-)workflows.
+* `containers`: place for singularity image files. Not part of the git repo and gets created by the download command.
+* `data`: place for input data and results in different subfolders. Gets populated by the download commands and by running the workflows.
+* `lib`: custom libraries and helper functions
+* `modules`: nextflow DSL2.0 modules
+* `subworkflows`: nextflow subworkflows
+* `tables`: contains static content that should be under version control (e.g. manually created tables)
 
 ## Input data
 
