@@ -18,3 +18,4 @@ analyses/**/MOFA_out
 analyses/.r_console_wrapper.sh
 .Rhistory
 data_iHet_predictions
+analyses/10_mofa/15_iHet_predictions.html

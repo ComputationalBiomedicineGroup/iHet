@@ -124,7 +124,7 @@ Contains `hdf5` datasets for each dataset holding the mofa models.
 ### 14_mofa_analysis
 
 Results of an Rmarkdown notebook with the analysis of the MOFA results. A rendered version of the 
-notebook is in the main directory, all generated filesl are in the `artifacts` directory: 
+notebook is in the main directory, all generated files are in the `artifacts` directory: 
 
 * `median_factors.rds`: Median factors across all boostraps for each dataset.
   Contains a list of dataframes (one for each dataset). 
@@ -136,7 +136,11 @@ notebook is in the main directory, all generated filesl are in the `artifacts` d
 
 ### 15_iHet_predictions
 
-TODO
+Results of an Rmarkdown notebook with the analysis of iHet predictions. A rendered version of the notebook is in the main directory, all
+generated files are in the `artifacts` directory:
+
+* `*_bootstrap_iHet_scores.rds`: Computed boostraped iHet scores for the four ICB-cohorts:  1. Non-small cell lung cancer (NSCLC, Jung cohort), 2. Melanoma (SKCM, combined Gide and Auslander), 3. Bladder 
+urothelial carcinoma (BLCA, Mariathasan cohort) and 4. Stomach adenocarcinoma (STAD, Kim cohort). 
 
 ### 21_subset_atlas 
 

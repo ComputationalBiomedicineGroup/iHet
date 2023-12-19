@@ -338,13 +338,13 @@ categorize <- function(x, thresholds=NULL, labels = c(1,2,3)) {
 
 get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE, 
                                         model="NSCLC",
-                                        use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
-                                        cancer_type_hifs = c("NSCLC", "pancancer"),
+                                        use_fibroblasts_hifs_tissue = "tumor",
+                                        cancer_type_hifs = c("NSCLC"),
                                         scale_mofa_weights = FALSE){
   
   # Load knowledge of features correlated with information about the density of fibroblasts in tumor region 
-  feat_cor <- readRDS(corFibAllTissues)
-  feat_cor_tmp <- feat_cor[[use_fibroblasts_hifs_tissue]][[cancer_type_hifs]]
+  feat_cor <- readRDS(params$dataCorHIF)
+  feat_cor_tmp <- feat_cor[[cancer_type_hifs]]
   rownames(feat_cor_tmp) <- feat_cor_tmp$feature
   feat_cor_tmp <- feat_cor_tmp[!feat_cor_tmp$feature %in% c("Other", "DC", "Monocyte"),]
   feat_sign <- feat_cor_tmp$feature[which(feat_cor_tmp$cor>0 & feat_cor_tmp$FDR<=0.05)]
@@ -449,7 +449,7 @@ compute_iHet <- function(dataset,
                                    "SKCM", "STAD", "THCA", "UCEC"), 
                          use_bootstrap_weights=FALSE,
                          method=c("iHet", "iHet_removed", "iHet_inverted", "iHet_exclusion"),
-                         use_fibroblasts_hifs_tissue = c("ESI", "tumor", "stroma", "epithelial"),
+                         use_fibroblasts_hifs_tissue = "tumor",
                          cancer_type_hifs = c("NSCLC", "pancancer"),
                          assess_cor_threshold = FALSE,
                          scale_mofa_weights = FALSE){
@@ -610,7 +610,7 @@ compute_iHet <- function(dataset,
   }
   
   # Load knowledge of features correlated with information about the density of fibroblasts in tumor region 
-  feat_cor <- readRDS(corFibAllTissues)
+  feat_cor <- readRDS(params$dataCorHIF)
 
   cat("Computing iHet score... \n")
   if (use_bootstrap_weights){
@@ -641,8 +641,8 @@ compute_iHet <- function(dataset,
             if (method_x != "iHet") {
               
               iHet_hifs <- lapply(use_fibroblasts_hifs_tissue, function(tissue){
-                print(tissue)
-                feat_cor_tmp <- feat_cor[[tissue]][[cancer_type_hifs]]
+                #print(tissue)
+                feat_cor_tmp <- feat_cor[[cancer_type_hifs]]
                 rownames(feat_cor_tmp) <- feat_cor_tmp$feature
                 feat_cor_tmp <- feat_cor_tmp[cfeatures,]
                 
@@ -744,7 +744,7 @@ compute_iHet <- function(dataset,
             
             iHet_hifs <- lapply(use_fibroblasts_hifs_tissue, function(tissue){
               print(tissue)
-              feat_cor_tmp <- feat_cor[[tissue]][[cancer_type_hifs]]
+              feat_cor_tmp <- feat_cor[[cancer_type_hifs]]
               rownames(feat_cor_tmp) <- feat_cor_tmp$feature
               feat_cor_tmp <- feat_cor_tmp[cfeatures,]
               
@@ -1275,7 +1275,7 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
         AUC_TMB <- performance(pred, measure = "auc")
         AUC_TMB <- AUC_TMB@y.values[[1]]
       }
-      cat("AUC_TMB: ", AUC_TMB, "\n")
+      #cat("AUC_TMB: ", AUC_TMB, "\n")
     }
   }
 
@@ -1321,7 +1321,7 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     pred <- ROCR::prediction(myscores_mat, myresponse_mat, label.ordering = c("NR", "R"))
     AUC_iHet_exclusion <- performance(pred, measure = "auc")
     AUC_iHet_exclusion <- mean(unlist(AUC_iHet_exclusion@y.values))
-    cat("Average (bootstrap) AUC_iHet_exclusion: ", AUC_iHet_exclusion, "\n")
+    #cat("Average (bootstrap) AUC_iHet_exclusion: ", AUC_iHet_exclusion, "\n")
     
     ### iHet
     # predictions matrix
@@ -1336,7 +1336,7 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     pred <- prediction(myscores_mat, myresponse_mat, label.ordering = c("NR", "R"))
     AUC_iHet <- performance(pred, measure = "auc")
     AUC_iHet <- mean(unlist(AUC_iHet@y.values))
-    cat("Average (bootstrap) AUC_iHet: ", AUC_iHet, "\n")
+    #cat("Average (bootstrap) AUC_iHet: ", AUC_iHet, "\n")
     
   }else{
     ## median
@@ -1344,13 +1344,13 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     pred <- prediction(myscores_df$iHet_exclusion, myscores_df$response, label.ordering = c("NR", "R"))
     AUC_iHet_exclusion <- performance(pred, measure = "auc")
     AUC_iHet_exclusion <- AUC_iHet_exclusion@y.values[[1]]
-    cat("AUC_iHet_exclusion: ", AUC_iHet_exclusion, "\n")
+    #cat("AUC_iHet_exclusion: ", AUC_iHet_exclusion, "\n")
 
     ### iHet
     pred <- prediction(myscores_df$iHet, myscores_df$response, label.ordering = c("NR", "R"))
     AUC_iHet <- performance(pred, measure = "auc")
     AUC_iHet <- AUC_iHet@y.values[[1]]
-    cat("AUC_iHet: ", AUC_iHet, "\n")
+    #cat("AUC_iHet: ", AUC_iHet, "\n")
   }
   
   # Integration of - iHet_exclusion, iHet_removed and TMB
@@ -1413,12 +1413,12 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
       data.tri$ciw_value <- qt(0.975, data.tri$n_value) * data.tri$stdev_value / sqrt(data.tri$n_value) # 95% CI
       data.tri$is.max <- FALSE
       data.tri$is.max[data.tri$mean_value == (max(data.tri[,"mean_value"]))] <- TRUE
-      cat("Average (bootstrap) AUC_max: ", max(data.tri[,"mean_value"]), "\n")
+      #cat("Average (bootstrap) AUC_max: ", max(data.tri[,"mean_value"]), "\n")
       
       # Add variable for the use of equal weights
       data.tri$equal.weight <- FALSE
       data.tri$equal.weight[data.tri$Right == 1/3 & data.tri$Right == 1/3 & data.tri$Left == 1/3] <- TRUE
-      cat("Average (bootstrap) AUC_equal.weight: ", data.tri$mean_value[data.tri$equal.weight], "\n")
+      #cat("Average (bootstrap) AUC_equal.weight: ", data.tri$mean_value[data.tri$equal.weight], "\n")
       
     }else{
       
@@ -1462,12 +1462,12 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
 
       data.tri$is.max <- FALSE
       data.tri$is.max[data.tri$value == (max(data.tri[,"value"]))] <- TRUE
-      cat("AUC_max: ", max(data.tri[,"value"]), "\n")
+      #cat("AUC_max: ", max(data.tri[,"value"]), "\n")
       
       # Add variable for the use of equal weights
       data.tri$equal.weight <- FALSE
       data.tri$equal.weight[data.tri$Right == 1/3 & data.tri$Right == 1/3 & data.tri$Left == 1/3] <- TRUE
-      cat("AUC_equal.weight: ", data.tri$value[data.tri$equal.weight], "\n")
+      #cat("AUC_equal.weight: ", data.tri$value[data.tri$equal.weight], "\n")
       
     }
       
@@ -1480,16 +1480,18 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
       ## bootstrap
       
       g <- ggtern(data=data.tri, ggtern::aes(x = Left, y = Top, z = Right)) +
-        theme_bw() + theme_hidetitles() + theme_hidearrows() +
-        geom_point(shape=21,size=5, aes(fill=mean_value, col=is.max, alpha=is.max)) +
-        geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
-        geom_crosshair_tern(data = subset(data.tri, equal.weight==TRUE), lty=2, colour = "black") + 
+        ggplot2::theme_bw() + 
+        ggtern::theme_hidetitles() + 
+        ggtern::theme_hidearrows() +
+        ggplot2::geom_point(shape=21,size=5, aes(fill=mean_value, col=is.max, alpha=is.max)) +
+        ggtern::geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
+        ggtern::geom_crosshair_tern(data = subset(data.tri, equal.weight==TRUE), lty=2, colour = "black") + 
         # scale_fill_gradient(name="AUC", low="white", high=palette[2], limit=c(0.5, 0.9))+
         # scale_fill_gradient(name="AUC", trans = "log", low="#264653", high="#e76f51", limit=c(0.5, 0.9))+
-        scale_alpha_manual(values = c(0.6,0.9))+
-        scale_fill_viridis(name="AUC", option = "A", limit=c(0.5, 0.9))+
-        scale_colour_manual(values = c("white", "black")) + 
-        ggtitle(paste0(dataset_name, 
+        ggplot2::scale_alpha_manual(values = c(0.6,0.9))+
+        viridis::scale_fill_viridis(name="AUC", option = "A", limit=c(0.5, 0.9))+
+        ggplot2::scale_colour_manual(values = c("white", "black")) + 
+        ggplot2::ggtitle(paste0(dataset_name, 
                        "\niHet: ", round(AUC_iHet_removed,2), 
                        "\niHet_IExcl: ", round(AUC_iHet_exclusion,2), 
                        "\nTMB: ", round(AUC_TMB,2), 
@@ -1508,33 +1510,36 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
         Tlab("TMB") +
         Rlab("iHet") +
         Llab("iHet_IExcl") +
-        theme_bw() +
-        theme(plot.title=element_text(vjust = -30), axis.text = element_text(colour = "black"),
-              axis.title = element_text(face = "bold"))
+        ggplot2::theme_bw() +
+        ggplot2::theme(plot.title=element_text(vjust = -30), 
+                       axis.text = element_text(colour = "black"),
+                       axis.title = element_text(face = "bold"))
       
-      print(g)
-      if (save_figure_format == ".pdf"){
-        ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_bootstrap.pdf"),
-               width = 8, height = 6)
-      }else if (save_figure_format == ".png"){
-        ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_bootstrap.png"),
-               width = 8, height = 6)
-      }
+      # print(g)
+      # if (save_figure_format == ".pdf"){
+      #   ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_bootstrap.pdf"),
+      #          width = 8, height = 6)
+      # }else if (save_figure_format == ".png"){
+      #   ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_bootstrap.png"),
+      #          width = 8, height = 6)
+      # }
       
   
     }else{
       ## median
       
       g <- ggtern(data=data.tri,ggtern::aes(x = Left, y = Top, z = Right)) +
-        theme_bw() + theme_hidetitles() + theme_hidearrows() +
-        geom_point(shape=21,size=5, aes(fill=value, col=is.max, alpha=is.max)) +
-        geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
+        ggplot2::theme_bw() +
+        ggtern::theme_hidetitles() + 
+        ggtern::theme_hidearrows() +
+        ggplot2::geom_point(shape=21,size=5, aes(fill=value, col=is.max, alpha=is.max)) +
+        ggtern::geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") + 
         # scale_fill_gradient(name="AUC", low="white", high=palette[2], limit=c(0.5, 0.9))+
         # scale_fill_gradient(name="AUC", trans = "log", low="#264653", high="#e76f51", limit=c(0.5, 0.9))+
-        scale_alpha_manual(values = c(0.6,0.9))+
-        scale_fill_viridis(name="AUC", option = "A", limit=c(0.5, 0.9))+
-        scale_colour_manual(values = c("white", "black")) + 
-        ggtitle(paste0(dataset_name, 
+        ggplot2::scale_alpha_manual(values = c(0.6,0.9))+
+        viridis::scale_fill_viridis(name="AUC", option = "A", limit=c(0.5, 0.9))+
+        ggplot2::scale_colour_manual(values = c("white", "black")) + 
+        ggplot2::ggtitle(paste0(dataset_name, 
                        "\niHet (IR): ", round(AUC_iHet_removed,2), 
                        "\niHet (noExcl): ", round(AUC_iHet_exclusion,2), 
                        "\nTMB: ", round(AUC_TMB,2), 
@@ -1546,19 +1551,20 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
         Tlab("TMB") +
         Rlab("iHet\n(IR)") +
         Llab("iHet\n(noExcl)") +
-        theme_bw() +
-        theme(plot.title=element_text(vjust = -30), axis.text = element_text(colour = "black"),
-              axis.title = element_text(face = "bold"))
+        ggplot2::theme_bw() +
+        ggplot2::theme(plot.title=element_text(vjust = -30), 
+                       axis.text = element_text(colour = "black"),
+                       axis.title = element_text(face = "bold"))
       
-      print(g)
+      #print(g)
       
-      if (save_figure_format == ".pdf"){
-        ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_median.pdf"),
-               width = 8, height = 6)
-      }else if (save_figure_format == ".png"){
-        ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_median.png"),
-               width = 8, height = 6)
-      }
+      # if (save_figure_format == ".pdf"){
+      #   ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_median.pdf"),
+      #          width = 8, height = 6)
+      # }else if (save_figure_format == ".png"){
+      #   ggsave(filename = paste0("./iHet_ms/iHet_iHetExcl_TMB_", normalize,  "_" ,file_name, "_", tissue, "_performance_results_median.png"),
+      #          width = 8, height = 6)
+      # }
     }
     return(g)
     #return(list("data.duo"=data.duo, "data.duo_tmb"=data.duo_tmb,"data.tri"=data.tri))
