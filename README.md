@@ -33,15 +33,15 @@ Then, within the repository, download the data archives and extract then to the 
 
 ```bash
 # singularity containers
-curl TODO
+curl -L "https://figshare.com/ndownloader/files/43761759" | tar xvJ
 
 # input data
-curl TODO
+curl -L "https://figshare.com/ndownloader/files/43761567" | tar xvJ
 ```
 
 Additionally, you can obtain the pre-computed results without running the workflow using
 ```bash
-curl TODO
+curl -L "https://figshare.com/ndownloader/files/43762119" | tar xvJ
 ```
 
 Note that some results depend on the [TRACERx data](https://pubmed.ncbi.nlm.nih.gov/31591602/) (EGAS00001003458, EGAD00001003206)
