@@ -66,7 +66,7 @@ getFeat <- function(dataobj,
     }
 
     # Quantification of pathway activity scores with RPOGENy
-    pathway <- compute_pathways_scores(
+    pathway <- compute_pathway_activity(
       RNA_counts = dataobj$count[[dataset]],
       remove_sig_genes_immune_response = remove.genes.ICB_proxies
       # remove.genes.ICB_proxies = remove.genes.ICB_proxies
