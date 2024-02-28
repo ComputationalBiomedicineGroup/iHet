@@ -69,13 +69,11 @@ getFeat <- function(dataobj,
     pathway <- compute_pathway_activity(
       RNA_counts = dataobj$count[[dataset]],
       remove_sig_genes_immune_response = remove.genes.ICB_proxies
-      # remove.genes.ICB_proxies = remove.genes.ICB_proxies
     )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
       RNA_tpm = dataobj$tpm[[dataset]],
-      # remove.genes.ICB_proxies = remove.genes.ICB_proxies
     )
 
     # Storing of the computed features in the output object
