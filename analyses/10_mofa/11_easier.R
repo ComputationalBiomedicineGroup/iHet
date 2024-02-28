@@ -33,7 +33,7 @@ getFeat <- function(dataobj,
     "IFNy",
     "Ayers_expIS",
     "Tcell_inflamed",
-    # "RIR",
+    "resF_down",
     "TLS"
   )
 
