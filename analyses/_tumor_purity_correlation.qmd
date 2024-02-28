@@ -1,0 +1,64 @@
+
+```{r}
+library(conflicted)
+library(immunedeconv)
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+nsclc_data <- read_rds("/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/NSCLC_expr_data_sel.rds")
+```
+
+```{r}
+estimate <- lapply(names(nsclc_data$tpm), \(x) immunedeconv::deconvolute(nsclc_data$tpm[[x]], method = "estimate") |> column_to_rownames("cell_type"))
+names(estimate) <- names(nsclc_data$tpm)
+```
+
+```{r}
+median_factors <- read_rds("/home/sturm/projects/2021/nsclc_heterogeneity/data/00_backup/2023-12-18_preprint_version/results/10_mofa/14_mofa_analysis/artifacts/median_factors.rds")
+```
+
+```{r}
+df <- as_tibble(estimate$Jia2018["tumor purity", ] |> t(), rownames = "sample")
+factors <- median_factors$Jia |> mutate(sample = str_replace(sample, "Jia-", ""))
+df <- df |> left_join(factors, by = "sample")
+ggplot(df, aes(x = `tumor purity`, y = `factor 1`)) +
+    geom_point() +
+    stat_cor() +
+    ggtitle("Jia")
+```
+
+```{r}
+df <- as_tibble(estimate$Sharma2019["tumor purity", ] |> t(), rownames = "sample")
+factors <- median_factors$Sharma |> mutate(sample = str_replace(sample, "Sharma-", ""))
+df <- df |> left_join(factors, by = "sample")
+ggplot(df, aes(x = `tumor purity`, y = `factor 1`)) +
+    geom_point() +
+    stat_cor() +
+    ggtitle("Sharma")
+```
+
+```{r}
+df <- as_tibble(estimate$LUAD["tumor purity", ] |> t(), rownames = "sample")
+factors <- median_factors$LUAD
+df <- df |> left_join(factors, by = "sample")
+ggplot(df, aes(x = `tumor purity`, y = `factor 1`)) +
+    geom_point() +
+    stat_cor() +
+    ggtitle("LUAD")
+```
+
+```{r}
+df <- as_tibble(estimate$LUAD["tumor purity", ] |> t(), rownames = "sample")
+factors <- median_factors$LUAD
+df <- df |> left_join(factors, by = "sample")
+ggplot(df, aes(x = `tumor purity`, y = `factor 1`)) +
+    geom_point() +
+    stat_cor() +
+    ggtitle("LUSC")
+```
