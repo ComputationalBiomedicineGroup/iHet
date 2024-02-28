@@ -83,8 +83,8 @@ getFeat <- function(dataobj,
 
     proxies.mat <- compute_scores_immune_response(
       RNA_tpm = dataobj$tpm[[dataset]],
-      selected_scores = selscores
     )
+    proxies.mat <- proxies.mat[, selscores]
 
     # Rotation of the "Chemokines" score to agree with "CYT" direction
     chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
