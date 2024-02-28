@@ -33,7 +33,7 @@ getFeat <- function(dataobj,
     "IFNy",
     "Ayers_expIS",
     "Tcell_inflamed",
-    "RIR",
+    # "RIR",
     "TLS"
   )
 
@@ -83,34 +83,24 @@ getFeat <- function(dataobj,
     dataobj$pathway[[dataset]] <- pathway$scores
     dataobj$tf[[dataset]] <- TF$scores
 
-    # # Computation of immune response scores (proxies)
-    # proxies <- compute_gold_standards(
-    #     RNA_tpm =
-    #         as.data.frame(dataobj$tpm[[dataset]]),
-    #     list_gold_standards = selscores,
-    #     cancertype = cancertype
-    # )
-    # proxies.mat <- as.data.frame(matrix(unlist(proxies),
-    #     nrow = length(proxies),
-    #     byrow = T
-    # ))
-    # rownames(proxies.mat) <- names(proxies)
-    # colnames(proxies.mat) <- colnames(proxies[[1]])
-    # proxies.mat <- t(proxies.mat)
+    proxies.mat <- compute_scores_immune_response(
+      RNA_tpm = dataobj$tpm[[dataset]],
+      selected_scores = selscores
+    )
 
-    # # Rotation of the "Chemokines" score to agree with "CYT" direction
-    # chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
-    # if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
+    # Rotation of the "Chemokines" score to agree with "CYT" direction
+    chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
+    if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
 
-    # # Computation of the median scaled response
-    # immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
-    # response <- proxies.mat[, match(selscores, colnames(proxies.mat))]
-    # response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
-    # response <- apply(response, 2, median)
-    # proxies.mat <- as.data.frame(proxies.mat)
-    # proxies.mat$response <- response
+    # Computation of the median scaled response
+    immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
+    response <- proxies.mat[, match(selscores, colnames(proxies.mat))]
+    response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
+    response <- apply(response, 2, median)
+    proxies.mat <- as.data.frame(proxies.mat)
+    proxies.mat$response <- response
 
-    # dataobj$immresp[[dataset]] <- proxies.mat
+    dataobj$immresp[[dataset]] <- proxies.mat
   }
 
   # Removal of gene expression data
