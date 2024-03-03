@@ -78,8 +78,8 @@ getFeat <- function(dataobj,
 
     # Storing of the computed features in the output object
     dataobj$cellfrac[[dataset]] <- cellfrac
-    dataobj$pathway[[dataset]] <- pathway$scores
-    dataobj$tf[[dataset]] <- TF$scores
+    dataobj$pathway[[dataset]] <- pathway
+    dataobj$tf[[dataset]] <- TF
 
     proxies.mat <- compute_scores_immune_response(
       RNA_tpm = dataobj$tpm[[dataset]],
