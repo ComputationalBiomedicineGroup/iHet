@@ -35,47 +35,47 @@ library(ggrepel)
 ```{r}
 #' Bring features into 'tidy' format required by MOFA
 processFeatures <- function(data, dataset_id) {
-    add_patient_col <- function(df) {
-        if (dataset_id %in% c("Jia", "Sharma", "TRACERx")) {
-            df %>%
-                separate("sample", c("patient", "replicate"), remove = FALSE) %>%
-                # exclude normal samples
-                filter(replicate != "N") %>%
-                select(-replicate) %>%
-                # prefix with dataset
-                mutate(patient = paste0(dataset_id, "-", patient)) %>%
-                mutate(sample = paste0(dataset_id, "-", sample))
-        } else {
-            df %>% mutate(patient = sample)
-        }
+  add_patient_col <- function(df) {
+    if (dataset_id %in% c("Jia", "Sharma", "TRACERx")) {
+      df %>%
+        separate("sample", c("patient", "replicate"), remove = FALSE) %>%
+        # exclude normal samples
+        filter(replicate != "N") %>%
+        select(-replicate) %>%
+        # prefix with dataset
+        mutate(patient = paste0(dataset_id, "-", patient)) %>%
+        mutate(sample = paste0(dataset_id, "-", sample))
+    } else {
+      df %>% mutate(patient = sample)
     }
+  }
 
-    do_pivot <- function(df, view) {
-        df %>%
-            as_tibble(rownames = "sample") %>%
-            pivot_longer(cols = -sample, names_to = "feature") %>%
-            mutate(view = !!view) %>%
-            add_patient_col()
-    }
+  do_pivot <- function(df, view) {
+    df %>%
+      as_tibble(rownames = "sample") %>%
+      pivot_longer(cols = -sample, names_to = "feature") %>%
+      mutate(view = !!view) %>%
+      add_patient_col()
+  }
 
-    cellfrac.df <- data$cellfrac[[dataset_id]] %>%
-        as.data.frame() %>%
-        # fix naming CD8
-        rename(`CD8 T` = `CD8+ T`) %>%
-        # summarise Tregs and CD4, but keep treg estimate.
-        # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
-        mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
-        do_pivot("Immune cells quantification") %>%
-        # DCs and Monocytes show unstable results in the different bootstraps -> exclude them.
-        filter(!(feature %in% c("Other", "DC", "Monocyte")))
-    pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
-    tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
-    response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
+  cellfrac.df <- data$cellfrac[[dataset_id]] %>%
+    as.data.frame() %>%
+    # fix naming CD8
+    rename(`CD8 T` = `CD8+ T`) %>%
+    # summarise Tregs and CD4, but keep treg estimate.
+    # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
+    mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
+    do_pivot("Immune cells quantification") %>%
+    # DCs and Monocytes show unstable results in the different bootstraps -> exclude them.
+    filter(!(feature %in% c("Other", "DC", "Monocyte")))
+  pathways.df <- do_pivot(data$pathway[[dataset_id]], "Pathway scores")
+  tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors")
+  response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
 
-    feature_df <- bind_rows(cellfrac.df, pathways.df, tfs.df, response.df) %>%
-        mutate(group = dataset_id, dataset = dataset_id)
+  feature_df <- bind_rows(cellfrac.df, pathways.df, tfs.df, response.df) %>%
+    mutate(group = dataset_id, dataset = dataset_id)
 
-    return(feature_df)
+  return(feature_df)
 }
 ```
 
@@ -83,7 +83,7 @@ processFeatures <- function(data, dataset_id) {
 gtex_data <- readRDS(file.path(params$input_dir, "GTEx_expr_data.features.rds"))
 nsclc_data <- readRDS(file.path(params$input_dir, "NSCLC_expr_data_sel.features.rds"))
 if (INCLUDE_TRACERX) {
-    tracerx_data <- readRDS(file.path(params$input_dir, "TRACERx_expr_data.features.rds"))
+  tracerx_data <- readRDS(file.path(params$input_dir, "TRACERx_expr_data.features.rds"))
 }
 tcga_data <- readRDS(file.path(params$input_dir, "TCGA_expr_data.features.rds"))
 data_all <- tcga_data
@@ -92,12 +92,12 @@ data_all <- tcga_data
 # LUAD and LUSC are contained in both tcga and nsclc. They are identical
 # and we use the version contained in the TCGA object.
 for (slot in names(gtex_data)) {
-    data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
-    data_all[[slot]][["Jia"]] <- nsclc_data[[slot]][["Jia2018"]]
-    data_all[[slot]][["Sharma"]] <- nsclc_data[[slot]][["Sharma2019"]]
-    if (INCLUDE_TRACERX) {
-        data_all[[slot]][["TRACERx"]] <- tracerx_data[[slot]][["TRACERx"]]
-    }
+  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
+  data_all[[slot]][["Jia"]] <- nsclc_data[[slot]][["Jia2018"]]
+  data_all[[slot]][["Sharma"]] <- nsclc_data[[slot]][["Sharma2019"]]
+  if (INCLUDE_TRACERX) {
+    data_all[[slot]][["TRACERx"]] <- tracerx_data[[slot]][["TRACERx"]]
+  }
 }
 DATASETS <- names(data_all$count)
 ```
@@ -106,7 +106,7 @@ DATASETS <- names(data_all$count)
 ## Process features
 ```{r processfeatures}
 data_all_tidy <- sapply(DATASETS, function(dataset_id) {
-    processFeatures(data_all, dataset_id)
+  processFeatures(data_all, dataset_id)
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 # We want to keep JiaSharma a multigroup model
@@ -121,11 +121,11 @@ saveRDS(data_all_tidy, file = file.path(params$artifact_dir, "data_all_tidy.rds"
 ## Process features for MOFA
 ```{r processfeatures_mofa}
 feature_data <- sapply(data_all_tidy$dataset %>% unique(), function(dataset_id) {
-    data_all_tidy %>%
-        filter(dataset == dataset_id) %>%
-        select(-dataset) %>%
-        filter(view %in% c("Immune cells quantification", "Transcription factors", "Pathway scores")) %>%
-        mutate(value = if_else(view == "Immune cells quantification", log10(value * 100 + 0.001), value))
+  data_all_tidy %>%
+    filter(dataset == dataset_id) %>%
+    select(-dataset) %>%
+    filter(view %in% c("Immune cells quantification", "Transcription factors", "Pathway scores")) %>%
+    mutate(value = if_else(view == "Immune cells quantification", log10(value * 100 + 0.001), value))
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 feature_data$JiaSharma <- bind_rows(feature_data$Jia, feature_data$Sharma)
@@ -135,7 +135,7 @@ feature_data$NSCLC <- bind_rows(feature_data$LUAD, feature_data$LUSC) %>% mutate
 ### save feature data
 ```{r}
 lapply(names(feature_data), function(dataset_id) {
-    saveRDS(feature_data[[dataset_id]], file = file.path(params$artifact_dir, paste0("mofa_", dataset_id, ".rds")), compress = FALSE)
+  saveRDS(feature_data[[dataset_id]], file = file.path(params$artifact_dir, paste0("mofa_", dataset_id, ".rds")), compress = FALSE)
 })
 ```
 
@@ -144,39 +144,39 @@ lapply(names(feature_data), function(dataset_id) {
 # Build random bootstrap datasets for each dataset
 N_BOOTSTRAP <- 100
 bootstrap_datasets <- sapply(DATASETS, function(dataset_id) {
-    samples <- feature_data[[dataset_id]]$sample %>% unique()
-    lapply(1:N_BOOTSTRAP, function(i) {
-        set.seed(i)
-        # make new sample ids unique (required for MOFA)!
-        sample_df <- tibble(sample = sample(samples, replace = TRUE)) %>%
-            mutate(sample_id = row_number())
-        feature_data[[dataset_id]] %>%
-            right_join(sample_df) %>%
-            mutate(sample = paste0(sample, "_", sample_id))
-    })
+  samples <- feature_data[[dataset_id]]$sample %>% unique()
+  lapply(1:N_BOOTSTRAP, function(i) {
+    set.seed(i)
+    # make new sample ids unique (required for MOFA)!
+    sample_df <- tibble(sample = sample(samples, replace = TRUE)) %>%
+      mutate(sample_id = row_number())
+    feature_data[[dataset_id]] %>%
+      right_join(sample_df) %>%
+      mutate(sample = paste0(sample, "_", sample_id))
+  })
 }, simplify = FALSE, USE.NAMES = TRUE)
 
 bootstrap_datasets$JiaSharma <- lapply(1:N_BOOTSTRAP, function(i) {
-    bind_rows(
-        bootstrap_datasets$Jia[[i]],
-        bootstrap_datasets$Sharma[[i]]
-    )
+  bind_rows(
+    bootstrap_datasets$Jia[[i]],
+    bootstrap_datasets$Sharma[[i]]
+  )
 })
 bootstrap_datasets$NSCLC <- lapply(1:N_BOOTSTRAP, function(i) {
-    bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
+  bind_rows(bootstrap_datasets$LUAD[[i]], bootstrap_datasets$LUSC[[i]])
 })
 ```
 
 ### save bootstrap datasets
 ```{r}
 lapply(names(bootstrap_datasets), function(dataset_id) {
-    lapply(1:N_BOOTSTRAP, function(i) {
-        saveRDS(bootstrap_datasets[[dataset_id]][[i]],
-            file = file.path(params$artifact_dir, paste0(
-                "mofa_boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
-            )), compress = FALSE
-        )
-    })
+  lapply(1:N_BOOTSTRAP, function(i) {
+    saveRDS(bootstrap_datasets[[dataset_id]][[i]],
+      file = file.path(params$artifact_dir, paste0(
+        "mofa_boot_", dataset_id, "_", str_pad(i, 4, pad = "0"), ".rds"
+      )), compress = FALSE
+    )
+  })
 })
 ```
 
