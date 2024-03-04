@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds>
+  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds>
 
 " -> doc
 
@@ -12,31 +12,14 @@ library(immunedeconv)
 
 args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
-immscore_file <- args[2]
-output_file <- args[3]
+output_file <- args[2]
 
 getFeat <- function(dataobj,
                     cancertype = "LUAD",
                     remove.genes.ICB_proxies = FALSE,
                     onlyEasier = TRUE,
                     epic = FALSE,
-                    proxies = TRUE,
-                    zscoredata = "../../tables/easier_Zscores/immscoreZ.rds") {
-  immscoreZ <- readRDS(zscoredata)
-
-  # List of immune response scores to be computed
-  selscores <- c(
-    "CYT",
-    "Roh_IS",
-    "chemokines",
-    "Davoli_IS",
-    "IFNy",
-    "Ayers_expIS",
-    "Tcell_inflamed",
-    "resF_down",
-    "TLS"
-  )
-
+                    proxies = TRUE) {
   # List of datasets in the input object
   datasets <- names(dataobj[[1]])
 
@@ -76,29 +59,15 @@ getFeat <- function(dataobj,
       RNA_tpm = dataobj$tpm[[dataset]],
     )
 
+    immscore <- compute_scores_immune_response(
+      RNA_tpm = dataobj$tpm[[dataset]],
+    )
+
     # Storing of the computed features in the output object
     dataobj$cellfrac[[dataset]] <- cellfrac
     dataobj$pathway[[dataset]] <- pathway
     dataobj$tf[[dataset]] <- TF
-
-    proxies.mat <- compute_scores_immune_response(
-      RNA_tpm = dataobj$tpm[[dataset]],
-    )
-    proxies.mat <- proxies.mat[, selscores]
-
-    # Rotation of the "Chemokines" score to agree with "CYT" direction
-    chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
-    if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
-
-    # Computation of the median scaled response
-    immscoreZ <- immscoreZ[match(selscores, immscoreZ$score), ]
-    response <- proxies.mat[, match(selscores, colnames(proxies.mat))]
-    response <- ((t(response) - immscoreZ$mean) / immscoreZ$sd)
-    response <- apply(response, 2, median)
-    proxies.mat <- as.data.frame(proxies.mat)
-    proxies.mat$response <- response
-
-    dataobj$immresp[[dataset]] <- proxies.mat
+    dataobj$immresp[[dataset]] <- immscore
   }
 
   # Removal of gene expression data
@@ -112,6 +81,6 @@ getFeat <- function(dataobj,
 cancertype <- "NSCLC"
 expr_obj <- readRDS(input_file)
 
-easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE, zscoredata = immscore_file)
+easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE)
 
 saveRDS(easier_obj, file = output_file)

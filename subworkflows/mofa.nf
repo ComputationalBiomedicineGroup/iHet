@@ -14,6 +14,7 @@ include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkd
     options: modules["P14_mofa_analysis"]
 )
 
+
 process P11_easier {
     input:
         tuple val(meta), path(script)
@@ -26,7 +27,6 @@ process P11_easier {
     """
     Rscript ${script} \\
         ${expr_data} \\
-        ${baseDir}/tables/easier_Zscores/immscoreZ.rds \\
         ${expr_data.baseName}.features.rds
     """
 }

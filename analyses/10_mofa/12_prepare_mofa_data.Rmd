@@ -102,6 +102,47 @@ for (slot in names(gtex_data)) {
 DATASETS <- names(data_all$count)
 ```
 
+## Compute consensus immune response score
+```{r response_score}
+# List of selected immune response scores
+selscores <- c(
+  "CYT",
+  "Roh_IS",
+  "chemokines",
+  "Davoli_IS",
+  "IFNy",
+  "Ayers_expIS",
+  "Tcell_inflamed",
+  "resF_down",
+  "TLS"
+)
+
+
+# Rotation of the "Chemokines" score to agree with "CYT" direction
+data_all$immresp <- sapply(data_all$immresp, function(tmp_immresp) {
+  chemosign <- sign(cor(tmp_immresp[, "CYT"], tmp_immresp[, "chemokines"]))
+  if (chemosign < 0) tmp_immresp[, "chemokines"] <- -tmp_immresp[, "chemokines"]
+  tmp_immresp <- tmp_immresp[, selscores]
+  tmp_immresp
+}, USE.NAMES = TRUE, simplify = FALSE)
+
+# Compute mean/sd for TCGA as base for z-scoring response scores
+immresp_tcga <- bind_rows(data_all$immresp[names(tcga_data$immresp)])
+immscoreZ <- data.frame(
+  score = colnames(immresp_tcga),
+  mean = apply(immresp_tcga, 2, mean),
+  sd = apply(immresp_tcga, 2, sd)
+)
+
+# Computation of the median scaled response
+data_all$immresp <- sapply(data_all$immresp, function(tmp_immresp) {
+  tmpZ <- immscoreZ[colnames(tmp_immresp), ]
+  response <- ((t(tmp_immresp) - tmpZ$mean) / tmpZ$sd)
+  response <- apply(response, 2, median)
+  tmp_immresp$response <- response
+  tmp_immresp
+}, USE.NAMES = TRUE, simplify = FALSE)
+```
 
 ## Process features
 ```{r processfeatures}
