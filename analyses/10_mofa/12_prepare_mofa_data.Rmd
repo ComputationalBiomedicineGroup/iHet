@@ -142,6 +142,13 @@ data_all$immresp <- sapply(data_all$immresp, function(tmp_immresp) {
   tmp_immresp$response <- response
   tmp_immresp
 }, USE.NAMES = TRUE, simplify = FALSE)
+
+# Subset TFs to intersection across all datasets
+# In some datasets, a few TFs (like 4)
+tfs_intersection <- Reduce(intersect, lapply(data_all$tf, colnames))
+data_all$tf <- sapply(data_all$tf, function(tmp_tf) {
+  tmp_tf[, tfs_intersection]
+}, USE.NAMES = TRUE, simplify = FALSE)
 ```
 
 ## Process features

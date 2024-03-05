@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds>
+  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds> <regulon_net>
 
 " -> doc
 
