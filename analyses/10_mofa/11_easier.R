@@ -13,6 +13,7 @@ library(immunedeconv)
 args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 output_file <- args[2]
+regulon_net <- args[3]
 
 getFeat <- function(dataobj,
                     cancertype = "LUAD",
@@ -50,13 +51,14 @@ getFeat <- function(dataobj,
 
     # Quantification of pathway activity scores with RPOGENy
     pathway <- compute_pathway_activity(
-      RNA_counts = dataobj$count[[dataset]],
+      RNA_tpm = dataobj$tpm[[dataset]],
       remove_sig_genes_immune_response = remove.genes.ICB_proxies
     )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
       RNA_tpm = dataobj$tpm[[dataset]],
+      regulon_net = regulon_net
     )
 
     immscore <- compute_scores_immune_response(

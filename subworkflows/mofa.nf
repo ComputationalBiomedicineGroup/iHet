@@ -27,7 +27,8 @@ process P11_easier {
     """
     Rscript ${script} \\
         ${expr_data} \\
-        ${expr_data.baseName}.features.rds
+        ${expr_data.baseName}.features.rds \\
+        ${task.ext.regulon_net}
     """
 }
 
