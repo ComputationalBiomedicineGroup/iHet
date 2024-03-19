@@ -51,13 +51,13 @@ getFeat <- function(dataobj,
 
     # Quantification of pathway activity scores with RPOGENy
     pathway <- compute_pathway_activity(
-      RNA_tpm = dataobj$tpm[[dataset]],
+      RNA_tpm = log1p(dataobj$tpm[[dataset]]),
       remove_sig_genes_immune_response = remove.genes.ICB_proxies
     )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
-      RNA_tpm = dataobj$tpm[[dataset]],
+      RNA_tpm = log1p(dataobj$tpm[[dataset]]),
       regulon_net = regulon_net
     )
 
