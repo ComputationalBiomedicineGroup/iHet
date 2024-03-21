@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds> <regulon_net>
+  11_easier.R <INPUT_FILE.rds> <OUTPUT_FILE.rds> <regulon_net> <TCGA_file.rds>
 
 " -> doc
 
@@ -14,13 +14,15 @@ args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 output_file <- args[2]
 regulon_net <- args[3]
+tcga_file <- args[4]
 
 getFeat <- function(dataobj,
                     cancertype = "LUAD",
                     remove.genes.ICB_proxies = FALSE,
                     onlyEasier = TRUE,
                     epic = FALSE,
-                    proxies = TRUE) {
+                    proxies = TRUE,
+                    tcga_obj) {
   # List of datasets in the input object
   datasets <- names(dataobj[[1]])
 
@@ -30,6 +32,13 @@ getFeat <- function(dataobj,
 
   for (dataset in datasets) {
     cat("Computing cell fractions, TF scores, pathway scores, and proxies of response from ", dataset, " data...\n", sep = "")
+
+    tcga_mean <- apply(dplyr::bind_cols(tcga_obj$tpm), 1, mean)
+    tcga_sd <- apply(dplyr::bind_cols(tcga_obj$tpm), 1, sd)
+    genes_intersection <- intersect(rownames(tcga_obj$tpm[[1]]), rownames(dataobj$tpm[[dataset]]))
+
+    log_tpm <- log1p(dataobj$tpm[[dataset]])
+    log_tpm_scaled <- log_tpm[genes_intersection, ] - tcga_mean[genes_intersection] / tcga_sd[genes_intersection]
 
     # Quantification of immune cell fractions with quanTIseq
     cellfrac <- compute_cell_fractions(
@@ -51,13 +60,13 @@ getFeat <- function(dataobj,
 
     # Quantification of pathway activity scores with RPOGENy
     pathway <- compute_pathway_activity(
-      RNA_tpm = log1p(dataobj$tpm[[dataset]]),
+      RNA_tpm = log_tpm_scaled,
       remove_sig_genes_immune_response = remove.genes.ICB_proxies
     )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
-      RNA_tpm = log1p(dataobj$tpm[[dataset]]),
+      RNA_tpm = log_tpm_scaled,
       regulon_net = regulon_net
     )
 
@@ -82,7 +91,8 @@ getFeat <- function(dataobj,
 
 cancertype <- "NSCLC"
 expr_obj <- readRDS(input_file)
+tcga_obj <- readRDS(tcga_file)
 
-easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE)
+easier_obj <- getFeat(expr_obj, cancertype = cancertype, epic = TRUE, onlyEasier = FALSE, tcga_obj = tcga_obj)
 
 saveRDS(easier_obj, file = output_file)

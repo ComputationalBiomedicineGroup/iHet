@@ -73,9 +73,9 @@ processFeatures <- function(data, dataset_id) {
     do_pivot("Immune cells quantification") %>%
     # DCs and Monocytes show unstable results in the different bootstraps -> exclude them.
     filter(!(feature %in% c("Other", "DC", "Monocyte")))
-  pathways.df <- do_pivot(scale(data$pathway[[dataset_id]]), "Pathway scores")
+  pathways.df <- do_pivot(data$pathway[[dataset_id]], "Pathway scores")
   # TODO filter is tmp_check
-  tfs.df <- do_pivot(scale(data$tf[[dataset_id]]), "Transcription factors") |> filter(feature %in% dorothea_tfs)
+  tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors") |> filter(feature %in% dorothea_tfs)
   response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
 
   feature_df <- bind_rows(cellfrac.df, pathways.df, tfs.df, response.df) %>%
