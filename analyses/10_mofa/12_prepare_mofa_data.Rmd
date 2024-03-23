@@ -35,6 +35,14 @@ library(ggrepel)
 ```{r}
 # TODO: tmp check
 dorothea_tfs <- readr::read_rds("/home/sturm/projects/2021/nsclc_heterogeneity/analyses/10_mofa/dorothea_tfs_old.rds")
+gtex_healthy_samples <- readr::read_tsv("/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv")
+gtex_accession_numbers <- readr::read_csv("/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv")
+gtex_accession_numbers <- gtex_accession_numbers %>%
+  select(`Library ID` = Experiment, gtex_id = biospecimen_repository_sample_id) %>%
+  distinct()
+gtex_healthy_sample_ids <- gtex_accession_numbers %>%
+  semi_join(gtex_healthy_samples) %>%
+  pull(gtex_id)
 ```
 
 ```{r}
@@ -75,7 +83,7 @@ processFeatures <- function(data, dataset_id) {
     filter(!(feature %in% c("Other", "DC", "Monocyte")))
   pathways.df <- do_pivot(data$pathway[[dataset_id]], "Pathway scores")
   # TODO filter is tmp_check
-  tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors") |> filter(feature %in% dorothea_tfs)
+  tfs.df <- do_pivot(data$tf[[dataset_id]], "Transcription factors") # |> filter(feature %in% dorothea_tfs)
   response.df <- do_pivot(data$immresp[[dataset_id]], "immune response")
 
   feature_df <- bind_rows(cellfrac.df, pathways.df, tfs.df, response.df) %>%
@@ -98,7 +106,7 @@ data_all <- tcga_data
 # LUAD and LUSC are contained in both tcga and nsclc. They are identical
 # and we use the version contained in the TCGA object.
 for (slot in names(gtex_data)) {
-  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
+  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]][, intersect(colnames(gtex_data$tpm$Lung), gtex_healthy_sample_ids)]
   data_all[[slot]][["Jia"]] <- nsclc_data[[slot]][["Jia2018"]]
   data_all[[slot]][["Sharma"]] <- nsclc_data[[slot]][["Sharma2019"]]
   if (INCLUDE_TRACERX) {
@@ -170,6 +178,27 @@ data_all_tidy$NSCLC <- bind_rows(data_all_tidy$LUAD, data_all_tidy$LUSC) %>% mut
 data_all_tidy <- data_all_tidy %>% bind_rows()
 
 saveRDS(data_all_tidy, file = file.path(params$artifact_dir, "data_all_tidy.rds"), compress = FALSE)
+```
+
+## Visualize feature distributions
+```{r, fig.width=12, fig.height=12}
+lapply(unique(data_all_tidy$view), function(tmp_view) {
+  print(tmp_view)
+  tmp_data <- data_all_tidy %>%
+    dplyr::filter(view == !!tmp_view) %>%
+    tidyr::pivot_wider(id_cols = c("sample", "dataset"), names_from = "feature", values_from = "value") %>%
+    dplyr::select(-sample, -dataset)
+
+  p <- GGally::ggpairs(tmp_data,
+    columns = head(colnames(tmp_data), 15),
+    lower = list(
+      continuous = GGally::wrap("smooth", size = 0.05, alpha = 0.05)
+    )
+  )
+
+  print(p)
+  #   ggplot2::ggsave(file.path(params$artifact_dir, sprintf("feature_distributions_%s.pdf", tmp_view)), width = 15, height = 15)
+})
 ```
 
 ## Process features for MOFA

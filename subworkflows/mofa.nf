@@ -19,7 +19,7 @@ process P11_easier {
     input:
         tuple val(meta), path(script)
         path(expr_data)
-        path(tcga_data)
+        path("tcga_data.rds")
 
     output:
         path("*.features.rds")
@@ -30,7 +30,7 @@ process P11_easier {
         ${expr_data} \\
         ${expr_data.baseName}.features.rds \\
         ${task.ext.regulon_net} \\
-        ${tcga_data}
+        "tcga_data.rds"
     """
 }
 
