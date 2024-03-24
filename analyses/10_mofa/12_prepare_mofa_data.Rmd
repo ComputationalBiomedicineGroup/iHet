@@ -102,17 +102,28 @@ if (INCLUDE_TRACERX) {
 tcga_data <- readRDS(file.path(params$input_dir, "TCGA_expr_data.features.rds"))
 data_all <- tcga_data
 
+# TODO
+# subset gtex to 'truly healthy' samples
+selected_gtex_idx <- intersect(colnames(gtex_data[["tpm"]]$Lung), gtex_healthy_sample_ids)
+gtex_data[["tpm"]][["Lung"]] <- gtex_data[["tpm"]][["Lung"]][, selected_gtex_idx]
+gtex_data[["count"]][["Lung"]] <- gtex_data[["count"]][["Lung"]][, selected_gtex_idx]
+gtex_data[["pathway"]][["Lung"]] <- gtex_data[["pathway"]][["Lung"]][selected_gtex_idx, ]
+gtex_data[["tf"]][["Lung"]] <- gtex_data[["tf"]][["Lung"]][selected_gtex_idx, ]
+gtex_data[["cellfrac"]][["Lung"]] <- gtex_data[["cellfrac"]][["Lung"]][selected_gtex_idx, ]
+gtex_data[["immresp"]][["Lung"]] <- gtex_data[["immresp"]][["Lung"]][selected_gtex_idx, ]
+
 # Merge and rename datasets
 # LUAD and LUSC are contained in both tcga and nsclc. They are identical
 # and we use the version contained in the TCGA object.
 for (slot in names(gtex_data)) {
-  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]][, intersect(colnames(gtex_data$tpm$Lung), gtex_healthy_sample_ids)]
+  data_all[[slot]][["GTEx"]] <- gtex_data[[slot]][["Lung"]]
   data_all[[slot]][["Jia"]] <- nsclc_data[[slot]][["Jia2018"]]
   data_all[[slot]][["Sharma"]] <- nsclc_data[[slot]][["Sharma2019"]]
   if (INCLUDE_TRACERX) {
     data_all[[slot]][["TRACERx"]] <- tracerx_data[[slot]][["TRACERx"]]
   }
 }
+
 DATASETS <- names(data_all$count)
 ```
 
