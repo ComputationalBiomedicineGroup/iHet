@@ -7,5 +7,5 @@ include { W20_single_cell } from "./subworkflows/single-cell.nf"
 
 workflow {
     W10_mofa()
-    W20_single_cell()
+    // W20_single_cell()
 }

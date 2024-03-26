@@ -9,6 +9,9 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
+[*.{r,R,Rmd,rmd}]
+indent_size = 2
+
 # Use 4 spaces for the Python files
 [*.py]
 indent_size = 4
