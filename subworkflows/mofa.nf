@@ -19,6 +19,7 @@ process P11_easier {
     input:
         tuple val(meta), path(script)
         path(expr_data)
+        path("tcga_data.rds")
 
     output:
         path("*.features.rds")
@@ -28,7 +29,8 @@ process P11_easier {
     Rscript ${script} \\
         ${expr_data} \\
         ${expr_data.baseName}.features.rds \\
-        ${task.ext.regulon_net}
+        ${task.ext.regulon_net} \\
+        "tcga_data.rds"
     """
 }
 
@@ -50,7 +52,8 @@ workflow W10_mofa {
     def dir = "analyses/10_mofa"
     P11_easier(
         file_tuple("$dir/11_easier.R"),
-        Channel.fromPath("${ params.bulk_input_dir }/*_expr_data*.rds")
+        Channel.fromPath("${ params.bulk_input_dir }/*_expr_data*.rds"),
+        file("${ params.bulk_input_dir }/TCGA_expr_data.rds")
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
