@@ -33,9 +33,10 @@ getFeat <- function(dataobj,
   for (dataset in datasets) {
     cat("Computing cell fractions, TF scores, pathway scores, and proxies of response from ", dataset, " data...\n", sep = "")
 
-    tcga_mean <- apply(dplyr::bind_cols(tcga_obj$tpm), 1, mean)
-    tcga_sd <- apply(dplyr::bind_cols(tcga_obj$tpm), 1, sd)
-    genes_intersection <- intersect(rownames(tcga_obj$tpm[[1]]), rownames(dataobj$tpm[[dataset]]))
+    tcga_log_tpm <- log1p(dplyr::bind_cols(tcga_obj$tpm))
+    tcga_mean <- apply(tcga_log_tpm, 1, mean)
+    tcga_sd <- apply(tcga_log_tpm, 1, sd)
+    genes_intersection <- intersect(rownames(tcga_log_tpm), rownames(dataobj$tpm[[dataset]]))
 
     log_tpm <- log1p(dataobj$tpm[[dataset]])
     log_tpm_scaled <- log_tpm[genes_intersection, ] - tcga_mean[genes_intersection] / tcga_sd[genes_intersection]
