@@ -58,7 +58,10 @@ workflow W10_mofa {
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
         ["include_tracerx": String.valueOf(params.include_tracerx)],
-        P11_easier.out.collect()
+        P11_easier.out.collect().mix(
+            Channel.fromPath("${ params.bulk_input_dir }/GTEx_healthy_samples.csv"),
+            Channel.fromPath("${ params.bulk_input_dir }/GTEx_accession_numbers.csv")
+        ).collect()
     )
     P13_run_mofa(
         file_tuple("$dir/13_run_mofa.R"),

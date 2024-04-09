@@ -38,8 +38,10 @@ getFeat <- function(dataobj,
     tcga_sd <- apply(tcga_log_tpm, 1, sd)
     genes_intersection <- intersect(rownames(tcga_log_tpm), rownames(dataobj$tpm[[dataset]]))
 
+    # TODO: to scale or not to scale?
     log_tpm <- log1p(dataobj$tpm[[dataset]])
-    log_tpm_scaled <- (log_tpm[genes_intersection, ] - tcga_mean[genes_intersection]) / tcga_sd[genes_intersection]
+    log_tpm_scaled <- log_tpm
+    # log_tpm_scaled <- (log_tpm[genes_intersection, ] - tcga_mean[genes_intersection]) / tcga_sd[genes_intersection]
 
     # Quantification of immune cell fractions with quanTIseq
     cellfrac <- compute_cell_fractions(

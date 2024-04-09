@@ -3,6 +3,8 @@ params:
     cpus: 1
     meta: NULL
     input_dir: "../../results/10_mofa/11_easier"
+    gtex_healthy_samples: /home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv # bgee samples
+    gtex_accession_numbers: /home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv # mapping gtex <-> bgee
     artifact_dir: "/local/scratch/sturm/mofa"
     include_tracerx: "true"
 ---
@@ -34,9 +36,9 @@ library(ggrepel)
 
 ```{r}
 # TODO: tmp check
-dorothea_tfs <- readr::read_rds("/home/sturm/projects/2021/nsclc_heterogeneity/analyses/10_mofa/dorothea_tfs_old.rds")
-gtex_healthy_samples <- readr::read_tsv("/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv")
-gtex_accession_numbers <- readr::read_csv("/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv")
+# dorothea_tfs <- readr::read_rds("/home/sturm/projects/2021/nsclc_heterogeneity/analyses/10_mofa/dorothea_tfs_old.rds")
+gtex_healthy_samples <- readr::read_tsv(params$gtex_healthy_samples)
+gtex_accession_numbers <- readr::read_csv(params$gtex_accession_numbers)
 gtex_accession_numbers <- gtex_accession_numbers %>%
   select(`Library ID` = Experiment, gtex_id = biospecimen_repository_sample_id) %>%
   distinct()
