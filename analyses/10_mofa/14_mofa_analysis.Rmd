@@ -83,11 +83,12 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
     rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
+
+# rename NSCLC to TCGA-NSCLC
 median_weights$`TCGA-NSCLC` <- median_weights$NSCLC
 median_weights$NSCLC <- NULL
 median_factors$`TCGA-NSCLC` <- median_factors$NSCLC
 median_factors$NSCLC <- NULL
-# rename NSCLC to TCGA-NSCLC
 feature_data <- feature_data %>% mutate(group = if_else(group == "NSCLC", "TCGA-NSCLC", group), dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset))
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
@@ -401,7 +402,8 @@ tmp_scatter_data <- scatter_data %>%
   pivot_wider(names_from = "dataset", values_from = "factor 1")
 
 selected_features <- tmp_scatter_data %>%
-  filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
+  # filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
+  filter(JiaSharma > 0.6 | `TCGA-NSCLC` > 0.6 | `TCGA-NSCLC` < -0.6 | JiaSharma < -0.6) %>%
   pull(feature)
 
 tmp_scatter_data %>%
