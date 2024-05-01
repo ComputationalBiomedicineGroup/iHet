@@ -19,3 +19,6 @@ analyses/.r_console_wrapper.sh
 .Rhistory
 data_iHet_predictions
 omnipathr-log
+analyses/10_mofa/15_iHet_predictions.html
+input_data_bulk
+figures
