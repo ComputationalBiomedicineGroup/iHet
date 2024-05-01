@@ -3,8 +3,8 @@ params:
     cpus: 1
     meta: NULL
     input_dir: "../../results/10_mofa/11_easier"
-    gtex_healthy_samples: /home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv # bgee samples
-    gtex_accession_numbers: /home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv # mapping gtex <-> bgee
+    gtex_healthy_samples: NULL #/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv # bgee samples
+    gtex_accession_numbers: NULL #/home/sturm/projects/2021/nsclc_heterogeneity/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv # mapping gtex <-> bgee
     artifact_dir: "/local/scratch/sturm/mofa"
     include_tracerx: "true"
 ---
