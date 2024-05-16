@@ -32,20 +32,20 @@ workflow W20_single_cell {
                 Channel.fromPath("$projectDir/tables/gene_annotations/hlca_cell_type_signatures.csv", checkIfExists: true)
             ).collect()
         )
-        ch_adata_annotated =JUPYTER_ANNOTATE_MYELOID.out.artifacts
+        ch_adata_annotated = JUPYTER_ANNOTATE_MYELOID.out.artifacts
     } else {
         ch_adata_annotated = Channel.fromPath("${ params.precomputed_adata_annotated }/*", checkIfExists: true).collect()
     }
 
 
-    JUPYTER_TF_PW(
-        get_notebook_channel("23_tf_pw"),
-        Channel.value([
-            "adata_m": "adata_myeloid_reannotated.h5ad",
-            "adata_nsclc": "adata_nsclc_reannotated.h5ad"
-        ]),
-        ch_adata_annotated
-    )
+    // JUPYTER_TF_PW(
+    //     get_notebook_channel("23_tf_pw"),
+    //     Channel.value([
+    //         "adata_m": "adata_myeloid_reannotated.h5ad",
+    //         "adata_nsclc": "adata_nsclc_reannotated.h5ad"
+    //     ]),
+    //     ch_adata_annotated
+    // )
     JUPYTER_OVERVIEW_PLOTS(
         get_notebook_channel("29_overview_plots"),
         Channel.value([
