@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import scipy.stats
 from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
+import decoupler as dc
 
 sc.settings.set_figure_params(figsize=(4, 4))
 import scanpy_helpers as sh
@@ -50,8 +51,55 @@ adata_m = sc.read_h5ad(path_adata_m)
 adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
 # %%
-adatas = {"m": {}, "nsclc": {}}
+# Make pseudobulk
+pb = dc.get_pseudobulk(
+    adata_nsclc, sample_col="patient", groups_col="cell_type", mode="sum", min_cells=10, min_counts=1000
+)
 
+sc.pp.normalize_total(pb, target_sum=1e6)
+sc.pp.log1p(pb)
+
+
+# %%
+dorothea = dc.get_dorothea(organism="human")
+progeny = dc.get_progeny(organism="human", top=500)
+# TODO collectri?
+
+
+# %%
+dc.run_wmean(pb, progeny, use_raw=False, times=0, min_n=5)
+pb.obsm["progeny"] = pb.obsm["wmean_estimate"]
+
+# %%
+# TODO regress out dataset?
+ad_progeny = dc.get_acts(pb, "progeny")
+
+# %%
+
+tfs_of_interest = [
+    "E2F2",
+    "E2F3",
+    "E2F4",
+    "ETS1",
+    "MYC",
+    "MYCN",
+    "NFKB1",
+    "RELA",
+    "RFX5",
+    "SPI1",
+    "STAT1",
+    "STAT2",
+    "TFDP1",
+    "ZNF263",
+]
+pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
+
+sc.pl.matrixplot(ad_progeny, var_names=pws_of_interest, groupby="cell_type")
+
+# -------------------------- OLD STUFF --------------
+
+# %%
+adatas = {"m": {}, "nsclc": {}}
 # %%
 adatas["m"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_m)
 adatas["m"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_m)
