@@ -269,6 +269,8 @@ sc.pl.matrixplot(
 
 # %% [markdown]
 # ### Dorothea
+
+# %%
 sc.pl.matrixplot(
     ad_dorothea,
     var_names=tfs_of_interest,
@@ -284,6 +286,8 @@ sc.pl.matrixplot(
 
 # %% [markdown]
 # ### CollecTRI
+
+# %%
 sc.pl.matrixplot(
     ad_collectri,
     var_names=tfs_of_interest,
@@ -296,7 +300,7 @@ sc.pl.matrixplot(
     title="PW scaled",
 )
 
-
+# %%
 # -------------------------- OLD STUFF --------------
 
 # # %%
