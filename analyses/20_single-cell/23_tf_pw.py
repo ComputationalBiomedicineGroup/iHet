@@ -23,11 +23,10 @@ import pandas as pd
 from threadpoolctl import threadpool_limits
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.stats
 import decoupler as dc
+from IPython.display import Markdown, display
 
 sc.settings.set_figure_params(figsize=(4, 4))
-import scanpy_helpers as sh
 
 # %%
 path_adata_m = nxfvars.get(
@@ -61,50 +60,9 @@ adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
 adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
 
 # %%
-# Make pseudobulk
-pb = dc.get_pseudobulk(
-    adata_nsclc, sample_col="patient", groups_col="cell_type", mode="sum", min_cells=10, min_counts=1000
-)
-# keep order
-pb.obs["cell_type"] = pd.Categorical(pb.obs["cell_type"], categories=adata_nsclc.obs["cell_type"].cat.categories)
-
-sc.pp.normalize_total(pb, target_sum=1e6)
-sc.pp.log1p(pb)
-
-
-# %%
 dorothea = dc.get_dorothea(organism="human")
 progeny = dc.get_progeny(organism="human", top=500)
 collectri = dc.get_collectri(organism="human", split_complexes=False)
-
-
-# %%
-dc.run_wmean(pb, progeny, use_raw=False, times=0, min_n=5)
-pb.obsm["progeny"] = pb.obsm["wmean_estimate"]
-ad_progeny = dc.get_acts(pb, "progeny")
-ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
-ad_progeny.layers["batch_corrected"] = ad_progeny.X.copy()
-sc.pp.regress_out(ad_progeny, keys="dataset", layer="batch_corrected")
-sc.pp.scale(ad_progeny, layer="batch_corrected")
-
-# %%
-dc.run_wmean(pb, dorothea, use_raw=False, times=0, min_n=5)
-pb.obsm["dorothea"] = pb.obsm["wmean_estimate"]
-ad_dorothea = dc.get_acts(pb, "dorothea")
-ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
-ad_dorothea.layers["batch_corrected"] = ad_dorothea.X.copy()
-sc.pp.regress_out(ad_dorothea, keys="dataset", layer="batch_corrected")
-sc.pp.scale(ad_dorothea, layer="batch_corrected")
-
-# %%
-dc.run_wmean(pb, collectri, use_raw=False, times=0, min_n=5)
-pb.obsm["collectri"] = pb.obsm["wmean_estimate"]
-ad_collectri = dc.get_acts(pb, "collectri")
-ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
-ad_collectri.layers["batch_corrected"] = ad_collectri.X.copy()
-sc.pp.regress_out(ad_collectri, keys="dataset", layer="batch_corrected")
-sc.pp.scale(ad_collectri, layer="batch_corrected")
-
 
 # %%
 tfs_of_interest = [
@@ -125,80 +83,116 @@ tfs_of_interest = [
 ]
 pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
 
-# %% [markdown]
-# ## Progeny
-
 # %%
-sc.pl.matrixplot(
-    ad_progeny,
-    var_names=pws_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    title="PW scaled",
-)
-sc.pl.matrixplot(
-    ad_progeny,
-    var_names=pws_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2,
-    vmax=2,
-    layer="batch_corrected",
-    title="PW batch corrected/scaled",
-)
+for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
 
-# %% [markdown]
-# ## Dorothea
-sc.pl.matrixplot(
-    ad_dorothea,
-    var_names=tfs_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    title="PW scaled",
-)
-sc.pl.matrixplot(
-    ad_dorothea,
-    var_names=tfs_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="batch_corrected",
-    title="PW batch corrected/scaled",
-)
+    display(Markdown(f"## {name}"))
+
+    # Make pseudobulk
+    pb = dc.get_pseudobulk(
+        tmp_ad, sample_col="patient", groups_col="cell_type", mode="sum", min_cells=10, min_counts=1000
+    )
+    # keep order
+    pb.obs["cell_type"] = pd.Categorical(pb.obs["cell_type"], categories=tmp_ad.obs["cell_type"].cat.categories)
+
+    sc.pp.normalize_total(pb, target_sum=1e6)
+    sc.pp.log1p(pb)
+
+    # Run methods
+    dc.run_wmean(pb, progeny, use_raw=False, times=0, min_n=5)
+    pb.obsm["progeny"] = pb.obsm["wmean_estimate"]
+    ad_progeny = dc.get_acts(pb, "progeny")
+    ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
+    ad_progeny.layers["batch_corrected"] = ad_progeny.X.copy()
+    sc.pp.regress_out(ad_progeny, keys="dataset", layer="batch_corrected")
+    sc.pp.scale(ad_progeny, layer="batch_corrected")
+
+    dc.run_wmean(pb, dorothea, use_raw=False, times=0, min_n=5)
+    pb.obsm["dorothea"] = pb.obsm["wmean_estimate"]
+    ad_dorothea = dc.get_acts(pb, "dorothea")
+    ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
+    ad_dorothea.layers["batch_corrected"] = ad_dorothea.X.copy()
+    sc.pp.regress_out(ad_dorothea, keys="dataset", layer="batch_corrected")
+    sc.pp.scale(ad_dorothea, layer="batch_corrected")
+
+    dc.run_wmean(pb, collectri, use_raw=False, times=0, min_n=5)
+    pb.obsm["collectri"] = pb.obsm["wmean_estimate"]
+    ad_collectri = dc.get_acts(pb, "collectri")
+    ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
+    ad_collectri.layers["batch_corrected"] = ad_collectri.X.copy()
+    sc.pp.regress_out(ad_collectri, keys="dataset", layer="batch_corrected")
+    sc.pp.scale(ad_collectri, layer="batch_corrected")
+
+    display(Markdown("### Progeny"))
+
+    sc.pl.matrixplot(
+        ad_progeny,
+        var_names=pws_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        title="PW scaled",
+    )
+    sc.pl.matrixplot(
+        ad_progeny,
+        var_names=pws_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2,
+        vmax=2,
+        layer="batch_corrected",
+        title="PW batch corrected/scaled",
+    )
+
+    display(Markdown("### Dorothea"))
+
+    sc.pl.matrixplot(
+        ad_dorothea,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        title="PW scaled",
+    )
+    sc.pl.matrixplot(
+        ad_dorothea,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="batch_corrected",
+        title="PW batch corrected/scaled",
+    )
+
+    display(Markdown("### collecTRI"))
+
+    sc.pl.matrixplot(
+        ad_collectri,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        title="PW scaled",
+    )
+    sc.pl.matrixplot(
+        ad_collectri,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="batch_corrected",
+        title="PW batch corrected/scaled",
+    )
 
 
-# %% [markdown]
-# ## CollecTRI
-sc.pl.matrixplot(
-    ad_collectri,
-    var_names=tfs_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    title="PW scaled",
-)
-sc.pl.matrixplot(
-    ad_collectri,
-    var_names=tfs_of_interest,
-    groupby="cell_type",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="batch_corrected",
-    title="PW batch corrected/scaled",
-)
-
-
-# --------------------------- METACELL STUFF ---------
 # %% [markdown]
 # ## Metacell approach
 
@@ -230,7 +224,7 @@ ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
 
 
 # %% [markdown]
-# ## Progeny
+# ### Progeny
 
 # %%
 sc.pl.matrixplot(
@@ -245,7 +239,7 @@ sc.pl.matrixplot(
 )
 
 # %% [markdown]
-# ## Dorothea
+# ### Dorothea
 sc.pl.matrixplot(
     ad_dorothea,
     var_names=tfs_of_interest,
@@ -259,7 +253,7 @@ sc.pl.matrixplot(
 
 
 # %% [markdown]
-# ## CollecTRI
+# ### CollecTRI
 sc.pl.matrixplot(
     ad_collectri,
     var_names=tfs_of_interest,
