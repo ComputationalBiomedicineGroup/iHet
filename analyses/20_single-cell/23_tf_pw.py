@@ -31,11 +31,11 @@ sc.settings.set_figure_params(figsize=(4, 4))
 # %%
 path_adata_m = nxfvars.get(
     "adata_m",
-    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_myeloid_reannotated.h5ad",
+    "/scratch/nsclc_heterogeneity/results/20_single_cell/22_annotate_myeloid/artifacts/adata_myeloid_reannotated.h5ad",
 )
 path_adata_nsclc = nxfvars.get(
     "adata_nsclc",
-    "../../data/results/20_single_cell/22_annotate_myeloid/artifacts/adata_nsclc_reannotated.h5ad",
+    "/scratch/nsclc_heterogeneity/results/20_single_cell/22_annotate_myeloid/artifacts/adata_nsclc_reannotated.h5ad",
 )
 cpus = nxfvars.get("cpus", 16)
 artifact_dir = nxfvars.get("artifact_dir", "/home/sturm/Downloads/ihet")
@@ -93,7 +93,10 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         tmp_ad, sample_col="patient", groups_col="cell_type", mode="sum", min_cells=10, min_counts=1000
     )
     # keep order
-    pb.obs["cell_type"] = pd.Categorical(pb.obs["cell_type"], categories=tmp_ad.obs["cell_type"].cat.categories)
+    pb.obs["cell_type"] = pd.Categorical(
+        pb.obs["cell_type"],
+        categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"]],
+    )
 
     sc.pp.normalize_total(pb, target_sum=1e6)
     sc.pp.log1p(pb)
@@ -133,6 +136,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2.5,
         vmax=2.5,
         layer="scaled",
+        swap_axes="myeloid" in name,
         title="PW scaled",
     )
     sc.pl.matrixplot(
@@ -143,6 +147,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2,
         vmax=2,
         layer="batch_corrected",
+        swap_axes="myeloid" in name,
         title="PW batch corrected/scaled",
     )
 
@@ -156,6 +161,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2.5,
         vmax=2.5,
         layer="scaled",
+        swap_axes="myeloid" in name,
         title="PW scaled",
     )
     sc.pl.matrixplot(
@@ -166,6 +172,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2.5,
         vmax=2.5,
         layer="batch_corrected",
+        swap_axes="myeloid" in name,
         title="PW batch corrected/scaled",
     )
 
@@ -179,6 +186,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2.5,
         vmax=2.5,
         layer="scaled",
+        swap_axes="myeloid" in name,
         title="PW scaled",
     )
     sc.pl.matrixplot(
@@ -189,6 +197,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmin=-2.5,
         vmax=2.5,
         layer="batch_corrected",
+        swap_axes="myeloid" in name,
         title="PW batch corrected/scaled",
     )
 
@@ -235,6 +244,7 @@ sc.pl.matrixplot(
     vmin=-2.5,
     vmax=2.5,
     layer="scaled",
+    swap_axes=True,
     title="PW scaled",
 )
 
@@ -248,6 +258,7 @@ sc.pl.matrixplot(
     vmin=-2.5,
     vmax=2.5,
     layer="scaled",
+    swap_axes=True,
     title="PW scaled",
 )
 
@@ -262,6 +273,7 @@ sc.pl.matrixplot(
     vmin=-2.5,
     vmax=2.5,
     layer="scaled",
+    swap_axes=True,
     title="PW scaled",
 )
 
