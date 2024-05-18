@@ -95,7 +95,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
     # keep order
     pb.obs["cell_type"] = pd.Categorical(
         pb.obs["cell_type"],
-        categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"]],
+        categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
     )
 
     sc.pp.normalize_total(pb, target_sum=1e6)
@@ -207,6 +207,25 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
 
 # %%
 adata_metacells = sc.read_h5ad("/scratch/nsclc_heterogeneity/_ihet_metacells/iHet_metcells.h5ad")
+fix_cell_type_names = lambda x: {
+    "Neutrophils": "Neutrophil",
+    "transitional club/AT2": "Transitional club/AT2",
+    "Tumor cells": "Tumor cell",
+    "stromal dividing": "Stromal cycling",
+    "B cell dividing": "B cell cycling",
+    "Plasma cell dividing": "Plasma cell cycling",
+    "T cell dividing": "T cell cycling",
+    "cDC dividing": "cDC cycling",
+    "Macrophage dividing": "Macrophage cycling",
+    "Macrophage alveolar dividing": "Macrophage alveolar cycling",
+}.get(x, x)
+adata_metacells.obs["major_celltype"] = adata_metacells.obs["major_celltype"].map(fix_cell_type_names)
+adata_metacells.obs["major_celltype"] = pd.Categorical(
+    adata_metacells.obs["major_celltype"],
+    categories=[
+        x for x in adata_nsclc.obs["cell_type"].cat.categories if x in adata_metacells.obs["major_celltype"].values
+    ],
+)
 
 # %%
 adata_metacells.X = adata_metacells.layers["total_umis"].copy()
