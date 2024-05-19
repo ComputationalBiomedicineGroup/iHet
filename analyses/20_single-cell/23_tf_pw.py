@@ -49,17 +49,6 @@ adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
 
 # %%
-# exclude these datasets because they contain patients that were already measured in another dataset (same study)
-# Having repeated measures would be problematic because the statistics we use do not account for this.
-excludelist = [
-    "Leader_Merad_2021_10x_5p_v1_beads",
-    "Leader_Merad_2021_10x_5p_v1_CD2",
-    "Leader_Merad_2021_10x_3p_v2_beads_cite",
-]
-adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
-adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
-
-# %%
 dorothea = dc.get_dorothea(organism="human")
 progeny = dc.get_progeny(organism="human", top=500)
 collectri = dc.get_collectri(organism="human", split_complexes=False)
@@ -82,6 +71,153 @@ tfs_of_interest = [
     "ZNF263",
 ]
 pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
+
+# %% [markdown]
+# ## Single-cell approach
+
+# %%
+for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
+    dc.run_wmean(tmp_ad, progeny, use_raw=False, times=0, min_n=5, verbose=True)
+    tmp_ad.obsm["progeny"] = tmp_ad.obsm["wmean_estimate"]
+    print("completed progeny")
+    dc.run_wmean(tmp_ad, dorothea, use_raw=False, times=0, min_n=5, verbose=True)
+    tmp_ad.obsm["dorothea"] = tmp_ad.obsm["wmean_estimate"]
+    print("completed dorothea")
+    dc.run_wmean(tmp_ad, collectri, use_raw=False, times=0, min_n=5, verbose=True)
+    tmp_ad.obsm["collectri"] = tmp_ad.obsm["wmean_estimate"]
+    print("completed collectri")
+
+# %%
+for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
+    ad_progeny = dc.get_acts(tmp_ad, "progeny")
+    ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
+    ad_dorothea = dc.get_acts(tmp_ad, "dorothea")
+    ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
+    ad_collectri = dc.get_acts(tmp_ad, "collectri")
+    ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
+
+    display(Markdown("### Progeny"))
+
+    sc.pl.matrixplot(
+        ad_progeny,
+        var_names=pws_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        swap_axes="myeloid" in name,
+        title="PW raw",
+    )
+
+    sc.pl.matrixplot(
+        ad_progeny,
+        var_names=pws_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="PW scaled",
+    )
+
+    display(Markdown("### Dorothea"))
+
+    sc.pl.matrixplot(
+        ad_dorothea,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        swap_axes="myeloid" in name,
+        title="TF raw",
+    )
+
+    sc.pl.matrixplot(
+        ad_dorothea,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="TF scaled",
+    )
+
+    display(Markdown("### collecTRI"))
+
+    sc.pl.matrixplot(
+        ad_collectri,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        swap_axes="myeloid" in name,
+        title="TF raw",
+    )
+
+    sc.pl.matrixplot(
+        ad_collectri,
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        # vmin=-2.5,
+        # vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="TF scaled",
+    )
+
+# # %%
+# fig, axs = plt.subplots(2, 4, figsize=(18, 8))
+# axs = iter(axs.flatten())
+# for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
+#     sc.pl.umap(
+#         adatas["nsclc"]["progeny"],
+#         color=pw,
+#         ax=ax,
+#         show=False,
+#         cmap="coolwarm",
+#         vmin=-2.5,
+#         vmax=2.5,
+#         title=f"PW: {pw}",
+#         frameon=False,
+#     )
+# for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
+#     sc.pl.umap(
+#         adatas["nsclc"]["dorothea"],
+#         color=tf,
+#         ax=ax,
+#         show=False,
+#         cmap="coolwarm",
+#         vmin=-2.5,
+#         vmax=2.5,
+#         title=f"TF: {tf}",
+#         frameon=False,
+#     )
+# fig.savefig(
+#     f"{artifact_dir}/umap_cell_selected_features.svg",
+#     bbox_inches="tight",
+#     dpi=600,
+# )
+# plt.show()
+
+# %% [markdown]
+# ## Pseudobulk approach
+
+# %%
+# exclude these datasets because they contain patients that were already measured in another dataset (same study)
+# Having repeated measures would be problematic because the statistics we use do not account for this.
+excludelist = [
+    "Leader_Merad_2021_10x_5p_v1_beads",
+    "Leader_Merad_2021_10x_5p_v1_CD2",
+    "Leader_Merad_2021_10x_3p_v2_beads_cite",
+]
+adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
+adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
 
 # %%
 for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
@@ -162,7 +298,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmax=2.5,
         layer="scaled",
         swap_axes="myeloid" in name,
-        title="PW scaled",
+        title="TF scaled",
     )
     sc.pl.matrixplot(
         ad_dorothea,
@@ -173,7 +309,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmax=2.5,
         layer="batch_corrected",
         swap_axes="myeloid" in name,
-        title="PW batch corrected/scaled",
+        title="TF batch corrected/scaled",
     )
 
     display(Markdown("### collecTRI"))
@@ -187,7 +323,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmax=2.5,
         layer="scaled",
         swap_axes="myeloid" in name,
-        title="PW scaled",
+        title="TF scaled",
     )
     sc.pl.matrixplot(
         ad_collectri,
@@ -198,7 +334,7 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         vmax=2.5,
         layer="batch_corrected",
         swap_axes="myeloid" in name,
-        title="PW batch corrected/scaled",
+        title="TF batch corrected/scaled",
     )
 
 
@@ -280,7 +416,7 @@ sc.pl.matrixplot(
     vmax=2.5,
     layer="scaled",
     swap_axes=True,
-    title="PW scaled",
+    title="TF scaled",
 )
 
 
@@ -297,7 +433,7 @@ sc.pl.matrixplot(
     vmax=2.5,
     layer="scaled",
     swap_axes=True,
-    title="PW scaled",
+    title="TF scaled",
 )
 
 # %%
