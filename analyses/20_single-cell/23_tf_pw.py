@@ -77,24 +77,45 @@ pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT
 
 # %%
 for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
-    dc.run_wmean(tmp_ad, progeny, use_raw=False, times=0, min_n=5, verbose=True)
+    # .raw contains log-norm values
+    dc.run_wmean(tmp_ad, progeny, use_raw=True, times=0, min_n=5, verbose=True)
     tmp_ad.obsm["progeny"] = tmp_ad.obsm["wmean_estimate"]
     print("completed progeny")
-    dc.run_wmean(tmp_ad, dorothea, use_raw=False, times=0, min_n=5, verbose=True)
+    dc.run_wmean(tmp_ad, dorothea, use_raw=True, times=0, min_n=5, verbose=True)
     tmp_ad.obsm["dorothea"] = tmp_ad.obsm["wmean_estimate"]
     print("completed dorothea")
-    dc.run_wmean(tmp_ad, collectri, use_raw=False, times=0, min_n=5, verbose=True)
+    dc.run_wmean(tmp_ad, collectri, use_raw=True, times=0, min_n=5, verbose=True)
     tmp_ad.obsm["collectri"] = tmp_ad.obsm["wmean_estimate"]
     print("completed collectri")
 
 # %%
 for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
-    ad_progeny = dc.get_acts(tmp_ad, "progeny")
-    ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
-    ad_dorothea = dc.get_acts(tmp_ad, "dorothea")
-    ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
-    ad_collectri = dc.get_acts(tmp_ad, "collectri")
-    ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
+    adatas = {}
+    for net in ["progeny", "dorothea", "collectri"]:
+        # Make pseudobulk
+        pb = dc.get_pseudobulk(
+            dc.get_acts(tmp_ad, net),
+            sample_col="patient",
+            groups_col="cell_type",
+            mode="mean",
+            min_cells=10,
+            # decoupler pseudobulk is mainly intended for counts - need to disable checks and set all filtering options to 0
+            skip_checks=True,
+            min_counts=0,
+            min_prop=0,
+            min_smpls=0,
+        ).copy()
+        # keep order
+        pb.obs["cell_type"] = pd.Categorical(
+            pb.obs["cell_type"],
+            categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
+        )
+        pb.layers["scaled"] = sc.pp.scale(pb.X.copy())
+        adatas[net] = pb
+
+    ad_progeny = adatas["progeny"]
+    ad_dorothea = adatas["dorothea"]
+    ad_collectri = adatas["collectri"]
 
     display(Markdown("### Progeny"))
 
@@ -103,19 +124,8 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         var_names=pws_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
-        swap_axes="myeloid" in name,
-        title="PW raw",
-    )
-
-    sc.pl.matrixplot(
-        ad_progeny,
-        var_names=pws_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
+        vmin=-2.5,
+        vmax=2.5,
         layer="scaled",
         swap_axes="myeloid" in name,
         title="PW scaled",
@@ -128,19 +138,8 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         var_names=tfs_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
-        swap_axes="myeloid" in name,
-        title="TF raw",
-    )
-
-    sc.pl.matrixplot(
-        ad_dorothea,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
+        vmin=-2.5,
+        vmax=2.5,
         layer="scaled",
         swap_axes="myeloid" in name,
         title="TF scaled",
@@ -153,57 +152,50 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         var_names=tfs_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
-        swap_axes="myeloid" in name,
-        title="TF raw",
-    )
-
-    sc.pl.matrixplot(
-        ad_collectri,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        # vmin=-2.5,
-        # vmax=2.5,
+        vmin=-2.5,
+        vmax=2.5,
         layer="scaled",
         swap_axes="myeloid" in name,
         title="TF scaled",
     )
 
-# # %%
-# fig, axs = plt.subplots(2, 4, figsize=(18, 8))
-# axs = iter(axs.flatten())
-# for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
-#     sc.pl.umap(
-#         adatas["nsclc"]["progeny"],
-#         color=pw,
-#         ax=ax,
-#         show=False,
-#         cmap="coolwarm",
-#         vmin=-2.5,
-#         vmax=2.5,
-#         title=f"PW: {pw}",
-#         frameon=False,
-#     )
-# for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
-#     sc.pl.umap(
-#         adatas["nsclc"]["dorothea"],
-#         color=tf,
-#         ax=ax,
-#         show=False,
-#         cmap="coolwarm",
-#         vmin=-2.5,
-#         vmax=2.5,
-#         title=f"TF: {tf}",
-#         frameon=False,
-#     )
-# fig.savefig(
-#     f"{artifact_dir}/umap_cell_selected_features.svg",
-#     bbox_inches="tight",
-#     dpi=600,
-# )
-# plt.show()
+# %%
+ad_pw = dc.get_acts(adata_nsclc, "progeny")
+ad_tf = dc.get_acts(adata_nsclc, "collectri")
+sc.pp.scale(ad_pw)
+sc.pp.scale(ad_tf)
+fig, axs = plt.subplots(2, 4, figsize=(18, 8))
+axs = iter(axs.flatten())
+for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
+    sc.pl.umap(
+        ad_pw,
+        color=pw,
+        ax=ax,
+        show=False,
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        title=f"PW: {pw}",
+        frameon=False,
+    )
+for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
+    sc.pl.umap(
+        ad_tf,
+        color=tf,
+        ax=ax,
+        show=False,
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        title=f"TF: {tf}",
+        frameon=False,
+    )
+fig.savefig(
+    f"{artifact_dir}/umap_cell_selected_features.svg",
+    bbox_inches="tight",
+    dpi=600,
+)
+plt.show()
 
 # %% [markdown]
 # ## Pseudobulk approach
