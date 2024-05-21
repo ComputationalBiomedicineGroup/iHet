@@ -1,0 +1,67 @@
+---
+title: "LungCancer Analysis Cell2Location Lambrecht"
+author: "Constantin Zackl"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, collapse=TRUE}
+library(SpatialExperiment)
+library(spacedeconv)
+library(decoupleR)
+```
+
+```{r data, collapse=TRUE}
+spe <- read10xVisium("~/data/lungCancerVisium/")
+```
+
+```{r preprocessing, collapse=TRUE}
+spe <- preprocess(spe)
+spe <- spacedeconv::normalize(spe, method = "cpm")
+
+rownames(spe) <- rowData(spe)$symbol
+```
+
+```{r}
+## Single Cell Reference data
+sce = readRDS("~/data/lambrechts_LungCancer_iHet.rds")
+```
+
+```{r}
+assayNames(sce) <- "counts"
+sce = preprocess(sce)
+
+signature = build_model(sce, cell_type_col = "cell_type", method="cell2location", epochs = 250, batch_id_col = "patient", gpu = T, assay_sc = "counts")
+deconv = deconvolute(spe, method = "cell2location", signature = signature, epochs = 30000, gpu=T, assay_sp = "counts")
+```
+
+```{r}
+saveRDS(deconv, file = "~/export/LCdeconv_Visium_c2l_lambrecht.rds")
+```
+
+```{r, fig.width=15, fig.height=15}
+plot_celltype(deconv, cell_type = "c2l", show_image = F, density = F, smooth = T)
+```
+
+
+```{r cluster, fig.width=15, fig.height=10, collapse=TRUE}
+########### read the clustering from first-gen
+cluster <- readRDS("~/export/LungCancerCluster_Visium.rds")
+
+colData(cluster) = cbind(colData(cluster), colData(deconv))
+```
+
+# c2l features
+
+```{r}
+## ZSCORE
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "c2l", topn = 5, zscore = TRUE)
+
+## NORMAL
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "c2l", topn = 5, zscore = FALSE)
+
+```

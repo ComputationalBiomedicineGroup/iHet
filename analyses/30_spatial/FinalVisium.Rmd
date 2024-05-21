@@ -1,0 +1,97 @@
+---
+title: "FinalVisium"
+output: html_document
+date: "2023-11-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(spacedeconv)
+library(SpatialExperiment)
+```
+
+```{r}
+visium <- readRDS("~/export/LungCancerCluster_Visium.rds")
+visiumC <- readRDS("~/export/LCdeconv_Visium_c2l_lambrecht.rds")
+```
+
+```{r}
+# manually remove single spot out of tissue
+visium <- visium[, visium$array_row != 77]
+visiumC <- visiumC[, visiumC$array_row != 77]
+```
+
+```{r}
+# myeloids
+visiumC <- aggregate_results(visiumC, "c2l_Monocyte.classical", "c2l_cDC2", name = "tmp1")
+visiumC <- aggregate_results(visiumC, "c2l_Macrophage.alveolar", "c2l_cDC2.CD1A.", name = "tmp2")
+visiumC <- aggregate_results(visiumC, "c2l_TAM", "c2l_DC.mature", name = "tmp3")
+visiumC <- aggregate_results(visiumC, "c2l_Monocyte.non.classical", "c2l_cDC1", name = "tmp4")
+
+visiumC <- aggregate_results(visiumC, "tmp1", "tmp2", name = "tmpf1")
+visiumC <- aggregate_results(visiumC, "tmp3", "tmp4", name = "tmpf2")
+
+visiumC <- aggregate_results(visiumC, "tmpf1", "tmpf2", name = "myeloids")
+```
+
+```{r}
+visiumC <- aggregate_results(visiumC, "c2l_Fibroblast.adventitial", "c2l_Fibroblast.alveolar", name = "tmp5")
+visiumC <- aggregate_results(visiumC, "c2l_Fibroblast.peribronchial", "tmp5", name = "CAFs")
+```
+
+
+```{r}
+palette <- "inferno"
+palette2 <- "Purple-Green"
+smooth <- FALSE
+myeloids <- plot_celltype(visiumC, cell_type = "myeloids", smooth = smooth, density = F, title = "Myeloid cells", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+monocytes <- plot_celltype(visiumC, cell_type = "c2l_Monocyte.classical", smooth = smooth, density = F, title = "Monocytes classical", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+caf <- plot_celltype(visiumC, "CAFs", smooth = smooth, density = F, title = "Fibroblasts", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+tam <- plot_celltype(visiumC, "c2l_TAM", smooth = smooth, density = F, title = "TAMs", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+fib_per <- plot_celltype(visiumC, "c2l_Fibroblast.peribronchial", smooth = smooth, density = F, title = "Fibroblasts peribronchial", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+cd8 <- plot_celltype(visiumC, "c2l_T.cell.CD8", smooth = smooth, density = F, title = "CD8 T cells", palette = palette, title_size = 60, legend_size = 40, font_size = 30)
+mono_fib <- plot_comparison(visiumC, cell_type_1 = "c2l_Fibroblast.peribronchial", cell_type_2 = "c2l_Monocyte.classical", density = F, smooth = smooth, title = "Fibroblasts/Monocytes", palette = palette2, reverse_palette = TRUE, title_size = 60, legend_size = 40, font_size = 30)
+```
+
+
+
+```{r}
+# x_new = (x - min(x))/(max(x) - min(x)) + 1
+visium$transformed_TGFb <- (visium$progeny_TGFb - min(visium$progeny_TGFb)) / (max(visium$progeny_TGFb) - min(visium$progeny_TGFb)) + 1
+visium$transformed_TNFa <- (visium$progeny_TNFa - min(visium$progeny_TNFa)) / (max(visium$progeny_TNFa) - min(visium$progeny_TNFa)) + 1
+visium$transformed_NFkB <- (visium$progeny_NFkB - min(visium$progeny_NFkB)) / (max(visium$progeny_NFkB) - min(visium$progeny_NFkB)) + 1
+
+tgfb_tnfa <- plot_comparison(visium, cell_type_1 = "transformed_TGFb", cell_type_2 = "transformed_TNFa", density = F, title = "TGFb/TNFa", smooth = smooth, palette = palette2, reverse_palette = TRUE, title_size = 60, legend_size = 40, font_size = 30)
+tgfb_nfkb <- plot_comparison(visium, cell_type_1 = "transformed_TGFb", cell_type_2 = "transformed_NFkB", density = F, title = "TGFb/NFkB", smooth = smooth, palette = palette2, reverse_palette = TRUE, title_size = 60, legend_size = 40, font_size = 30)
+```
+
+```{r, fig.width=15, fig.height=15}
+library(gridExtra)
+
+grid.arrange(myeloids, monocytes, tam, caf, fib_per, cd8, mono_fib, tgfb_tnfa, tgfb_nfkb, ncol = 3)
+```
+
+```{r, fig.width=30, fig.height=10}
+grid.arrange(monocytes, tam, fib_per, ncol = 3)
+```
+```{r, fig.width=14, fig.height=80}
+grid.arrange(myeloids, caf, cd8, mono_fib, tgfb_tnfa, tgfb_nfkb, ncol = 1)
+```
+
+
+
+```{r, fig.width=5, fig.height=5}
+rows <- as.vector(read.table("./HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION.v2023.2.txt"))
+
+visium_subset <- visium[rownames(visium) %in% unlist(rows), ]
+
+tmp <- assay(visium_subset, "cpm")
+
+result <- colSums(log(tmp + 1))
+colData(visium) <- cbind(colData(visium), value = result)
+
+plot_celltype(visium, "value", density = F, title = "Visium", palette = "inferno")
+```

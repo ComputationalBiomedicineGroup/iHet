@@ -1,0 +1,122 @@
+---
+title: "LungCancer Analysis"
+author: "Constantin Zackl"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, collapse=TRUE}
+library(SpatialExperiment)
+library(spacedeconv)
+library(decoupleR)
+```
+
+```{r data, collapse=TRUE}
+spe <- read10xVisium("~/data/lungCancerVisium/")
+```
+
+```{r preprocessing, collapse=TRUE}
+spe <- preprocess(spe)
+spe <- spacedeconv::normalize(spe, method = "cpm")
+
+rownames(spe) <- rowData(spe)$symbol
+```
+# UMI Counts
+```{r umi, collapse=TRUE}
+plot_umi_count(spe, transform_scale = "sqrt", density = F, smooth = T)
+```
+# First Gen Deconvolution 
+```{r, fig.width=15, fig.height=10, collapse=TRUE}
+deconv <- deconvolute(spe, method = "epic", assay_sp = "cpm")
+deconv <- deconvolute(deconv, method = "quantiseq", assay_sp = "cpm")
+
+plot_celltype(deconv, cell_type = "epic", density = F, smooth = T, title_size = 15)
+plot_celltype(deconv, cell_type = "quantiseq", density = F, smooth = T, title_size = 15)
+```
+
+```{r decoupleR, fig.width=15, fig.height=10, collapse=TRUE}
+ref <- get_decoupleR_reference("progeny")
+deconv <- compute_activities(deconv, ref, method = "wmean", assay = "cpm")
+
+ref <- get_decoupleR_reference("collectri")
+deconv <- compute_activities(deconv, ref, method = "wmean", assay = "cpm")
+
+plot_celltype(deconv, cell_type = "progeny", density = F, smooth = T, title_size = 15)
+
+# E2F2, E2F3, E2F4, ETS1, MYC, MYCN, NFKB1, RELA, RFX5, SPI1, STAT1, STAT2, TFDP1, ZNF263
+filtered <- deconv
+colData(filtered) <- colData(filtered)[, !(grepl("^collectri_", names(colData(filtered))) & !grepl("_(E2F2|E2F3|E2F4|ETS1|MYC|MYCN|NFKB1|RELA|RFX5|SPI1|STAT1|STAT2|TFDP1|ZNF263|ZEB1)$", names(colData(filtered))))]
+
+plot_celltype(filtered, cell_type = "collectri", density = F, smooth = T, title_size = 15)
+```
+
+```{r}
+saveRDS(deconv, file = "~/export/LCdeconv_Visium_firstGen.rds")
+```
+
+
+```{r cluster, fig.width=15, fig.height=10, collapse=TRUE}
+cluster <- cluster(deconv, data = "expression", clusres = 0.12)
+
+plot_celltype(cluster, "cluster", palette = "inferno", title_size = 15, density = F)
+```
+
+```{r}
+saveRDS(cluster, file = "~/export/LungCancerCluster_Visium.rds")
+```
+
+# EPIC features
+
+```{r}
+## ZSCORE
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "epic", topn = 5, zscore = TRUE)
+
+## NORMAL
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "epic", topn = 5, zscore = FALSE)
+```
+# quanTIseq features
+
+```{r}
+## ZSCORE
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "quantiseq", topn = 5, zscore = TRUE)
+
+## NORMAL
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "quantiseq", topn = 5, zscore = FALSE)
+```
+
+# progeny features
+
+```{r}
+## ZSCORE
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "progeny", topn = 5, zscore = TRUE)
+
+## NORMAL
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "progeny", topn = 5, zscore = FALSE)
+```
+
+# collectri features
+
+```{r}
+## ZSCORE
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "collectri", topn = 5, zscore = TRUE)
+
+## NORMAL
+get_cluster_features(cluster, clusterid = "cluster_expression_0.12", spmethod = "collectri", topn = 5, zscore = FALSE)
+```
+
+```{r}
+plot_gene(spe, gene = "HBB", transform_scale = "sqrt", smooth = T, assay = "counts", title = "HBB_sqrt_smoothed")
+plot_gene(spe, gene = "HBB", transform_scale = NULL, smooth = T, assay = "counts", title = "HBB_smoothed")
+
+plot_gene(spe, gene = "HBA2", transform_scale = "sqrt", smooth = T, assay = "counts", title = "HBA2_sqrt_smoothed")
+plot_gene(spe, gene = "HBA2", transform_scale = NULL, smooth = T, assay = "counts", title = "HBA2_smoothed")
+
+plot_gene(spe, gene = "CD1C", transform_scale = "sqrt", smooth = T, assay = "counts", title = "CD1C_sqrt_smoothed")
+plot_gene(spe, gene = "CD1C", transform_scale = NULL, smooth = T, assay = "counts", title = "CD1C_smoothed")
+```
