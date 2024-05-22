@@ -1,0 +1,31 @@
+name: iHet
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - nextflow=22.04.5
+  - conda-forge::singularity
+  - ca-certificates
+  - openssl
+  - conda-forge::r-conflicted
+  - bioconda::bioconductor-mofa2
+  - conda-forge::r-reticulate
+  - bioconda::bioconductor-complexheatmap
+  - conda-forge::r-dplyr
+  - conda-forge::r-rcolorbrewer
+  - conda-forge::r-ggpubr
+  - conda-forge::r-ggplot2
+  - conda-forge::r-cowplot
+  - conda-forge::r-tidyr
+  - conda-forge::r-tibble
+  - conda-forge::r-corrplot
+  - conda-forge::r-rstatix
+  - conda-forge::r-stringr
+  - conda-forge::r-ggbeeswarm
+  - conda-forge::r-bayesfactor
+  - conda-forge::r-ggrepel
+  - conda-forge::r-readr
+  - conda-forge::r-remotes
+  - bioconda::r-immunedeconv
+prefix: /home/olapuente/mambaforge/envs/iHet

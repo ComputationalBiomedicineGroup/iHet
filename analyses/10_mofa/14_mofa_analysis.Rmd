@@ -3,11 +3,11 @@ title: MOFA analysis results
 params:
     cpus: 1
     meta: NULL
-    input_dir: "../../results/10_mofa/13_run_mofa"
-    features_dir: "../../results/10_mofa/12_prepare_mofa_data/artifacts"
-    easier_dir: "../../results/10_mofa/11_easier"
+    input_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/13_run_mofa"
+    features_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/12_prepare_mofa_data/artifacts"
+    easier_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/11_easier"
     tmb_dir: "../../data/01_processed/bulk_rna_seq"
-    artifact_dir: "/home/sturm/Downloads/ihet"
+    artifact_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/14_mofa_analysis/artifacts"
     include_tracerx: "true"
 ---
 
@@ -154,7 +154,11 @@ ggsave(file.path(params$artifact_dir, "plots", "variance_explained.svg"), device
 ## Heatmap of bootstrapped factors
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 20)
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 98)
+
+# GTEx has one extra TF, compared to the rest
+tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature) 
+median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), ,drop=FALSE]
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -190,7 +194,7 @@ draw(all)
 
 
 ## Correlation heatmaps
-```{r correlation_features, echo = FALSE,  fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
+```{r correlation_features, echo = FALSE, fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 
 dataset_list <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
