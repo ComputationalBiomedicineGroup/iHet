@@ -6,10 +6,6 @@
 #       format_name: percent
 #       format_version: '1.3'
 #       jupytext_version: 1.14.4
-#   kernelspec:
-#     display_name: Python [conda env:conda-2021-nsclc-heterogeneity-scanpy2]
-#     language: python
-#     name: conda-env-conda-2021-nsclc-heterogeneity-scanpy2-py
 # ---
 
 # %%
@@ -21,7 +17,6 @@ import scanpy as sc
 from nxfvars import nxfvars
 import pandas as pd
 from threadpoolctl import threadpool_limits
-import numpy as np
 import matplotlib.pyplot as plt
 import decoupler as dc
 from IPython.display import Markdown, display
@@ -50,8 +45,8 @@ adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
 # %%
 references = {
-    "dorothea": dc.get_dorothea(organism="human"),
     "progeny": dc.get_progeny(organism="human", top=500),
+    "dorothea": dc.get_dorothea(organism="human"),
     "collectri": dc.get_collectri(organism="human", split_complexes=False),
 }
 
@@ -378,3 +373,76 @@ for name, tmp_ad in {
         swap_axes="myeloid" in name,
         title="TF scaled",
     )
+
+# %% [markdown]
+# ### correlations
+
+# %%
+import altair as alt  # noqa
+
+alt.data_transformers.enable("vegafusion")
+
+for tool in references:
+
+    ad_decoupler_pseudobulk = sc.get.aggregate(singlecell_res[tool], by="cell_type", func="mean")
+    ad_pseudobulk_decoupler = sc.get.aggregate(pb_res["NSCLC myeloid subset"][tool], by="cell_type", func="mean")
+    ad_metacell_decoupler = sc.get.aggregate(metacell_res[tool], by="major_celltype", func="mean")
+
+    agg_df = pd.concat(
+        [
+            ad_decoupler_pseudobulk.to_df(layer="mean").assign(approach="SC -> decoupler -> pseudobulk"),
+            ad_pseudobulk_decoupler.to_df(layer="mean").assign(approach="SC -> pseudobulk -> decoupler"),
+            ad_metacell_decoupler.to_df(layer="mean").assign(approach="SC -> metacell -> decoupler"),
+        ]
+    )
+    agg_df.index.name = "cell_type"
+    plot_df = (
+        agg_df.reset_index()
+        .melt(id_vars=["cell_type", "approach"])
+        .pivot(columns="approach", index=["cell_type", "variable"], values="value")
+        .reset_index()
+    )
+
+    # correlations
+    from scipy.stats import pearsonr
+
+    cor_singlecell_vs_pseudobulk = pearsonr(
+        plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> pseudobulk -> decoupler"]
+    )
+    cor_singlecell_vs_metacells = pearsonr(
+        plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> metacell -> decoupler"]
+    )
+    cor_pseudobulk_vs_metacells = pearsonr(
+        plot_df["SC -> pseudobulk -> decoupler"], plot_df["SC -> metacell -> decoupler"]
+    )
+
+    # single cell vs. pseudobulk
+    c1 = alt.Chart(plot_df).encode(
+        x="SC -> decoupler -> pseudobulk", y="SC -> pseudobulk -> decoupler", color="cell_type"
+    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+        x=alt.value(5),  # pixels from left
+        y=alt.value(5),  # pixels from top
+        text=alt.value(f"r={cor_singlecell_vs_pseudobulk[0]:.3f}"),
+    )
+
+    # single cell vs. metacell
+    c2 = alt.Chart(plot_df).encode(
+        x="SC -> decoupler -> pseudobulk", y="SC -> metacell -> decoupler", color="cell_type"
+    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+        x=alt.value(5),  # pixels from left
+        y=alt.value(5),  # pixels from top
+        text=alt.value(f"r={cor_singlecell_vs_metacells[0]:.3f}"),
+    )
+
+    # pseudobulk vs metacell
+    c3 = alt.Chart(plot_df).encode(
+        x="SC -> pseudobulk -> decoupler", y="SC -> metacell -> decoupler", color="cell_type"
+    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+        x=alt.value(5),  # pixels from left
+        y=alt.value(5),  # pixels from top
+        text=alt.value(f"r={cor_pseudobulk_vs_metacells[0]:.3f}"),
+    )
+
+    (c1 | c2 | c3).properties(title=tool).show()
+
+# %%
