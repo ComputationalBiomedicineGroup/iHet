@@ -49,9 +49,11 @@ adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
 
 # %%
-dorothea = dc.get_dorothea(organism="human")
-progeny = dc.get_progeny(organism="human", top=500)
-collectri = dc.get_collectri(organism="human", split_complexes=False)
+references = {
+    "dorothea": dc.get_dorothea(organism="human"),
+    "progeny": dc.get_progeny(organism="human", top=500),
+    "collectri": dc.get_collectri(organism="human", split_complexes=False),
+}
 
 # %%
 tfs_of_interest = [
@@ -78,86 +80,11 @@ pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT
 # %%
 for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
     # .raw contains log-norm values
-    dc.run_wmean(tmp_ad, progeny, use_raw=True, times=0, min_n=5, verbose=True)
-    tmp_ad.obsm["progeny"] = tmp_ad.obsm["wmean_estimate"]
-    print("completed progeny")
-    dc.run_wmean(tmp_ad, dorothea, use_raw=True, times=0, min_n=5, verbose=True)
-    tmp_ad.obsm["dorothea"] = tmp_ad.obsm["wmean_estimate"]
-    print("completed dorothea")
-    dc.run_wmean(tmp_ad, collectri, use_raw=True, times=0, min_n=5, verbose=True)
-    tmp_ad.obsm["collectri"] = tmp_ad.obsm["wmean_estimate"]
-    print("completed collectri")
+    for method, net in references.items():
+        dc.run_wmean(tmp_ad, net, use_raw=True, times=0, min_n=5, verbose=True)
+        tmp_ad.obsm[method] = tmp_ad.obsm["wmean_estimate"]
+        print(f"completed {method}")
 
-# %%
-for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
-    adatas = {}
-    for net in ["progeny", "dorothea", "collectri"]:
-        # Make pseudobulk
-        pb = dc.get_pseudobulk(
-            dc.get_acts(tmp_ad, net),
-            sample_col="patient",
-            groups_col="cell_type",
-            mode="mean",
-            min_cells=10,
-            # decoupler pseudobulk is mainly intended for counts - need to disable checks and set all filtering options to 0
-            skip_checks=True,
-            min_counts=0,
-            min_prop=0,
-            min_smpls=0,
-        ).copy()
-        # keep order
-        pb.obs["cell_type"] = pd.Categorical(
-            pb.obs["cell_type"],
-            categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
-        )
-        pb.layers["scaled"] = sc.pp.scale(pb.X.copy())
-        adatas[net] = pb
-
-    ad_progeny = adatas["progeny"]
-    ad_dorothea = adatas["dorothea"]
-    ad_collectri = adatas["collectri"]
-
-    display(Markdown("### Progeny"))
-
-    sc.pl.matrixplot(
-        ad_progeny,
-        var_names=pws_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="PW scaled",
-    )
-
-    display(Markdown("### Dorothea"))
-
-    sc.pl.matrixplot(
-        ad_dorothea,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="TF scaled",
-    )
-
-    display(Markdown("### collecTRI"))
-
-    sc.pl.matrixplot(
-        ad_collectri,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="TF scaled",
-    )
 
 # %%
 ad_pw = dc.get_acts(adata_nsclc, "progeny")
@@ -212,7 +139,10 @@ adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
 adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
 
 # %%
+pb_res = {}
 for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
+    tmp_pb_res = {}
+    pb_res[name] = tmp_pb_res
 
     display(Markdown(f"## {name}"))
 
@@ -229,35 +159,20 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
     sc.pp.normalize_total(pb, target_sum=1e6)
     sc.pp.log1p(pb)
 
-    # Run methods
-    dc.run_wmean(pb, progeny, use_raw=False, times=0, min_n=5)
-    pb.obsm["progeny"] = pb.obsm["wmean_estimate"]
-    ad_progeny = dc.get_acts(pb, "progeny")
-    ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
-    ad_progeny.layers["batch_corrected"] = ad_progeny.X.copy()
-    sc.pp.regress_out(ad_progeny, keys="dataset", layer="batch_corrected")
-    sc.pp.scale(ad_progeny, layer="batch_corrected")
-
-    dc.run_wmean(pb, dorothea, use_raw=False, times=0, min_n=5)
-    pb.obsm["dorothea"] = pb.obsm["wmean_estimate"]
-    ad_dorothea = dc.get_acts(pb, "dorothea")
-    ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
-    ad_dorothea.layers["batch_corrected"] = ad_dorothea.X.copy()
-    sc.pp.regress_out(ad_dorothea, keys="dataset", layer="batch_corrected")
-    sc.pp.scale(ad_dorothea, layer="batch_corrected")
-
-    dc.run_wmean(pb, collectri, use_raw=False, times=0, min_n=5)
-    pb.obsm["collectri"] = pb.obsm["wmean_estimate"]
-    ad_collectri = dc.get_acts(pb, "collectri")
-    ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
-    ad_collectri.layers["batch_corrected"] = ad_collectri.X.copy()
-    sc.pp.regress_out(ad_collectri, keys="dataset", layer="batch_corrected")
-    sc.pp.scale(ad_collectri, layer="batch_corrected")
+    for method, net in references.items():
+        dc.run_wmean(pb, net, use_raw=False, times=0, min_n=5)
+        pb.obsm[method] = pb.obsm["wmean_estimate"]
+        tmp_ad_decoupler = dc.get_acts(pb, method)
+        tmp_ad_decoupler.layers["scaled"] = sc.pp.scale(tmp_ad_decoupler.X.copy())
+        # tmp_ad.layers["batch_corrected"] = tmp_ad.X.copy()
+        # sc.pp.regress_out(tmp_ad, keys="dataset", layer="batch_corrected")
+        # sc.pp.scale(tmp_ad, layer="batch_corrected")
+        tmp_pb_res[method] = tmp_ad_decoupler
 
     display(Markdown("### Progeny"))
 
     sc.pl.matrixplot(
-        ad_progeny,
+        tmp_pb_res["progeny"],
         var_names=pws_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
@@ -267,22 +182,11 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         swap_axes="myeloid" in name,
         title="PW scaled",
     )
-    sc.pl.matrixplot(
-        ad_progeny,
-        var_names=pws_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2,
-        vmax=2,
-        layer="batch_corrected",
-        swap_axes="myeloid" in name,
-        title="PW batch corrected/scaled",
-    )
 
     display(Markdown("### Dorothea"))
 
     sc.pl.matrixplot(
-        ad_dorothea,
+        tmp_pb_res["dorothea"],
         var_names=tfs_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
@@ -291,23 +195,12 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         layer="scaled",
         swap_axes="myeloid" in name,
         title="TF scaled",
-    )
-    sc.pl.matrixplot(
-        ad_dorothea,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="batch_corrected",
-        swap_axes="myeloid" in name,
-        title="TF batch corrected/scaled",
     )
 
     display(Markdown("### collecTRI"))
 
     sc.pl.matrixplot(
-        ad_collectri,
+        tmp_pb_res["collectri"],
         var_names=tfs_of_interest,
         groupby="cell_type",
         cmap="coolwarm",
@@ -317,21 +210,13 @@ for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": 
         swap_axes="myeloid" in name,
         title="TF scaled",
     )
-    sc.pl.matrixplot(
-        ad_collectri,
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="batch_corrected",
-        swap_axes="myeloid" in name,
-        title="TF batch corrected/scaled",
-    )
 
 
 # %% [markdown]
-# ## Metacell approach
+# ---
+#
+# ## Comparison of approaches
+# ### Metacell approach
 
 # %%
 adata_metacells = sc.read_h5ad("/scratch/nsclc_heterogeneity/_ihet_metacells/iHet_metcells.h5ad")
@@ -359,24 +244,15 @@ adata_metacells.obs["major_celltype"] = pd.Categorical(
 adata_metacells.X = adata_metacells.layers["total_umis"].copy()
 sc.pp.normalize_total(adata_metacells, target_sum=1e6)
 sc.pp.log1p(adata_metacells)
+metacell_res = {}
 
 # %%
-dc.run_wmean(adata_metacells, progeny, use_raw=False, times=0, min_n=5)
-adata_metacells.obsm["progeny"] = adata_metacells.obsm["wmean_estimate"]
-ad_progeny = dc.get_acts(adata_metacells, "progeny")
-ad_progeny.layers["scaled"] = sc.pp.scale(ad_progeny.X.copy())
-
-# %%
-dc.run_wmean(adata_metacells, dorothea, use_raw=False, times=0, min_n=5)
-adata_metacells.obsm["dorothea"] = adata_metacells.obsm["wmean_estimate"]
-ad_dorothea = dc.get_acts(adata_metacells, "dorothea")
-ad_dorothea.layers["scaled"] = sc.pp.scale(ad_dorothea.X.copy())
-
-# %%
-dc.run_wmean(adata_metacells, collectri, use_raw=False, times=0, min_n=5)
-adata_metacells.obsm["collectri"] = adata_metacells.obsm["wmean_estimate"]
-ad_collectri = dc.get_acts(adata_metacells, "collectri")
-ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
+for method, net in references.items():
+    dc.run_wmean(adata_metacells, net, use_raw=False, times=0, min_n=5)
+    adata_metacells.obsm["progeny"] = adata_metacells.obsm["wmean_estimate"]
+    tmp_ad = dc.get_acts(adata_metacells, "progeny")
+    tmp_ad.layers["scaled"] = sc.pp.scale(tmp_ad.X.copy())
+    metacell_res[method] = tmp_ad
 
 
 # %% [markdown]
@@ -384,7 +260,7 @@ ad_collectri.layers["scaled"] = sc.pp.scale(ad_collectri.X.copy())
 
 # %%
 sc.pl.matrixplot(
-    ad_progeny,
+    metacell_res["progeny"],
     var_names=pws_of_interest,
     groupby="major_celltype",
     cmap="coolwarm",
@@ -400,7 +276,7 @@ sc.pl.matrixplot(
 
 # %%
 sc.pl.matrixplot(
-    ad_dorothea,
+    metacell_res["dorothea"],
     var_names=tfs_of_interest,
     groupby="major_celltype",
     cmap="coolwarm",
@@ -417,7 +293,7 @@ sc.pl.matrixplot(
 
 # %%
 sc.pl.matrixplot(
-    ad_collectri,
+    metacell_res["collectri"],
     var_names=tfs_of_interest,
     groupby="major_celltype",
     cmap="coolwarm",
@@ -428,208 +304,77 @@ sc.pl.matrixplot(
     title="TF scaled",
 )
 
-# %%
-# -------------------------- OLD STUFF --------------
-
-# # %%
-# adatas = {"m": {}, "nsclc": {}}
-# # %%
-# adatas["m"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_m)
-# adatas["m"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_m)
-# adatas["nsclc"]["progeny"] = sh.compare_groups.compute_scores.run_progeny(adata_nsclc)
-# adatas["nsclc"]["dorothea"] = sh.compare_groups.compute_scores.run_dorothea(adata_nsclc)
-
-# # %%
-# with plt.rc_context({"figure.figsize": (6, 6)}):
-#     sc.pl.umap(
-#         adatas["nsclc"]["dorothea"],
-#         cmap="coolwarm",
-#         color=["E2F1", "E2F2", "E2F3", "E2F4"],
-#         vmin=-2,
-#         vmax=2,
-#         sort_order=False,
-#     )
-
-# # %%
-# tfs_of_interest = [
-#     "E2F2",
-#     "E2F3",
-#     "E2F4",
-#     "ETS1",
-#     "MYC",
-#     "MYCN",
-#     "NFKB1",
-#     "RELA",
-#     "RFX5",
-#     "SPI1",
-#     "STAT1",
-#     "STAT2",
-#     "TFDP1",
-#     "ZNF263",
-# ]
-# pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
-
-# # %%
-# pb_progeny = sh.pseudobulk.pseudobulk(adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
-# pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(adatas["nsclc"]["progeny"].obs["cell_type"].dtype)
-
-# # %% [markdown]
-# # Note: another round of z-scoreing after pseudobulking hardly makes any difference.
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_progeny,
-#     var_names=pws_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=False,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_progeny.svg")
-
-
-# # %%
-# def _export_df(pb):
-#     df = pb.to_df()
-#     df["cell_type"] = pb.obs["cell_type"]
-#     return df.groupby("cell_type").agg("mean").T
-
-
-# _export_df(pb_progeny).to_csv(f"{artifact_dir}/table_progeny.csv")
-
-# # %%
-# pb_dorothea = sh.pseudobulk.pseudobulk(adatas["nsclc"]["dorothea"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
-# pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(adatas["nsclc"]["dorothea"].obs["cell_type"].dtype)
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_dorothea,
-#     var_names=tfs_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=False,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_dorothea.svg")
-
-# _export_df(pb_dorothea).to_csv(f"{artifact_dir}/table_dorothea.csv")
-
-# # %% [markdown]
-# # ## Including myeloid subclusters
-
-# # %%
-# pb_progeny = sh.pseudobulk.pseudobulk(adatas["nsclc"]["progeny"], groupby=["patient", "cell_type"], aggr_fun=np.mean)
-# pb_progeny.obs["cell_type"] = pb_progeny.obs["cell_type"].astype(adatas["nsclc"]["progeny"].obs["cell_type"].dtype)
-
-# # %%
-# pb_dorothea = sh.pseudobulk.pseudobulk(
-#     adatas["nsclc"]["dorothea"],
-#     groupby=["patient", "cell_type"],
-#     aggr_fun=np.mean,
-# )
-# pb_dorothea.obs["cell_type"] = pb_dorothea.obs["cell_type"].astype(adatas["nsclc"]["dorothea"].obs["cell_type"].dtype)
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_progeny[pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
-#     var_names=pws_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=True,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_progeny_myeloid.svg")
-
-# # %%
-# pb_progeny.layers["zscore"] = scipy.stats.zscore(pb_progeny.X, axis=1)
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_progeny[pb_progeny.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
-#     var_names=pws_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=True,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-#     layer="zscore",
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_progeny_myeloid_zscore.svg")
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_dorothea[pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
-#     var_names=tfs_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=True,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_dorothea_myeloid.svg")
-
-# # %%
-# pb_dorothea.layers["zscore"] = scipy.stats.zscore(pb_dorothea.X, axis=1)
-
-# # %%
-# fig = sc.pl.matrixplot(
-#     pb_dorothea[pb_dorothea.obs["cell_type"].isin(adata_m.obs["cell_type"]), :],
-#     var_names=tfs_of_interest,
-#     groupby="cell_type",
-#     cmap="coolwarm",
-#     swap_axes=True,
-#     vmin=-2.5,
-#     vmax=2.5,
-#     return_fig=True,
-#     layer="zscore",
-# )
-# fig.savefig(f"{artifact_dir}/heatmap_dorothea_myeloid_zscore.svg")
-
-# # %% [markdown]
-# # ## UMAP plots of selected features
-
-# # %%
-# fig, axs = plt.subplots(2, 4, figsize=(18, 8))
-# axs = iter(axs.flatten())
-# for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
-#     sc.pl.umap(
-#         adatas["nsclc"]["progeny"],
-#         color=pw,
-#         ax=ax,
-#         show=False,
-#         cmap="coolwarm",
-#         vmin=-2.5,
-#         vmax=2.5,
-#         title=f"PW: {pw}",
-#         frameon=False,
-#     )
-# for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
-#     sc.pl.umap(
-#         adatas["nsclc"]["dorothea"],
-#         color=tf,
-#         ax=ax,
-#         show=False,
-#         cmap="coolwarm",
-#         vmin=-2.5,
-#         vmax=2.5,
-#         title=f"TF: {tf}",
-#         frameon=False,
-#     )
-# fig.savefig(
-#     f"{artifact_dir}/umap_cell_selected_features.svg",
-#     bbox_inches="tight",
-#     dpi=600,
-# )
-# plt.show()
-
-# # %%
+# %% [markdown]
+# ## Comparison of approaches
+# ### single cell -> decoupler -> pseudobulk
 
 # %%
+# Single cell -> decoupler -> pseudobulk
+singlecell_res = {}
+for name, tmp_ad in {
+    # "NSCLC full dataset": adata_nsclc,
+    "NSCLC myeloid subset": adata_m,
+}.items():
+    for method in references:
+        # Make pseudobulk
+        pb = dc.get_pseudobulk(
+            dc.get_acts(tmp_ad, method),
+            sample_col="patient",
+            groups_col="cell_type",
+            mode="mean",
+            min_cells=10,
+            # decoupler pseudobulk is mainly intended for counts - need to disable checks and set all filtering options to 0
+            skip_checks=True,
+            min_counts=0,
+            min_prop=0,
+            min_smpls=0,
+        ).copy()
+        # keep order
+        pb.obs["cell_type"] = pd.Categorical(
+            pb.obs["cell_type"],
+            categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
+        )
+        pb.layers["scaled"] = sc.pp.scale(pb.X.copy())
+        singlecell_res[method] = pb
+
+    display(Markdown(f"### Progeny"))
+
+    sc.pl.matrixplot(
+        singlecell_res["progeny"],
+        var_names=pws_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="PW scaled",
+    )
+
+    display(Markdown("### Dorothea"))
+
+    sc.pl.matrixplot(
+        singlecell_res["dorothea"],
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="TF scaled",
+    )
+
+    display(Markdown("### collecTRI"))
+
+    sc.pl.matrixplot(
+        singlecell_res["collectri"],
+        var_names=tfs_of_interest,
+        groupby="cell_type",
+        cmap="coolwarm",
+        vmin=-2.5,
+        vmax=2.5,
+        layer="scaled",
+        swap_axes="myeloid" in name,
+        title="TF scaled",
+    )
