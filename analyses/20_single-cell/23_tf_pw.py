@@ -42,6 +42,19 @@ threadpool_limits(cpus)
 adata_m = sc.read_h5ad(path_adata_m)
 adata_nsclc = sc.read_h5ad(path_adata_nsclc)
 
+# %%
+# exclude these datasets because they contain patients that were already measured in another dataset (same study)
+# Having repeated measures would be problematic because the statistics we use do not account for this.
+excludelist = [
+    "Leader_Merad_2021_10x_5p_v1_beads",
+    "Leader_Merad_2021_10x_5p_v1_CD2",
+    "Leader_Merad_2021_10x_3p_v2_beads_cite",
+]
+adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
+adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
+
+sc_datasets = {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}
+
 
 # %%
 references = {
@@ -73,7 +86,7 @@ pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT
 # ## Single-cell approach
 
 # %%
-for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
+for name, tmp_ad in sc_datasets.items():
     # .raw contains log-norm values
     for method, net in references.items():
         dc.run_wmean(tmp_ad, net, use_raw=True, times=0, min_n=5, verbose=True)
@@ -122,20 +135,10 @@ plt.show()
 # %% [markdown]
 # ## Pseudobulk approach
 
-# %%
-# exclude these datasets because they contain patients that were already measured in another dataset (same study)
-# Having repeated measures would be problematic because the statistics we use do not account for this.
-excludelist = [
-    "Leader_Merad_2021_10x_5p_v1_beads",
-    "Leader_Merad_2021_10x_5p_v1_CD2",
-    "Leader_Merad_2021_10x_3p_v2_beads_cite",
-]
-adata_m = adata_m[~adata_m.obs["dataset"].isin(excludelist)]
-adata_nsclc = adata_nsclc[~adata_nsclc.obs["dataset"].isin(excludelist)]
 
 # %%
 pb_res = {}
-for name, tmp_ad in {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_m}.items():
+for name, tmp_ad in sc_datasets.items():
     tmp_pb_res = {}
     pb_res[name] = tmp_pb_res
 
@@ -244,8 +247,8 @@ metacell_res = {}
 # %%
 for method, net in references.items():
     dc.run_wmean(adata_metacells, net, use_raw=False, times=0, min_n=5)
-    adata_metacells.obsm["progeny"] = adata_metacells.obsm["wmean_estimate"]
-    tmp_ad = dc.get_acts(adata_metacells, "progeny")
+    adata_metacells.obsm[method] = adata_metacells.obsm["wmean_estimate"]
+    tmp_ad = dc.get_acts(adata_metacells, method)
     tmp_ad.layers["scaled"] = sc.pp.scale(tmp_ad.X.copy())
     metacell_res[method] = tmp_ad
 
@@ -384,9 +387,11 @@ alt.data_transformers.enable("vegafusion")
 
 for tool in references:
 
-    ad_decoupler_pseudobulk = sc.get.aggregate(singlecell_res[tool], by="cell_type", func="mean")
-    ad_pseudobulk_decoupler = sc.get.aggregate(pb_res["NSCLC myeloid subset"][tool], by="cell_type", func="mean")
-    ad_metacell_decoupler = sc.get.aggregate(metacell_res[tool], by="major_celltype", func="mean")
+    ad_decoupler_pseudobulk = sc.get.aggregate(singlecell_res[tool], by="cell_type", func="mean", layer="scaled")
+    ad_pseudobulk_decoupler = sc.get.aggregate(
+        pb_res["NSCLC myeloid subset"][tool], by="cell_type", func="mean", layer="scaled"
+    )
+    ad_metacell_decoupler = sc.get.aggregate(metacell_res[tool], by="major_celltype", func="mean", layer="scaled")
 
     agg_df = pd.concat(
         [
