@@ -46,14 +46,15 @@ workflow W20_single_cell {
         ]),
         ch_adata_annotated
     )
-    // JUPYTER_OVERVIEW_PLOTS(
-    //     get_notebook_channel("29_overview_plots"),
-    //     Channel.value([
-    //         "adata_m": "adata_myeloid_reannotated.h5ad",
-    //         "adata_nsclc": "adata_nsclc_reannotated.h5ad"
-    //     ]),
-    //     // hack: include injection to make centos7 container work
-    //     // see `lib/inject/README.md`
-    //     ch_adata_annotated.concat(Channel.fromPath("$baseDir/lib/inject/inject.so")).collect()
-    // )
+    JUPYTER_OVERVIEW_PLOTS(
+        get_notebook_channel("29_overview_plots"),
+        Channel.value([
+            "adata_m": "adata_myeloid_reannotated.h5ad",
+            "adata_nsclc": "adata_nsclc_reannotated.h5ad"
+        ]),
+        // hack: include injection to make centos7 container work
+        // see `lib/inject/README.md`
+        ch_adata_annotated.concat(Channel.fromPath("$baseDir/lib/inject/inject.so")).collect()
+    )
+
 }

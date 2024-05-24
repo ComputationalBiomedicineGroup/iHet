@@ -59,7 +59,6 @@ sc_datasets = {"NSCLC full dataset": adata_nsclc, "NSCLC myeloid subset": adata_
 # %%
 references = {
     "progeny": dc.get_progeny(organism="human", top=500),
-    "dorothea": dc.get_dorothea(organism="human"),
     "collectri": dc.get_collectri(organism="human", split_complexes=False),
 }
 
@@ -181,20 +180,6 @@ for name, tmp_ad in sc_datasets.items():
         title="PW scaled",
     )
 
-    display(Markdown("### Dorothea"))
-
-    sc.pl.matrixplot(
-        tmp_pb_res["dorothea"],
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="TF scaled",
-    )
-
     display(Markdown("### collecTRI"))
 
     sc.pl.matrixplot(
@@ -270,23 +255,6 @@ sc.pl.matrixplot(
 )
 
 # %% [markdown]
-# ### Dorothea
-
-# %%
-sc.pl.matrixplot(
-    metacell_res["dorothea"],
-    var_names=tfs_of_interest,
-    groupby="major_celltype",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    swap_axes=True,
-    title="TF scaled",
-)
-
-
-# %% [markdown]
 # ### CollecTRI
 
 # %%
@@ -347,20 +315,6 @@ for name, tmp_ad in {
         layer="scaled",
         swap_axes="myeloid" in name,
         title="PW scaled",
-    )
-
-    display(Markdown("### Dorothea"))
-
-    sc.pl.matrixplot(
-        singlecell_res["dorothea"],
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="TF scaled",
     )
 
     display(Markdown("### collecTRI"))

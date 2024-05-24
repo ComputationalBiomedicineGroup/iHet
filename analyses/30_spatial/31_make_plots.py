@@ -92,12 +92,15 @@ adata.obs["TGFb/NFkB"] = np.log(adata.obsm["wmean_estimate"]["TGFb"] + 1) - np.l
 )
 
 # %%
-sc.pl.spatial(adata, color="Myeloid cells", cmap="inferno", alpha_img=0, size=1.5, frameon=False)
-sc.pl.spatial(adata, color="Fibroblasts", cmap="inferno", alpha_img=0, size=1.5, frameon=False)
-sc.pl.spatial(adata, color="c2l_T.cell.CD8", cmap="inferno", alpha_img=0, size=1.5, frameon=False, title="CD8+ T cells")
+fig = sc.pl.spatial(adata, color="Myeloid cells", cmap="inferno", alpha_img=0, size=1.5, frameon=False, return_fig=True)
+fig.savefig(f"{artifact_dir}/myeloid.svg", bbox_inches="tight", dpi=600)
+fig = sc.pl.spatial(adata, color="Fibroblasts", cmap="inferno", alpha_img=0, size=1.5, frameon=False, return_fig=True)
+fig.savefig(f"{artifact_dir}/fibroblasts.svg", bbox_inches="tight", dpi=600)
+fig = sc.pl.spatial(adata, color="c2l_T.cell.CD8", cmap="inferno", alpha_img=0, size=1.5, frameon=False, title="CD8+ T cells", return_fig=True)
+fig.savefig(f"{artifact_dir}/t_cd8.svg", bbox_inches="tight", dpi=600)
 
 # %%
-sc.pl.spatial(
+fig = sc.pl.spatial(
     adata,
     color="Fibroblasts/Monocytes",
     cmap="PRGn_r",
@@ -107,10 +110,12 @@ sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.5,
     vmax=0.5,
+    return_fig=True
 )
+fig.savefig(f"{artifact_dir}/ratio_fibroblasts_monocytes.svg", bbox_inches="tight", dpi=600)
 
 # %%
-sc.pl.spatial(
+fig = sc.pl.spatial(
     adata,
     color="TGFb/TNFa",
     cmap="PRGn_r",
@@ -120,11 +125,13 @@ sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.2,
     vmax=0.2,
+    return_fig=True
 )
+fig.savefig(f"{artifact_dir}/ratio_tbfb_tnfa.svg", bbox_inches="tight", dpi=600)
 
 
 # %%
-sc.pl.spatial(
+fig = sc.pl.spatial(
     adata,
     color="TGFb/NFkB",
     cmap="PRGn_r",
@@ -134,5 +141,8 @@ sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.2,
     vmax=0.2,
+    return_fig=True
 )
+fig.savefig(f"{artifact_dir}/ratio_tbfb_nfkb.svg", bbox_inches="tight", dpi=600)
+
 # %%
