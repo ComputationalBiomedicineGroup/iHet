@@ -17,6 +17,7 @@ include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkd
 process P11_easier {
     input:
         tuple val(meta), path(script)
+        path(zscore_data)
         path(expr_data)
 
     output:
@@ -26,8 +27,9 @@ process P11_easier {
     """
     Rscript ${script} \\
         ${expr_data} \\
-        ${baseDir}/tables/easier_Zscores/immscoreZ.rds \\
-        ${expr_data.baseName}.features.rds
+        ${zscore_data} \\
+        ${expr_data.baseName}.features.rds \\
+        ${params.regulon_net}
     """
 }
 
@@ -49,6 +51,7 @@ workflow W10_mofa {
     def dir = "analyses/10_mofa"
     P11_easier(
         file_tuple("$dir/11_easier.R"),
+        file("${baseDir}/tables/easier_Zscores/immscoreZ.rds"),
         Channel.fromPath("${ params.bulk_input_dir }/*_expr_data*.rds")
     )
     P12_prepare_mofa_data(

@@ -52,8 +52,6 @@ workflow W20_single_cell {
             "adata_m": "adata_myeloid_reannotated.h5ad",
             "adata_nsclc": "adata_nsclc_reannotated.h5ad"
         ]),
-        // hack: include injection to make centos7 container work
-        // see `lib/inject/README.md`
-        ch_adata_annotated.concat(Channel.fromPath("$baseDir/lib/inject/inject.so")).collect()
+        ch_adata_annotated.collect()
     )
 }

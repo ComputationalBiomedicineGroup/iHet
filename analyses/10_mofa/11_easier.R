@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds>
+  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds> <regulon_net>
 
 " -> doc
 
@@ -14,6 +14,7 @@ args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 immscore_file <- args[2]
 output_file <- args[3]
+regulon_net = args[4]
 
 getFeat <- function(dataobj,
                     cancertype = "LUAD",
@@ -79,7 +80,7 @@ getFeat <- function(dataobj,
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
       RNA_tpm = dataobj$tpm[[dataset]],
-      regulon_net = "dorothea"
+      regulon_net = regulon_net
     )
 
     # Storing of the computed features in the output object
@@ -94,7 +95,7 @@ getFeat <- function(dataobj,
     )
 
     proxies.mat <- proxies.mat[, selscores]
-    
+
     # Rotation of the "Chemokines" score to agree with "CYT" direction
     chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
     if (chemosign < 0) proxies.mat[, "chemokines"] <- -proxies.mat[, "chemokines"]
