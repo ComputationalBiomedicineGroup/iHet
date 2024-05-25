@@ -13,6 +13,9 @@ include { RMARKDOWNNOTEBOOK as P12_prepare_mofa_data } from "../modules/local/rm
 include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
     options: modules["P14_mofa_analysis"]
 )
+include { RMARKDOWNNOTEBOOK as P15_iHet_predictions } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
+    options: modules["P15_iHet_predictions"]
+)
 
 process P11_easier {
     input:
@@ -79,6 +82,14 @@ workflow W10_mofa {
             Channel.of(file("$dir/helper_functions.R")),
             P11_easier.out.collect(),
             Channel.fromPath("${ params.bulk_input_dir }/*.{txt,tsv}").collect(),
+            P13_run_mofa.out.models.collect()
+        ).collect()
+    )
+    P15_iHet_predictions(
+        file_tuple("$dir/15_iHet_predictions.Rmd"),
+        [regulon_net: params.regulon_net, mofa_dir: "./", easier_dir: "./"],
+        Channel.of(file("$dir/helper_iHet_predictions.R")).mix(
+            P11_easier.out.collect(),
             P13_run_mofa.out.models.collect()
         ).collect()
     )

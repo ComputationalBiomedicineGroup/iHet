@@ -51,6 +51,19 @@ if (INCLUDE_TRACERX) {
 }
 ```
 
+```{r}
+# TODO
+feature_data |>
+    filter(view == "Immune cells quantification") |>
+    filter(dataset %in% SELECTED_DATASETS) |>
+    ggplot(aes(x = feature, color = dataset, y = value)) +
+    geom_boxplot() +
+    scale_color_brewer(palette = "Dark2")
+
+# ggsave("/home/sturm/Downloads/ihet/ct_fractions_per_dataset.pdf", width = 8, height = 5)
+```
+
+
 ```{r, include=FALSE}
 models <- sapply(DATASETS, function(dataset_id) {
     load_model(file.path(params$input_dir, sprintf("mofa_%s.hdf5", dataset_id)))
@@ -159,6 +172,14 @@ svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width =
 # GTEx has one extra TF, compared to the rest
 tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
 median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
+
+# TODO
+# median_weights2 <- sapply(median_weights, function(df) {
+#     for (i in 1:7) {
+#         df[[sprintf("factor %s", i)]] <- df[[sprintf("factor %s", i)]] - median_weights$GTEx[[sprintf("factor %s", i)]]
+#     }
+#     df
+# }, simplify = FALSE, USE.NAMES = TRUE)
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -410,8 +431,12 @@ tmp_scatter_data <- scatter_data %>%
 #     pull(feature)
 
 selected_features <- bind_rows(
-    tmp_scatter_data |> group_by(view) |> filter(`TCGA-NSCLC` > 0 & `JiaSharma` > 0) |> slice_max(order_by = rank, n = 7),
-    tmp_scatter_data |> group_by(view) |> filter(`TCGA-NSCLC` < 0 & `JiaSharma` < 0) |> slice_max(order_by = rank, n = 5)
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` > 0.2 | `JiaSharma` > 0.2) |>
+        slice_max(order_by = rank, n = 7),
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` < -0.2 | `JiaSharma` < -0.2) |>
+        slice_max(order_by = rank, n = 5)
 ) |>
     pull(feature) |>
     unique()
