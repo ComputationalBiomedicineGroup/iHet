@@ -85,12 +85,12 @@ workflow W10_mofa {
             P13_run_mofa.out.models.collect()
         ).collect()
     )
-    P15_iHet_predictions(
-        file_tuple("$dir/15_iHet_predictions.Rmd"),
-        [regulon_net: params.regulon_net, mofa_dir: "./", easier_dir: "./"],
-        Channel.of(file("$dir/helper_iHet_predictions.R")).mix(
-            P11_easier.out.collect(),
-            P13_run_mofa.out.models.collect()
-        ).collect()
-    )
+    // P15_iHet_predictions(
+    //     file_tuple("$dir/15_iHet_predictions.Rmd"),
+    //     [regulon_net: params.regulon_net, mofa_dir: "./", easier_dir: "./"],
+    //     Channel.of(file("$dir/helper_iHet_predictions.R")).mix(
+    //         P11_easier.out.collect(),
+    //         P13_run_mofa.out.models.collect()
+    //     ).collect()
+    // )
 }
