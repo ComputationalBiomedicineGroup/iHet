@@ -96,8 +96,43 @@ fig = sc.pl.spatial(adata, color="Myeloid cells", cmap="inferno", alpha_img=0, s
 fig.savefig(f"{artifact_dir}/myeloid.svg", bbox_inches="tight", dpi=600)
 fig = sc.pl.spatial(adata, color="Fibroblasts", cmap="inferno", alpha_img=0, size=1.5, frameon=False, return_fig=True)
 fig.savefig(f"{artifact_dir}/fibroblasts.svg", bbox_inches="tight", dpi=600)
-fig = sc.pl.spatial(adata, color="c2l_T.cell.CD8", cmap="inferno", alpha_img=0, size=1.5, frameon=False, title="CD8+ T cells", return_fig=True)
+fig = sc.pl.spatial(
+    adata,
+    color="c2l_T.cell.CD8",
+    cmap="inferno",
+    alpha_img=0,
+    size=1.5,
+    frameon=False,
+    title="CD8+ T cells",
+    return_fig=True,
+)
 fig.savefig(f"{artifact_dir}/t_cd8.svg", bbox_inches="tight", dpi=600)
+fig = sc.pl.spatial(
+    adata,
+    color="c2l_Monocyte.classical",
+    cmap="inferno",
+    alpha_img=0,
+    size=1.5,
+    frameon=False,
+    title="Monocytes classical",
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/monocytes_classical.svg", bbox_inches="tight", dpi=600)
+fig = sc.pl.spatial(
+    adata,
+    color="c2l_Fibroblast.peribronchial",
+    cmap="inferno",
+    alpha_img=0,
+    size=1.5,
+    frameon=False,
+    title="Fibroblasts peribronchial",
+    return_fig=True,
+)
+fig.savefig(f"{artifact_dir}/fibroblasts_peribronchial.svg", bbox_inches="tight", dpi=600)
+fig = sc.pl.spatial(
+    adata, color="c2l_TAM", cmap="inferno", alpha_img=0, size=1.5, frameon=False, title="TAMs", return_fig=True
+)
+fig.savefig(f"{artifact_dir}/TAMs.svg", bbox_inches="tight", dpi=600)
 
 # %%
 fig = sc.pl.spatial(
@@ -110,7 +145,7 @@ fig = sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.5,
     vmax=0.5,
-    return_fig=True
+    return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/ratio_fibroblasts_monocytes.svg", bbox_inches="tight", dpi=600)
 
@@ -125,7 +160,7 @@ fig = sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.2,
     vmax=0.2,
-    return_fig=True
+    return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/ratio_tbfb_tnfa.svg", bbox_inches="tight", dpi=600)
 
@@ -141,7 +176,7 @@ fig = sc.pl.spatial(
     title="CD8+ T cells",
     vmin=-0.2,
     vmax=0.2,
-    return_fig=True
+    return_fig=True,
 )
 fig.savefig(f"{artifact_dir}/ratio_tbfb_nfkb.svg", bbox_inches="tight", dpi=600)
 
