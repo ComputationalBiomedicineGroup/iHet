@@ -292,7 +292,10 @@ plots <- lapply(names(factor_list), function(factors_name) {
         p.mat = cor_pmat,
         sig.level = 0.01,
         insig = "blank", tl.col = "black",
-        col = colorRampPalette(rev(rdbu10_palette))(1000),
+        col = rev(COL2("RdYlBu")),
+        type="lower",
+        number.cex=0.6,
+        addCoef.col = 'black'
     )
     dev.off()
 
@@ -305,10 +308,12 @@ plots <- lapply(names(factor_list), function(factors_name) {
         is.corr = TRUE,
         p.mat = cor_pmat,
         sig.level = 0.01,
-        insig = "blank",
-        tl.col = "black",
-        order = "hclust",
-        col = colorRampPalette(rev(rdbu10_palette))(1000),
+        insig = "blank", tl.col = "black",
+        col = rev(COL2("RdYlBu")),
+        type="lower",
+        number.cex=0.6,
+        addCoef.col = 'black',
+        order="hclust"
     )
     dev.off()
 
