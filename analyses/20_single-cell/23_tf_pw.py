@@ -195,213 +195,213 @@ for name, tmp_ad in sc_datasets.items():
     )
 
 
-# %% [markdown]
-# ---
-#
-# ## Comparison of approaches
-# ### Metacell approach
+# # %% [markdown]
+# # ---
+# #
+# # ## Comparison of approaches
+# # ### Metacell approach
 
-# %%
-adata_metacells = sc.read_h5ad("/scratch/nsclc_heterogeneity/_ihet_metacells/iHet_metcells.h5ad")
-fix_cell_type_names = lambda x: {
-    "Neutrophils": "Neutrophil",
-    "transitional club/AT2": "Transitional club/AT2",
-    "Tumor cells": "Tumor cell",
-    "stromal dividing": "Stromal cycling",
-    "B cell dividing": "B cell cycling",
-    "Plasma cell dividing": "Plasma cell cycling",
-    "T cell dividing": "T cell cycling",
-    "cDC dividing": "cDC cycling",
-    "Macrophage dividing": "Macrophage cycling",
-    "Macrophage alveolar dividing": "Macrophage alveolar cycling",
-}.get(x, x)
-adata_metacells.obs["major_celltype"] = adata_metacells.obs["major_celltype"].map(fix_cell_type_names)
-adata_metacells.obs["major_celltype"] = pd.Categorical(
-    adata_metacells.obs["major_celltype"],
-    categories=[
-        x for x in adata_nsclc.obs["cell_type"].cat.categories if x in adata_metacells.obs["major_celltype"].values
-    ],
-)
+# # %%
+# adata_metacells = sc.read_h5ad("/scratch/nsclc_heterogeneity/_ihet_metacells/iHet_metcells.h5ad")
+# fix_cell_type_names = lambda x: {
+#     "Neutrophils": "Neutrophil",
+#     "transitional club/AT2": "Transitional club/AT2",
+#     "Tumor cells": "Tumor cell",
+#     "stromal dividing": "Stromal cycling",
+#     "B cell dividing": "B cell cycling",
+#     "Plasma cell dividing": "Plasma cell cycling",
+#     "T cell dividing": "T cell cycling",
+#     "cDC dividing": "cDC cycling",
+#     "Macrophage dividing": "Macrophage cycling",
+#     "Macrophage alveolar dividing": "Macrophage alveolar cycling",
+# }.get(x, x)
+# adata_metacells.obs["major_celltype"] = adata_metacells.obs["major_celltype"].map(fix_cell_type_names)
+# adata_metacells.obs["major_celltype"] = pd.Categorical(
+#     adata_metacells.obs["major_celltype"],
+#     categories=[
+#         x for x in adata_nsclc.obs["cell_type"].cat.categories if x in adata_metacells.obs["major_celltype"].values
+#     ],
+# )
 
-# %%
-adata_metacells.X = adata_metacells.layers["total_umis"].copy()
-sc.pp.normalize_total(adata_metacells, target_sum=1e6)
-sc.pp.log1p(adata_metacells)
-metacell_res = {}
+# # %%
+# adata_metacells.X = adata_metacells.layers["total_umis"].copy()
+# sc.pp.normalize_total(adata_metacells, target_sum=1e6)
+# sc.pp.log1p(adata_metacells)
+# metacell_res = {}
 
-# %%
-for method, net in references.items():
-    dc.run_wmean(adata_metacells, net, use_raw=False, times=0, min_n=5)
-    adata_metacells.obsm[method] = adata_metacells.obsm["wmean_estimate"]
-    tmp_ad = dc.get_acts(adata_metacells, method)
-    tmp_ad.layers["scaled"] = sc.pp.scale(tmp_ad.X.copy())
-    metacell_res[method] = tmp_ad
+# # %%
+# for method, net in references.items():
+#     dc.run_wmean(adata_metacells, net, use_raw=False, times=0, min_n=5)
+#     adata_metacells.obsm[method] = adata_metacells.obsm["wmean_estimate"]
+#     tmp_ad = dc.get_acts(adata_metacells, method)
+#     tmp_ad.layers["scaled"] = sc.pp.scale(tmp_ad.X.copy())
+#     metacell_res[method] = tmp_ad
 
 
-# %% [markdown]
-# ### Progeny
+# # %% [markdown]
+# # ### Progeny
 
-# %%
-sc.pl.matrixplot(
-    metacell_res["progeny"],
-    var_names=pws_of_interest,
-    groupby="major_celltype",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    swap_axes=True,
-    title="PW scaled",
-)
+# # %%
+# sc.pl.matrixplot(
+#     metacell_res["progeny"],
+#     var_names=pws_of_interest,
+#     groupby="major_celltype",
+#     cmap="coolwarm",
+#     vmin=-2.5,
+#     vmax=2.5,
+#     layer="scaled",
+#     swap_axes=True,
+#     title="PW scaled",
+# )
 
-# %% [markdown]
-# ### CollecTRI
+# # %% [markdown]
+# # ### CollecTRI
 
-# %%
-sc.pl.matrixplot(
-    metacell_res["collectri"],
-    var_names=tfs_of_interest,
-    groupby="major_celltype",
-    cmap="coolwarm",
-    vmin=-2.5,
-    vmax=2.5,
-    layer="scaled",
-    swap_axes=True,
-    title="TF scaled",
-)
+# # %%
+# sc.pl.matrixplot(
+#     metacell_res["collectri"],
+#     var_names=tfs_of_interest,
+#     groupby="major_celltype",
+#     cmap="coolwarm",
+#     vmin=-2.5,
+#     vmax=2.5,
+#     layer="scaled",
+#     swap_axes=True,
+#     title="TF scaled",
+# )
 
-# %% [markdown]
-# ## Comparison of approaches
-# ### single cell -> decoupler -> pseudobulk
+# # %% [markdown]
+# # ## Comparison of approaches
+# # ### single cell -> decoupler -> pseudobulk
 
-# %%
-# Single cell -> decoupler -> pseudobulk
-singlecell_res = {}
-for name, tmp_ad in {
-    # "NSCLC full dataset": adata_nsclc,
-    "NSCLC myeloid subset": adata_m,
-}.items():
-    for method in references:
-        # Make pseudobulk
-        pb = dc.get_pseudobulk(
-            dc.get_acts(tmp_ad, method),
-            sample_col="patient",
-            groups_col="cell_type",
-            mode="mean",
-            min_cells=10,
-            # decoupler pseudobulk is mainly intended for counts - need to disable checks and set all filtering options to 0
-            skip_checks=True,
-            min_counts=0,
-            min_prop=0,
-            min_smpls=0,
-        ).copy()
-        # keep order
-        pb.obs["cell_type"] = pd.Categorical(
-            pb.obs["cell_type"],
-            categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
-        )
-        pb.layers["scaled"] = sc.pp.scale(pb.X.copy())
-        singlecell_res[method] = pb
+# # %%
+# # Single cell -> decoupler -> pseudobulk
+# singlecell_res = {}
+# for name, tmp_ad in {
+#     # "NSCLC full dataset": adata_nsclc,
+#     "NSCLC myeloid subset": adata_m,
+# }.items():
+#     for method in references:
+#         # Make pseudobulk
+#         pb = dc.get_pseudobulk(
+#             dc.get_acts(tmp_ad, method),
+#             sample_col="patient",
+#             groups_col="cell_type",
+#             mode="mean",
+#             min_cells=10,
+#             # decoupler pseudobulk is mainly intended for counts - need to disable checks and set all filtering options to 0
+#             skip_checks=True,
+#             min_counts=0,
+#             min_prop=0,
+#             min_smpls=0,
+#         ).copy()
+#         # keep order
+#         pb.obs["cell_type"] = pd.Categorical(
+#             pb.obs["cell_type"],
+#             categories=[x for x in adata_nsclc.obs["cell_type"].cat.categories if x in pb.obs["cell_type"].values],
+#         )
+#         pb.layers["scaled"] = sc.pp.scale(pb.X.copy())
+#         singlecell_res[method] = pb
 
-    display(Markdown(f"### Progeny"))
+#     display(Markdown(f"### Progeny"))
 
-    sc.pl.matrixplot(
-        singlecell_res["progeny"],
-        var_names=pws_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="PW scaled",
-    )
+#     sc.pl.matrixplot(
+#         singlecell_res["progeny"],
+#         var_names=pws_of_interest,
+#         groupby="cell_type",
+#         cmap="coolwarm",
+#         vmin=-2.5,
+#         vmax=2.5,
+#         layer="scaled",
+#         swap_axes="myeloid" in name,
+#         title="PW scaled",
+#     )
 
-    display(Markdown("### collecTRI"))
+#     display(Markdown("### collecTRI"))
 
-    sc.pl.matrixplot(
-        singlecell_res["collectri"],
-        var_names=tfs_of_interest,
-        groupby="cell_type",
-        cmap="coolwarm",
-        vmin=-2.5,
-        vmax=2.5,
-        layer="scaled",
-        swap_axes="myeloid" in name,
-        title="TF scaled",
-    )
+#     sc.pl.matrixplot(
+#         singlecell_res["collectri"],
+#         var_names=tfs_of_interest,
+#         groupby="cell_type",
+#         cmap="coolwarm",
+#         vmin=-2.5,
+#         vmax=2.5,
+#         layer="scaled",
+#         swap_axes="myeloid" in name,
+#         title="TF scaled",
+#     )
 
-# %% [markdown]
-# ### correlations
+# # %% [markdown]
+# # ### correlations
 
-# %%
-import altair as alt  # noqa
+# # %%
+# import altair as alt  # noqa
 
-alt.data_transformers.enable("vegafusion")
+# alt.data_transformers.enable("vegafusion")
 
-for tool in references:
+# for tool in references:
 
-    ad_decoupler_pseudobulk = sc.get.aggregate(singlecell_res[tool], by="cell_type", func="mean", layer="scaled")
-    ad_pseudobulk_decoupler = sc.get.aggregate(
-        pb_res["NSCLC myeloid subset"][tool], by="cell_type", func="mean", layer="scaled"
-    )
-    ad_metacell_decoupler = sc.get.aggregate(metacell_res[tool], by="major_celltype", func="mean", layer="scaled")
+#     ad_decoupler_pseudobulk = sc.get.aggregate(singlecell_res[tool], by="cell_type", func="mean", layer="scaled")
+#     ad_pseudobulk_decoupler = sc.get.aggregate(
+#         pb_res["NSCLC myeloid subset"][tool], by="cell_type", func="mean", layer="scaled"
+#     )
+#     ad_metacell_decoupler = sc.get.aggregate(metacell_res[tool], by="major_celltype", func="mean", layer="scaled")
 
-    agg_df = pd.concat(
-        [
-            ad_decoupler_pseudobulk.to_df(layer="mean").assign(approach="SC -> decoupler -> pseudobulk"),
-            ad_pseudobulk_decoupler.to_df(layer="mean").assign(approach="SC -> pseudobulk -> decoupler"),
-            ad_metacell_decoupler.to_df(layer="mean").assign(approach="SC -> metacell -> decoupler"),
-        ]
-    )
-    agg_df.index.name = "cell_type"
-    plot_df = (
-        agg_df.reset_index()
-        .melt(id_vars=["cell_type", "approach"])
-        .pivot(columns="approach", index=["cell_type", "variable"], values="value")
-        .reset_index()
-    )
+#     agg_df = pd.concat(
+#         [
+#             ad_decoupler_pseudobulk.to_df(layer="mean").assign(approach="SC -> decoupler -> pseudobulk"),
+#             ad_pseudobulk_decoupler.to_df(layer="mean").assign(approach="SC -> pseudobulk -> decoupler"),
+#             ad_metacell_decoupler.to_df(layer="mean").assign(approach="SC -> metacell -> decoupler"),
+#         ]
+#     )
+#     agg_df.index.name = "cell_type"
+#     plot_df = (
+#         agg_df.reset_index()
+#         .melt(id_vars=["cell_type", "approach"])
+#         .pivot(columns="approach", index=["cell_type", "variable"], values="value")
+#         .reset_index()
+#     )
 
-    # correlations
-    from scipy.stats import pearsonr
+#     # correlations
+#     from scipy.stats import pearsonr
 
-    cor_singlecell_vs_pseudobulk = pearsonr(
-        plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> pseudobulk -> decoupler"]
-    )
-    cor_singlecell_vs_metacells = pearsonr(
-        plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> metacell -> decoupler"]
-    )
-    cor_pseudobulk_vs_metacells = pearsonr(
-        plot_df["SC -> pseudobulk -> decoupler"], plot_df["SC -> metacell -> decoupler"]
-    )
+#     cor_singlecell_vs_pseudobulk = pearsonr(
+#         plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> pseudobulk -> decoupler"]
+#     )
+#     cor_singlecell_vs_metacells = pearsonr(
+#         plot_df["SC -> decoupler -> pseudobulk"], plot_df["SC -> metacell -> decoupler"]
+#     )
+#     cor_pseudobulk_vs_metacells = pearsonr(
+#         plot_df["SC -> pseudobulk -> decoupler"], plot_df["SC -> metacell -> decoupler"]
+#     )
 
-    # single cell vs. pseudobulk
-    c1 = alt.Chart(plot_df).encode(
-        x="SC -> decoupler -> pseudobulk", y="SC -> pseudobulk -> decoupler", color="cell_type"
-    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
-        x=alt.value(5),  # pixels from left
-        y=alt.value(5),  # pixels from top
-        text=alt.value(f"r={cor_singlecell_vs_pseudobulk[0]:.3f}"),
-    )
+#     # single cell vs. pseudobulk
+#     c1 = alt.Chart(plot_df).encode(
+#         x="SC -> decoupler -> pseudobulk", y="SC -> pseudobulk -> decoupler", color="cell_type"
+#     ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+#         x=alt.value(5),  # pixels from left
+#         y=alt.value(5),  # pixels from top
+#         text=alt.value(f"r={cor_singlecell_vs_pseudobulk[0]:.3f}"),
+#     )
 
-    # single cell vs. metacell
-    c2 = alt.Chart(plot_df).encode(
-        x="SC -> decoupler -> pseudobulk", y="SC -> metacell -> decoupler", color="cell_type"
-    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
-        x=alt.value(5),  # pixels from left
-        y=alt.value(5),  # pixels from top
-        text=alt.value(f"r={cor_singlecell_vs_metacells[0]:.3f}"),
-    )
+#     # single cell vs. metacell
+#     c2 = alt.Chart(plot_df).encode(
+#         x="SC -> decoupler -> pseudobulk", y="SC -> metacell -> decoupler", color="cell_type"
+#     ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+#         x=alt.value(5),  # pixels from left
+#         y=alt.value(5),  # pixels from top
+#         text=alt.value(f"r={cor_singlecell_vs_metacells[0]:.3f}"),
+#     )
 
-    # pseudobulk vs metacell
-    c3 = alt.Chart(plot_df).encode(
-        x="SC -> pseudobulk -> decoupler", y="SC -> metacell -> decoupler", color="cell_type"
-    ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
-        x=alt.value(5),  # pixels from left
-        y=alt.value(5),  # pixels from top
-        text=alt.value(f"r={cor_pseudobulk_vs_metacells[0]:.3f}"),
-    )
+#     # pseudobulk vs metacell
+#     c3 = alt.Chart(plot_df).encode(
+#         x="SC -> pseudobulk -> decoupler", y="SC -> metacell -> decoupler", color="cell_type"
+#     ).mark_point() + alt.Chart({"values": [{}]}).mark_text(align="left", baseline="top").encode(
+#         x=alt.value(5),  # pixels from left
+#         y=alt.value(5),  # pixels from top
+#         text=alt.value(f"r={cor_pseudobulk_vs_metacells[0]:.3f}"),
+#     )
 
-    (c1 | c2 | c3).properties(title=tool).show()
+#     (c1 | c2 | c3).properties(title=tool).show()
 
-# %%
+# # %%

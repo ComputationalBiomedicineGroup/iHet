@@ -8,6 +8,6 @@ include { W30_spatial } from "./subworkflows/spatial.nf"
 
 workflow {
 //    W10_mofa()
-    // W20_single_cell()
+    W20_single_cell()
     W30_spatial()
 }
