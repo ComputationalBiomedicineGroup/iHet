@@ -98,7 +98,7 @@ pws_of_interest = [
 for name, tmp_ad in sc_datasets.items():
     # .raw contains log-norm values
     for method, net in references.items():
-        dc.run_wmean(tmp_ad, net, use_raw=True, times=0, min_n=5, verbose=True)
+        dc.run_wmean(tmp_ad, net, use_raw=True, times=0, min_n=4, verbose=True)
         tmp_ad.obsm[method] = tmp_ad.obsm["wmean_estimate"]
         print(f"completed {method}")
 
@@ -167,7 +167,7 @@ for name, tmp_ad in sc_datasets.items():
     sc.pp.log1p(pb)
 
     for method, net in references.items():
-        dc.run_wmean(pb, net, use_raw=False, times=0, min_n=5)
+        dc.run_wmean(pb, net, use_raw=False, times=0, min_n=4)
         pb.obsm[method] = pb.obsm["wmean_estimate"]
         tmp_ad_decoupler = dc.get_acts(pb, method)
         tmp_ad_decoupler.layers["scaled"] = sc.pp.scale(tmp_ad_decoupler.X.copy())
