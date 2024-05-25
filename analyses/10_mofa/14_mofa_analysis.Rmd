@@ -51,8 +51,8 @@ if (INCLUDE_TRACERX) {
 }
 ```
 
-```{r}
-# TODO
+```{r, fig.width=10, fig.height=6}
+# Immune cell fractions per dataset
 feature_data |>
     filter(view == "Immune cells quantification") |>
     filter(dataset %in% SELECTED_DATASETS) |>
@@ -60,7 +60,7 @@ feature_data |>
     geom_boxplot() +
     scale_color_brewer(palette = "Dark2")
 
-# ggsave("/home/sturm/Downloads/ihet/ct_fractions_per_dataset.pdf", width = 8, height = 5)
+ggsave(file.path(params$artifact_dir, "immune_cell_fractions_per_dataset.svg"), width = 10, height = 6)
 ```
 
 
@@ -172,14 +172,6 @@ svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width =
 # GTEx has one extra TF, compared to the rest
 tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
 median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
-
-# TODO
-# median_weights2 <- sapply(median_weights, function(df) {
-#     for (i in 1:7) {
-#         df[[sprintf("factor %s", i)]] <- df[[sprintf("factor %s", i)]] - median_weights$GTEx[[sprintf("factor %s", i)]]
-#     }
-#     df
-# }, simplify = FALSE, USE.NAMES = TRUE)
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
