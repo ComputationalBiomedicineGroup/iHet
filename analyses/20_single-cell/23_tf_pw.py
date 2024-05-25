@@ -122,7 +122,7 @@ for pw, ax in zip(["TNFa", "NFkB", "TGFb"], axs):
         title=f"PW: {pw}",
         frameon=False,
     )
-for tf, ax in zip(["SPI1", "MYCN", "RFX5", "E2F4", "TFDP1"], axs):
+for tf, ax in zip(["SPI1", "MYCN", "RFXAP", "E2F4", "ZNF143"], axs):
     sc.pl.umap(
         ad_tf,
         color=tf,
