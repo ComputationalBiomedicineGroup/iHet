@@ -375,7 +375,7 @@ patient_cell_type_combs = (
 )
 
 # %%
-tmp_df = m_counts.merge(
+tmp_df = m_counts.reset_index(drop=True).merge(
     patient_cell_type_combs,
     on=["dataset", "study", "patient", "cell_type"],
     how="outer",
@@ -384,13 +384,27 @@ tmp_df = m_counts.merge(
 # %%
 tmp_df2 = tmp_df.groupby(["study", "cell_type"], observed=True).agg(n_cells=("n_cells", np.sum)).reset_index()
 
+
+# %%
+patient_counts_per_study = (
+    adata_nsclc.obs.loc[:, ["patient", "study"]]
+    .drop_duplicates()
+    .groupby("study")
+    .size()
+    .reset_index(name="n_patients")
+)
+
 # %%
 tmp_df2_study = (
     m_counts.groupby("study", observed=True)
     .agg(n_patients_ge_10_cells=("patient", lambda x: x.nunique()))
     .reset_index()
     .assign(x="#patients with ≥ 10 myeloid cells")
+    .merge(patient_counts_per_study, on="study", how="left")
+    .assign(pct=lambda x: round((x["n_patients_ge_10_cells"] / x["n_patients"]) * 100))
+    .assign(pct_txt="% of total patients")
 )
+
 
 # %%
 heatmp = (
@@ -424,9 +438,24 @@ studies = (
 studies_txt = (
     alt.Chart(tmp_df2_study).mark_text().encode(y="study", x=alt.X("x", title=None), text="n_patients_ge_10_cells")
 )
+studies_pct_total = (
+    alt.Chart(tmp_df2_study)
+    .mark_rect()
+    .encode(
+        y=alt.Y("study", axis=None),
+        color=alt.Color("pct", scale=alt.Scale(scheme="cividis", reverse=True, domain=[0, 100]), legend=None),
+    )
+)
+studies_pct_total_txt = (
+    alt.Chart(tmp_df2_study)
+    .mark_text()
+    .encode(y=alt.Y("study", axis=None), x=alt.X("pct_txt", title=None), text="pct", color=alt.value("white"))
+)
 
 # %%
-ch = ((studies + studies_txt) | (heatmp + txt).properties(width=450)).configure_concat(spacing=0)
+ch = (
+    (studies + studies_txt) | (studies_pct_total + studies_pct_total_txt) | (heatmp + txt).properties(width=450)
+).configure_concat(spacing=0)
 ch.display()
 
 # %%

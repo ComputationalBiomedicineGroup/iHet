@@ -4,8 +4,10 @@ nextflow.enable.dsl = 2
 
 include { W10_mofa } from "./subworkflows/mofa.nf"
 include { W20_single_cell } from "./subworkflows/single-cell.nf"
+include { W30_spatial } from "./subworkflows/spatial.nf"
 
 workflow {
     W10_mofa()
-    // W20_single_cell()
+    W20_single_cell()
+    W30_spatial()
 }

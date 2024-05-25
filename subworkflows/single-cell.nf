@@ -32,7 +32,7 @@ workflow W20_single_cell {
                 Channel.fromPath("$projectDir/tables/gene_annotations/hlca_cell_type_signatures.csv", checkIfExists: true)
             ).collect()
         )
-        ch_adata_annotated =JUPYTER_ANNOTATE_MYELOID.out.artifacts
+        ch_adata_annotated = JUPYTER_ANNOTATE_MYELOID.out.artifacts
     } else {
         ch_adata_annotated = Channel.fromPath("${ params.precomputed_adata_annotated }/*", checkIfExists: true).collect()
     }
@@ -54,4 +54,5 @@ workflow W20_single_cell {
         ]),
         ch_adata_annotated.collect()
     )
+
 }
