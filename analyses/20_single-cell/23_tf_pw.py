@@ -168,7 +168,7 @@ for name, tmp_ad in sc_datasets.items():
 
     display(Markdown("### Progeny"))
 
-    sc.pl.matrixplot(
+    fig = sc.pl.matrixplot(
         tmp_pb_res["progeny"],
         var_names=pws_of_interest,
         groupby="cell_type",
@@ -178,11 +178,13 @@ for name, tmp_ad in sc_datasets.items():
         layer="scaled",
         swap_axes="myeloid" in name,
         title="PW scaled",
+        return_fig=True,
     )
+    fig.savefig(f"{artifact_dir}/matrixplot_{name}_progeny.svg", bbox_inches="tight")
 
     display(Markdown("### collecTRI"))
 
-    sc.pl.matrixplot(
+    fig = sc.pl.matrixplot(
         tmp_pb_res["collectri"],
         var_names=tfs_of_interest,
         groupby="cell_type",
@@ -192,7 +194,9 @@ for name, tmp_ad in sc_datasets.items():
         layer="scaled",
         swap_axes="myeloid" in name,
         title="TF scaled",
+        return_fig=True,
     )
+    fig.savefig(f"{artifact_dir}/matrixplot_{name}_collectri.svg", bbox_inches="tight")
 
 
 # # %% [markdown]
