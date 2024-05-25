@@ -784,11 +784,11 @@ PRcurve <- assess_predictive_performance(iHet=iHet_df_norm,
                                          plot_roc=TRUE,
                                          metric="precision_recall")
 
-svglite(filename = "../../figures/Figure3B.svg", width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
+svglite(filename = file.path(params$artifact_dir, "Figure3B.svg"), width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 ROCcurve
 dev.off()
 
-svglite(filename = "../../figures/Figure3C.svg",width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
+svglite(filename = file.path(params$artifact_dir, "Figure3C.svg"), width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 PRcurve
 dev.off()
 
@@ -855,7 +855,7 @@ scatterplot_IR_vs_iHet <- tcga_df %>%
   stat_cor(method="pearson")
 
 scatterplot_IR_vs_iHet
-ggplot2::ggsave(filename = "../../figures/FigureS11.svg", width = 14, height = 10, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "FigureS11.svg"), width = 14, height = 10, device = "svg")
 
 ## Conservation ----------------------------------------------------------------
 
@@ -919,7 +919,7 @@ barplot_double_PeCorr <- cor_df %>%
   ggplot2::labs(y = "Pearson correlation")
 
 barplot_double_PeCorr
-ggplot2::ggsave(filename = "../../figures/Figure3D.svg", width = 10, height = 6, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "Figure3D.svg"), width = 10, height = 6, device = "svg")
 
 ```
 
@@ -958,7 +958,7 @@ plot <- ComplexHeatmap::Heatmap(tcga_median_weights_mat[as.character(mean_featur
                                 height = 20,
                                 raster_quality = 20)
 
-svglite(filename = "../../figures/FigureS12.svg", width = 4, height = 40, fix_text_size = FALSE, scaling = 0.6)
+svglite(filename = file.path(params$artifact_dir, "FigureS12.svg"), width = 4, height = 40, fix_text_size = FALSE, scaling = 0.6)
 ComplexHeatmap::draw(plot)
 dev.off()
 
@@ -1123,7 +1123,7 @@ roc_perf_boxplot <- roc_perf_boxplot +
             aes(x = x, y=y, label = stat.test$p.signif))
 
 roc_perf_boxplot
-ggplot2::ggsave(filename = "../../figures/Figure3E.svg", width = 7, height = 8, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "Figure3E.svg"), width = 7, height = 8, device = "svg")
 
 ## PR performance ##
 auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
@@ -1214,7 +1214,7 @@ pr_perf_boxplot <- pr_perf_boxplot +
             aes(x = x, y=y, label = stat.test$p.signif))
 
 pr_perf_boxplot
-ggplot2::ggsave(filename = "../../figures/Figure3F.svg", width = 7, height = 8, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "Figure3F.svg"), width = 7, height = 8, device = "svg")
 
 # ggpubr::ggarrange(roc_perf_boxplot, pr_perf_boxplot, nrow=1, align = "h")
 # ggplot2::ggsave(filename = "../../figures/Figure3EF.svg", width = 14, height = 8, device = "svg")
@@ -1295,7 +1295,7 @@ gg_mariathasan <- frac_pat_response %>%
   labs(y = "Number of patients", fill = "Cancer-immune phenotype")
 
 gg_mariathasan
-ggplot2::ggsave(filename = "../../figures/FigureS13A.svg", width = 8, height = 8, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "FigureS13A.svg"), width = 8, height = 8, device = "svg")
 
 ## gideauslanderpd1 -----------------------------------------------------------------
 dataset <- "gideauslanderpd1"
@@ -1365,7 +1365,7 @@ gg_gideauslanderpd1 <- frac_pat_response %>%
   labs(y = "Number of patients", fill = "Cancer-immune phenotype")
 
 gg_gideauslanderpd1
-ggplot2::ggsave(filename = "../../figures/FigureS13B.svg", width = 8, height = 8, device = "svg")
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "FigureS13B.svg"), width = 8, height = 8, device = "svg")
 
 ```
 
@@ -1501,13 +1501,13 @@ E <- plots$kim$bootstrap
 G <- plots$jung$bootstrap
 
 D
-ggtern::ggsave(filename = "../../figures/Figure4A.svg", width = 6, height = 6, device = "svg")
+ggtern::ggsave(filename = file.path(params$artifact_dir, "Figure4A.svg"), width = 6, height = 6, device = "svg")
 
 E
-ggtern::ggsave(filename = "../../figures/Figure4B.svg", width = 6, height = 6, device = "svg")
+ggtern::ggsave(filename = file.path(params$artifact_dir, "Figure4B.svg"), width = 6, height = 6, device = "svg")
 
 G
-ggtern::ggsave(filename = "../../figures/Figure4C.svg", width = 6, height = 6, device = "svg")
+ggtern::ggsave(filename = file.path(params$artifact_dir, "Figure4C.svg"), width = 6, height = 6, device = "svg")
 
 ```
 
@@ -1532,7 +1532,7 @@ iHet_df <- compute_iHet(
 
 ```{r, echo=FALSE, include=FALSE}
 
-sink("../../../../session_info.log")
+# sink("../../../../session_info.log")
 sessionInfo()
 sink()
 
