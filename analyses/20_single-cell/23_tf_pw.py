@@ -64,22 +64,32 @@ references = {
 
 # %%
 tfs_of_interest = [
-    "E2F2",
-    "E2F3",
     "E2F4",
-    "ETS1",
+    "HOPX",
+    "IRF1",
+    "KMT2E",
     "MYC",
-    "MYCN",
     "NFKB1",
+    "REL",
     "RELA",
-    "RFX5",
+    "RFXAP",
     "SPI1",
     "STAT1",
-    "STAT2",
-    "TFDP1",
-    "ZNF263",
+    "ZNF143",
 ]
-pws_of_interest = ["Androgen", "JAK-STAT", "NFkB", "TGFb", "TNFa", "Trail", "WNT"]
+pws_of_interest = [
+    "EGFR",
+    "Hypoxia",
+    "JAK-STAT",
+    "NFkB",
+    "PI3K",
+    "TGFb",
+    "TNFa",
+    "Trail",
+    "VEGF",
+    "WNT",
+    "p53",
+]
 
 # %% [markdown]
 # ## Single-cell approach

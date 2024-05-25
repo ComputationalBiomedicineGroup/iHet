@@ -19,8 +19,6 @@ message(capture.output(str(params)))
 dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
-TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
 DATASETS <- feature_data$dataset %>% unique()
 SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
@@ -50,19 +48,6 @@ if (INCLUDE_TRACERX) {
     tmb_all <- bind_rows(tmb_all, tmb_tracerx)
 }
 ```
-
-```{r, fig.width=10, fig.height=6}
-# Immune cell fractions per dataset
-feature_data |>
-    filter(view == "Immune cells quantification") |>
-    filter(dataset %in% SELECTED_DATASETS) |>
-    ggplot(aes(x = feature, color = dataset, y = value)) +
-    geom_boxplot() +
-    scale_color_brewer(palette = "Dark2")
-
-ggsave(file.path(params$artifact_dir, "immune_cell_fractions_per_dataset.svg"), width = 10, height = 6)
-```
-
 
 ```{r, include=FALSE}
 models <- sapply(DATASETS, function(dataset_id) {
@@ -96,15 +81,36 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
         rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
+
+# rename NSCLC to TCGA-NSCLC
 median_weights$`TCGA-NSCLC` <- median_weights$NSCLC
 median_weights$NSCLC <- NULL
 median_factors$`TCGA-NSCLC` <- median_factors$NSCLC
 median_factors$NSCLC <- NULL
-# rename NSCLC to TCGA-NSCLC
-feature_data <- feature_data %>% mutate(group = if_else(group == "NSCLC", "TCGA-NSCLC", group), dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset))
+feature_data <- feature_data %>% mutate(
+    group = if_else(group == "NSCLC", "TCGA-NSCLC", group),
+    dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset)
+)
+
+# GTEx has one extra TF, compared to the rest
+tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
+median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
+
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
 saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
+```
+
+## Immune cell fractions per dataset
+```{r, fig.width=10, fig.height=6}
+feature_data |>
+    filter(view == "Immune cells quantification") |>
+    filter(dataset %in% SELECTED_DATASETS) |>
+    ggplot(aes(x = feature, color = dataset, y = value)) +
+    geom_boxplot() +
+    scale_color_brewer(palette = "Dark2")
+
+ggsave(file.path(params$artifact_dir, "immune_cell_fractions_per_dataset.svg"), width = 10, height = 6)
 ```
 
 ## Summary stats
@@ -163,15 +169,56 @@ add_summary(p, error.plot = "crossbar", fun = "mean") +
 ggsave(file.path(params$artifact_dir, "plots", "variance_explained.svg"), device = svg)
 ```
 
+## Weight scatter TCGA-NSCLC / JiaSharma
+
+```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
+scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
+    median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
+}))
+
+tmp_scatter_data <- scatter_data %>%
+    filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
+    select(view, dataset, feature, `factor 1`) %>%
+    pivot_wider(names_from = "dataset", values_from = "factor 1") %>%
+    mutate(rank = pmax(abs(JiaSharma), abs(`TCGA-NSCLC`)))
+
+# selected_features <- tmp_scatter_data %>%
+#     filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
+#     pull(feature)
+
+selected_features <- bind_rows(
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` > 0.2 | `JiaSharma` > 0.2) |>
+        slice_max(order_by = rank, n = 7),
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` < -0.2 | `JiaSharma` < -0.2) |>
+        slice_max(order_by = rank, n = 5)
+) |> select(view, feature) |> distinct() |> arrange(view, feature)
+
+tmp_scatter_data %>%
+    ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
+    geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
+    geom_point(aes(color = view)) +
+    geom_label_repel(
+        size = 3.5, force = 3, max.time = 10, max.overlaps = 300,
+        data = tmp_scatter_data %>% filter(feature %in% selected_features$feature), aes(label = feature)
+    ) +
+    scale_color_brewer(type = "qual", palette = "Dark2") +
+    xlim(c(-1, 1)) +
+    ylim(c(-1, 1)) +
+    theme_cowplot() +
+    background_grid() +
+    stat_cor()
+
+ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg, width = 10, height = 7)
+write_csv(selected_features, file.path(params$artifact_dir, "selected_features.csv"))
+```
+
 
 ## Heatmap of bootstrapped factors
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
 svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 104)
-
-# GTEx has one extra TF, compared to the rest
-tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
-median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -184,16 +231,15 @@ all <- buildHeatmap(median_weights$Jia, "Jia") +
 draw(all)
 
 dev.off()
-draw(all)
 ```
 
 
 ```{r, fig.width=15, fig.height=8, echo=FALSE, message=FALSE, warning=FALSE}
 get_filtered_weight <- function(model) {
-    model %>%
-        filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))
+    model %>% filter(feature %in% selected_features$feature)
 }
 
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped_selected_features.svg"), width = 7, height = 7)
 all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
     buildHeatmap(get_filtered_weight(median_weights$Sharma), "Sharma") +
     buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "JS") +
@@ -202,6 +248,8 @@ all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
     buildHeatmap(get_filtered_weight(median_weights$`TCGA-NSCLC`), "TCGA-\nNSCLC") +
     buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx")
 
+draw(all)
+dev.off()
 draw(all)
 ```
 
@@ -405,48 +453,7 @@ if (INCLUDE_TRACERX) {
 }
 ```
 
-### Weight scatter TCGA-NSCLC / JiaSharma
 
-```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
-scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
-    median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
-}))
-
-tmp_scatter_data <- scatter_data %>%
-    filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
-    select(view, dataset, feature, `factor 1`) %>%
-    pivot_wider(names_from = "dataset", values_from = "factor 1") %>%
-    mutate(rank = pmax(abs(JiaSharma), abs(`TCGA-NSCLC`)))
-
-# selected_features <- tmp_scatter_data %>%
-#     filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
-#     pull(feature)
-
-selected_features <- bind_rows(
-    tmp_scatter_data |> group_by(view) |>
-        filter(`TCGA-NSCLC` > 0.2 | `JiaSharma` > 0.2) |>
-        slice_max(order_by = rank, n = 7),
-    tmp_scatter_data |> group_by(view) |>
-        filter(`TCGA-NSCLC` < -0.2 | `JiaSharma` < -0.2) |>
-        slice_max(order_by = rank, n = 5)
-) |>
-    pull(feature) |>
-    unique()
-
-tmp_scatter_data %>%
-    ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
-    geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
-    geom_point(aes(color = view)) +
-    geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(feature %in% selected_features), aes(label = feature)) +
-    scale_color_brewer(type = "qual", palette = "Dark2") +
-    xlim(c(-1, 1)) +
-    ylim(c(-1, 1)) +
-    theme_cowplot() +
-    background_grid() +
-    stat_cor()
-
-ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg, width = 10, height = 7)
-```
 
 
 ### Variability of weights between bootstrap samples
