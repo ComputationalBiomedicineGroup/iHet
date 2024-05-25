@@ -154,11 +154,11 @@ ggsave(file.path(params$artifact_dir, "plots", "variance_explained.svg"), device
 ## Heatmap of bootstrapped factors
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 98)
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 104)
 
 # GTEx has one extra TF, compared to the rest
-tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature) 
-median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), ,drop=FALSE]
+tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
+median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -195,7 +195,6 @@ draw(all)
 
 ## Correlation heatmaps
 ```{r correlation_features, echo = FALSE, fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
-
 dataset_list <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
 plots <- lapply(names(factor_list), function(factors_name) {
@@ -403,11 +402,19 @@ scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
 tmp_scatter_data <- scatter_data %>%
     filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
     select(view, dataset, feature, `factor 1`) %>%
-    pivot_wider(names_from = "dataset", values_from = "factor 1")
+    pivot_wider(names_from = "dataset", values_from = "factor 1") %>%
+    mutate(rank = pmax(abs(JiaSharma), abs(`TCGA-NSCLC`)))
 
-selected_features <- tmp_scatter_data %>%
-    filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
-    pull(feature)
+# selected_features <- tmp_scatter_data %>%
+#     filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
+#     pull(feature)
+
+selected_features <- bind_rows(
+    tmp_scatter_data |> group_by(view) |> filter(`TCGA-NSCLC` > 0 & `JiaSharma` > 0) |> slice_max(order_by = rank, n = 7),
+    tmp_scatter_data |> group_by(view) |> filter(`TCGA-NSCLC` < 0 & `JiaSharma` < 0) |> slice_max(order_by = rank, n = 5)
+) |>
+    pull(feature) |>
+    unique()
 
 tmp_scatter_data %>%
     ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
@@ -421,7 +428,7 @@ tmp_scatter_data %>%
     background_grid() +
     stat_cor()
 
-ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg)
+ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg, width = 10, height = 7)
 ```
 
 
