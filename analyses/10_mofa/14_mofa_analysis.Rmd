@@ -153,6 +153,7 @@ selected_datasets <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC
 
 p <- variance_explained_bootstrap %>%
     filter(factor %in% c("Factor1", "Factor2", "Factor3")) %>%
+    mutate(view = if_else(view == "Immune cells quantification", "Cell type fractions", view)) %>%
     filter(dataset %in% selected_datasets) %>%
     mutate(dataset = factor(dataset, levels = selected_datasets)) %>%
     ggplot(aes(x = factor, y = value, color = view)) +
@@ -368,7 +369,7 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.svg"), width = 12, height = 7, device = svg)
 ```
-```{r, fig.width=6.3, fig.height=6, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=5.8, fig.height=6, echo=FALSE, message=FALSE, warning=FALSE}
 selected_datasets <- c("Jia", "Sharma", "LUAD", "LUSC")
 factors_all %>%
     inner_join(immresp_all) %>%
@@ -383,7 +384,7 @@ factors_all %>%
     ylim(c(-2, 3)) +
     xlab("factor 1")
 
-ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg)
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg, width=5.8, height=6)
 ```
 
 ```{r, fig.width=2.95, fig.height=2.8, echo=FALSE, message=FALSE, warning=FALSE}
@@ -534,7 +535,9 @@ lapply(tmp_datasets, function(dataset_id) {
         geom_boxplot(width = 0.5, color = "grey") +
         geom_point() +
         ggtitle(dataset_id) +
-        theme_bw()
+        theme_cowplot() +
+        background_grid() +
+        theme(axis.text.y = element_text(size=10))
     ggsave(file.path(params$artifact_dir, "plots", glue::glue("variability_mofa_f1_multi_biopsy_data_{dataset_id}.svg")), device="svg", width=5, height=8)
 })
 ```
