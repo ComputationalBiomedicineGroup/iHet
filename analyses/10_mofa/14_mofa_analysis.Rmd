@@ -368,7 +368,7 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.svg"), width = 12, height = 7, device = svg)
 ```
-```{r, fig.width=10, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=6.3, fig.height=6, echo=FALSE, message=FALSE, warning=FALSE}
 selected_datasets <- c("Jia", "Sharma", "LUAD", "LUSC")
 factors_all %>%
     inner_join(immresp_all) %>%
@@ -379,7 +379,7 @@ factors_all %>%
     theme_bw(base_size = 17) +
     stat_cor() +
     geom_smooth(method = "lm") +
-    facet_wrap(~dataset_label, scales = "free_x", ncol = 7) +
+    facet_wrap(~dataset_label, scales = "free_x", ncol = 2) +
     ylim(c(-2, 3)) +
     xlab("factor 1")
 
@@ -473,10 +473,10 @@ all_weights <- lapply(SELECTED_DATASETS, function(dataset_id) {
     filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
-```{r, fig.height=8, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.height=9, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
 all_weights %>%
     filter(
-        feature %in% selected_features,
+        feature %in% selected_features$feature,
         factor == "factor 1",
         dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "TRACERx")
     ) %>%
@@ -484,7 +484,7 @@ all_weights %>%
     geom_boxplot(aes(fill = dataset), outlier.size = .5) +
     facet_wrap(~factor, ncol = 3) +
     scale_fill_brewer(type = "qual", palette = "Set2") +
-    facet_wrap(~feature, scale = "free_x", ncol = 10) +
+    facet_wrap(~feature, scale = "free_x", ncol = 8) +
     theme_bw() +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
@@ -533,7 +533,9 @@ lapply(tmp_datasets, function(dataset_id) {
         ggplot(aes(x = `factor 1`, y = `patient`)) +
         geom_boxplot(width = 0.5, color = "grey") +
         geom_point() +
-        ggtitle(dataset_id)
+        ggtitle(dataset_id) +
+        theme_bw()
+    ggsave(file.path(params$artifact_dir, "plots", glue::glue("variability_mofa_f1_multi_biopsy_data_{dataset_id}.svg")), device="svg", width=5, height=8)
 })
 ```
 
@@ -588,7 +590,7 @@ variability_df %>%
     scale_y_log10() +
     scale_x_log10() +
     geom_abline(slope = 1, intercept = 0, color = "red") +
-    geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features)) +
+    geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features$feature)) +
     facet_wrap(~dataset)
 ```
 
@@ -597,7 +599,7 @@ tmp_datasets <- c("Jia", "Sharma", "JiaSharma")
 if (INCLUDE_TRACERX) tmp_datasets <- c(tmp_datasets, "TRACERx")
 lapply(tmp_datasets, function(dataset) {
     variability_df %>%
-        filter(feature %in% selected_features, dataset == !!dataset) %>%
+        filter(feature %in% selected_features$feature, dataset == !!dataset) %>%
         mutate(feature = reorder(feature, ratio)) %>%
         ggplot(aes(x = feature, y = ratio, fill = view)) +
         geom_bar(stat = "identity") +
@@ -639,7 +641,7 @@ tmp_datasets <- c("Jia", "Sharma", "JiaSharma")
 if (INCLUDE_TRACERX) tmp_datasets <- c(tmp_datasets, "TRACERx")
 lapply(tmp_datasets, function(dataset) {
     feature_stability_df %>%
-        filter(dataset == !!dataset, feature %in% selected_features) %>%
+        filter(dataset == !!dataset, feature %in% selected_features$feature) %>%
         ggplot(aes(x = reorder(feature, -feature_stability), y = feature_stability, fill = view)) +
         geom_bar(stat = "identity") +
         scale_fill_brewer(palette = "Dark2") +
@@ -665,7 +667,7 @@ corr_df %>%
     theme_cowplot() +
     background_grid() +
     scale_color_brewer(palette = "Dark2") +
-    geom_text_repel(aes(label = feature), data = corr_df %>% filter(feature %in% selected_features)) +
+    geom_text_repel(aes(label = feature), data = corr_df %>% filter(feature %in% selected_features$feature)) +
     facet_wrap(~dataset) +
     stat_cor()
 ```
