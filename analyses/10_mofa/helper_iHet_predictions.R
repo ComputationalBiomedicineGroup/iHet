@@ -10,7 +10,6 @@ suppressPackageStartupMessages({
   library("reshape2")
   library("ggrepel")
   library("GGally")
-  #remotes::install_github("olapuentesantana/easier", ref = 'easier_iHet')
   library('easier')
   require('MOFA2') # read mofa models
   require('reshape2')
@@ -28,6 +27,7 @@ suppressPackageStartupMessages({
   library('ggtern')
   library("ggplot2")
   conflict_prefer("aes", "ggplot2")
+  conflict_prefer("ggsave", "ggplot2")
   conflict_prefer("theme_bw", "ggplot2")
   conflict_prefer("theme_minimal", "ggplot2")
   library('ggforce')
@@ -65,8 +65,10 @@ solve_annotation_issues <- function(gene_expr){
   gene_expr <- gene_expr[non_na, ]
   genes_info <- genes_info[non_na, ]
   ## Remove entries that are withdrawn
-  gene_expr <- gene_expr[-which(genes_info$new_names == "entry withdrawn"), ]
-  genes_info <- genes_info[-which(genes_info$new_names == "entry withdrawn"), ]
+  if (any(genes_info$new_names == "entry withdrawn")){
+    gene_expr <- gene_expr[-which(genes_info$new_names == "entry withdrawn"), ]
+    genes_info <- genes_info[-which(genes_info$new_names == "entry withdrawn"), ]
+  }
   ## Identify duplicated new genes
   newnames_dup <- unique(genes_info$new_names[duplicated(genes_info$new_names)])
   newnames_dup_ind <- do.call(c, lapply(newnames_dup, function(X) which(genes_info$new_names == X)))
@@ -359,26 +361,17 @@ get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE,
   # 2. Adjust sign of the factor 1 to have consistent positive
   # association with immune response across bootstrap runs (get_rotation())
 
-  ## mofa_in model files
-  mofa_out_boot <- grep(paste0("13_run_mofa/mofa_boot_", model), result_files, value = TRUE)
-
-  ## untar files
-  tmp <- utils::untar(tarfile = params$results_dir, files = mofa_out_boot, exdir = "../../data/tmp_mofa_out")
-
   mofa_boot_weights <- lapply(as.character(1:100), function(run){
 
     run_id <- paste0(paste(rep("0", 4-nchar(run)), collapse = ""), run)
     file <- paste("mofa_boot", model, run_id, sep = "_")
-    file_to_load <- grep(file, list.files("../../data/", all.files = TRUE, recursive = TRUE), value = TRUE)
+    file_to_load <- grep(file, list.files(params$mofa_dir, all.files = TRUE, recursive = TRUE), value = TRUE)
 
-    boot_model <- MOFA2::load_model(file = file.path("../../data/", file_to_load), load_data = FALSE)
+    boot_model <- MOFA2::load_model(file = file.path(params$mofa_dir, file_to_load), load_data = FALSE)
     boot_weights <- MOFA2::get_weights(boot_model, scale = scale_mofa_weights)
 
     return(boot_weights)
   })
-
-  ## rm mofa_out model directory
-  unlink("../../data/tmp_mofa_out/", recursive = TRUE)
 
   ## Bootstrap
   if (use_bootstrap_weights){
@@ -480,26 +473,17 @@ compute_iHet <- function(dataset,
   ## Bootstrap
   if (use_bootstrap_weights){
 
-    ## mofa_in model files
-    mofa_out_boot <- grep(paste0("13_run_mofa/mofa_boot_", model), result_files, value = TRUE)
-
-    ## untar files
-    tmp <- utils::untar(tarfile = params$results_dir, files = mofa_out_boot, exdir = "../../data/tmp_mofa_out")
-
     mofa_boot_weights <- lapply(as.character(1:100), function(run){
 
       run_id <- paste0(paste(rep("0", 4-nchar(run)), collapse = ""), run)
       file <- paste("mofa_boot", model, run_id, sep = "_")
-      file_to_load <- grep(file, list.files("../../data/tmp_mofa_out", all.files = TRUE, recursive = TRUE), value = TRUE)
+      file_to_load <- grep(file, list.files(params$mofa_dir, all.files = TRUE, recursive = TRUE), value = TRUE)
 
-      boot_model <- MOFA2::load_model(file = file.path("../../data/tmp_mofa_out", file_to_load), load_data = FALSE)
+      boot_model <- MOFA2::load_model(file = file.path(params$mofa_dir, file_to_load), load_data = FALSE)
       boot_weights <- MOFA2::get_weights(boot_model, scale = scale_mofa_weights)
 
       return(boot_weights)
     })
-
-    ## rm mofa_out model directory
-    unlink("../../data/tmp_mofa_out/", recursive = TRUE)
 
     F1_weights_df <- lapply(1:length(mofa_boot_weights), function(dataset_id) {
       weights <- mofa_boot_weights[[dataset_id]]
@@ -573,24 +557,11 @@ compute_iHet <- function(dataset,
   cellfrac <- log10(cellfrac * 100 + 0.001)
 
   # TF activity ----------------------------------------------------------------
-  #if (!any(packageVersion("dorothea") > '1.6.0')) stop("dorothea version 1.6.0 or 1.7.0 is required")
-
-  ## log transform
-  #log_tpm <- log1p(dataset$tpm)
-
-  ## TCGA-scaling
-  #genes_intersection <- intersect(rownames(tcga_log_tpm), rownames(log_tpm))
-  #log_tpm_scaled <- (log_tpm[genes_intersection, ] - tcga_mean[genes_intersection]) / tcga_sd[genes_intersection]
-
-  # tf <- easier::compute_TF_activity(RNA_tpm = log_tpm,
-  #                                  regulon_net = "collectri")
 
   tf <- easier::compute_TF_activity(RNA_tpm = dataset$tpm, regulon_net = regulon_net)
 
   # pathway activity -----------------------------------------------------------
-  # path <- easier::compute_pathway_activity(RNA_tpm = log_tpm,
-  #                                          remove_sig_genes_immune_response = FALSE)
-
+  
   path <- easier::compute_pathway_activity(RNA_counts = dataset$counts,
                                            remove_sig_genes_immune_response = FALSE)
 
@@ -601,9 +572,6 @@ compute_iHet <- function(dataset,
                                                  paste0(regulon_net, "_TCGA_boot_features_stats.rds")))
 
   boot_features_stats <- mofa_boot_feature_stats[[model]]
-
-  # boot_features_stats <- lapply(1:100, function(X) boot_features_stats)
-  # names(boot_features_stats) <- 1:100
 
   if (model == "NSCLC"){
 
@@ -1098,6 +1066,8 @@ assess_predictive_performance <- function(iHet,
           ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", lty = 3, type = "S", add = TRUE)
         }else{
           ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+          # bootstrap ROC curves
+          plot(ROC_data[[xx]]$roc_perf, col=col[xx], lty = 2, lwd = 0.25, add = TRUE)
         }
 
         if(metric=="precision_recall"){
@@ -1270,7 +1240,8 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
 
     pred <- ROCR::prediction(myscores_mat, myresponse_mat, label.ordering = c("NR", "R"))
     AUC_iHet_excl <- performance(pred, measure = "auc")
-    AUC_iHet_excl <- mean(unlist(AUC_iHet_excl@y.values))
+    AUC_iHet_excl <- unlist(AUC_iHet_excl@y.values)
+    AUC_iHet_excl_CI <- qt(0.975, 100) * sqrt(var(AUC_iHet_excl)) / sqrt(100) # 95% CI
     #cat("Average (bootstrap) AUC_iHet_excl: ", AUC_iHet_excl, "\n")
 
     # iHet pred matrix
@@ -1286,7 +1257,8 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
 
     pred <- prediction(myscores_mat, myresponse_mat, label.ordering = c("NR", "R"))
     AUC_iHet <- performance(pred, measure = "auc")
-    AUC_iHet <- mean(unlist(AUC_iHet@y.values))
+    AUC_iHet <- unlist(AUC_iHet@y.values)
+    AUC_iHet_CI <- qt(0.975, 100) * sqrt(var(AUC_iHet)) / sqrt(100) # 95% CI
     #cat("Average (bootstrap) AUC_iHet: ", AUC_iHet, "\n")
 
   }else{ ## median
@@ -1421,10 +1393,16 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
 
     if(length(myscores_df$patient) > length(unique(myscores_df$patient))){ ## bootstrap
 
+      data.tri$check <- FALSE
+      
+        
       g <- ggtern(data=data.tri, ggtern::aes(x = Left, y = Top, z = Right)) +
         ggplot2::geom_point(shape=21,size=5, aes(fill=mean_value, col=is.max, alpha=is.max)) +
         ggtern::geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") +
         ggtern::geom_crosshair_tern(data = subset(data.tri, equal.weight==TRUE), lty=2, colour = "black") +
+        # ggtern::geom_crosshair_tern(data = subset(data.tri, Top == 1 & Right == 0 & Left == 0), colour = "black") +
+        # ggtern::geom_crosshair_tern(data = subset(data.tri, Top == 0 & Right == 1 & Left == 0), colour = "black") +
+        # ggtern::geom_crosshair_tern(data = subset(data.tri, Top == 0 & Right == 0 & Left == 1), colour = "black") +
         ggplot2::theme_bw() +
         ggtern::theme_hidetitles() +
         ggtern::theme_hidegrid() +
@@ -1432,27 +1410,37 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
         # scale_fill_gradient(name="AUC", low="white", high=palette[2], limit=c(0.5, 0.9))+
         # scale_fill_gradient(name="AUC", trans = "log", low="#264653", high="#e76f51", limit=c(0.5, 0.9))+
         ggplot2::scale_alpha_manual(values = c(0.6,0.9))+
-        viridis::scale_fill_viridis(name="AUC", option = "B", limit=c(0, 1))+
+        viridis::scale_fill_viridis(name="AUC", option = "B", limit=c(0.5, 0.9)) +
         ggplot2::scale_colour_manual(values = c("white", "black")) +
+        ggtern::scale_T_continuous(limits=c(0,1.0), breaks=seq(0,1,by=0.2), labels = seq(0,1,by=0.2)) +
+        ggtern::scale_L_continuous(limits=c(0,1.0), breaks=seq(0,1,by=0.2), labels = seq(0,1,by=0.2)) +
+        ggtern::scale_R_continuous(limits=c(0,1.0), breaks=seq(0,1,by=0.2), labels = seq(0,1,by=0.2)) +
         ggplot2::ggtitle(paste0(dataset_name,
-                       "\niHet: ", round(AUC_iHet,2),
-                       "\niHet_excl: ", round(AUC_iHet_excl,2),
-                       "\nTMB: ", round(AUC_TMB,2),
-                       "\nmax: ", paste0(round(max_value[,"mean_value"],2),
-                                         " (95% CI: ",
-                                         round(max_value[,"mean_value"]-max_value[,"ciw_value"],3), ", ",
-                                         round(max_value[,"mean_value"]+max_value[,"ciw_value"],3), ")"),
-                       "\nequal: ", paste0(round(equal_value[,"mean_value"],2),
-                                         " (95% CI: ",
-                                         round(equal_value[,"mean_value"]-equal_value[,"ciw_value"],3), ", ",
-                                         round(equal_value[,"mean_value"]+equal_value[,"ciw_value"],3), ")"), "\n",
-                       "\nweights:","\nTMB=", as.character(round(values[1],2)),
-                       ",\niHet=", as.character(round(values[2],2)),
-                       ",\niHet_excl=", as.character(round(values[3],2))))
+                       "\nAUC(iHet) = ", paste0(round(mean(AUC_iHet),3),
+                                                " (95% CI: ",
+                                                round(mean(AUC_iHet)-AUC_iHet_CI,3), ", ",
+                                                round(mean(AUC_iHet)+AUC_iHet_CI,3), ")"),
+                       "\nAUC(iHet_Excl) = ", paste0(round(AUC_iHet_excl,3),
+                                                     " (95% CI: ",
+                                                     round(mean(AUC_iHet_excl)-AUC_iHet_excl_CI,3), ", ",
+                                                     round(mean(AUC_iHet_excl)+AUC_iHet_excl_CI,3), ")"),
+                       "\nAUC(TMB) = ", round(AUC_TMB,2),
+                       "\nAUC(max) = ", paste0(round(max_value[,"mean_value"],2),
+                                          " (95% CI: ",
+                                          round(max_value[,"mean_value"]-max_value[,"ciw_value"],3), ", ",
+                                          round(max_value[,"mean_value"]+max_value[,"ciw_value"],3), ")"),
+                       "\nAUC(equal) = ", paste0(round(equal_value[,"mean_value"],2),
+                                          " (95% CI: ",
+                                          round(equal_value[,"mean_value"]-equal_value[,"ciw_value"],3), ", ",
+                                          round(equal_value[,"mean_value"]+equal_value[,"ciw_value"],3), ")"),
+                       "\n"))
+                       #"\nweights:","\nTMB=", as.character(round(values[1],2)),
+                       #",\niHet=", as.character(round(values[2],2)),
+                       #",\niHet_excl=", as.character(round(values[3],2))))
       g = g +
-        Tlab("TMB") +
-        Rlab("iHet") +
-        Llab("iHet_excl") +
+        Tlab("TMB weight") +
+        Rlab("iHet weight") +
+        Llab("iHet_Excl weight") +
         ggplot2::theme(plot.title=element_text(vjust = -30),
                        axis.text = element_text(colour = "black", face = "bold", size = 12),
                        axis.title = element_text(face = "bold"))

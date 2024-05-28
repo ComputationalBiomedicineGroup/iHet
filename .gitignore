@@ -16,6 +16,9 @@ containers
 analyses/**/figures
 analyses/**/MOFA_out
 analyses/.r_console_wrapper.sh
+analyses/.DS_Store
 .Rhistory
 data_iHet_predictions
 omnipathr-log
+figures
+.DS_Store
