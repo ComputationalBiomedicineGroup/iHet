@@ -96,7 +96,7 @@ solve_annotation_issues <- function(gene_expr){
 }
 
 #' Compute correlation between features and HIF Density Fibroblasts
-compute_corr <- function(my_data, hif, cor_method="spearman", dataset_names) {
+compute_corr <- function(my_data, hif, cor_method="spearman", dataset_names, pancancer.hif.mfp.cols) {
 
   # combine the datasets of interest beforehand (NSCLC= LUAD + LUSC)
   if(dataset_names == "pan-cancer"){
@@ -364,10 +364,9 @@ get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE,
   mofa_boot_weights <- lapply(as.character(1:100), function(run){
 
     run_id <- paste0(paste(rep("0", 4-nchar(run)), collapse = ""), run)
-    file <- paste("mofa_boot", model, run_id, sep = "_")
-    file_to_load <- grep(file, list.files(params$mofa_dir, all.files = TRUE, recursive = TRUE), value = TRUE)
+    file <- paste0(paste("mofa_boot", model, run_id, sep = "_"), ".hdf5")
 
-    boot_model <- MOFA2::load_model(file = file.path(params$mofa_dir, file_to_load), load_data = FALSE)
+    boot_model <- MOFA2::load_model(file = file.path(params$mofa_dir, file), load_data = FALSE)
     boot_weights <- MOFA2::get_weights(boot_model, scale = scale_mofa_weights)
 
     return(boot_weights)
@@ -477,7 +476,7 @@ compute_iHet <- function(dataset,
 
       run_id <- paste0(paste(rep("0", 4-nchar(run)), collapse = ""), run)
       file <- paste("mofa_boot", model, run_id, sep = "_")
-      file_to_load <- grep(file, list.files(params$mofa_dir, all.files = TRUE, recursive = TRUE), value = TRUE)
+      file_to_load <- paste0(file, ".hdf5")
 
       boot_model <- MOFA2::load_model(file = file.path(params$mofa_dir, file_to_load), load_data = FALSE)
       boot_weights <- MOFA2::get_weights(boot_model, scale = scale_mofa_weights)
@@ -561,7 +560,7 @@ compute_iHet <- function(dataset,
   tf <- easier::compute_TF_activity(RNA_tpm = dataset$tpm, regulon_net = regulon_net)
 
   # pathway activity -----------------------------------------------------------
-  
+
   path <- easier::compute_pathway_activity(RNA_counts = dataset$counts,
                                            remove_sig_genes_immune_response = FALSE)
 
@@ -1394,8 +1393,8 @@ integrated_score <- function(myscores_df, grid=seq(0, 1, length.out = 19),
     if(length(myscores_df$patient) > length(unique(myscores_df$patient))){ ## bootstrap
 
       data.tri$check <- FALSE
-      
-        
+
+
       g <- ggtern(data=data.tri, ggtern::aes(x = Left, y = Top, z = Right)) +
         ggplot2::geom_point(shape=21,size=5, aes(fill=mean_value, col=is.max, alpha=is.max)) +
         ggtern::geom_crosshair_tern(data = subset(data.tri, is.max==TRUE), colour = "black") +

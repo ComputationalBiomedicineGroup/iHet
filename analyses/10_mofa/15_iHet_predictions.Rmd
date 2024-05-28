@@ -3,15 +3,17 @@ title: "Analysis of iHet predictions"
 params:
     meta: NULL
     cpus: 1
+    input_dir: NULL
     artifact_dir: "../../data/artifacts_15_iHet_predictions"
     mofa_dir: "../../data/results/results_collectri/10_mofa/13_run_mofa"
     easier_dir: "../../data/results/results_collectri/10_mofa/11_easier"
     features_dir: "../../data/results/results_collectri/10_mofa/12_prepare_mofa_data/artifacts"
-    bagaev_subtypes: "../../data/bagaev_mfp_tcga.xlsx"
-    validation_data: "../../data/validation_data"
-    fibroblast_spatial_data: "../../data/pancancer.hif.mfp.cols.RData"
+    bagaev_subtypes: "../../data/01_processed/bagaev_mfp_tcga.xlsx"
+    validation_data: "../../data/01_processed/validation_data"
+    fibroblast_spatial_data: "../../data/01_processed/pancancer.hif.mfp.cols.RData"
     tracerx_tmb_data: "../../data/01_processed/bulk_rna_seq/TRACERx100_Mut_per_Mb.tsv"
     regulon_net: collectri
+    include_tracerx: "true"
 
 output: html_document
 ---
@@ -185,7 +187,7 @@ df_tcga_weights <- do.call(rbind, lapply(models, function(model){
   return(weights_df)
 }))
 
-saveRDS(df_tcga_weights, file = file.path(params$artifact_dir, 
+saveRDS(df_tcga_weights, file = file.path(params$artifact_dir,
                                           paste0(regulon_net,"_TCGA_boot_iHet_scaled_weights.rds")))
 
 # Median weights across bootstrap samples
@@ -229,13 +231,15 @@ my_NSCLC_data <- list("NSCLC" = cbind(tcga_views$cellfrac$NSCLC,
                                       tcga_views$tf$NSCLC))
 
 ## HIF features
+# loads object named `pancancer.hif.mfp.cols`
 load(params$fibroblast_spatial_data)
 
 ## Compute correlation
 feat_cor_hifs <- compute_corr(my_data = my_NSCLC_data,
                               hif = "DENSITY [FIBROBLAST CELLS] IN [TUMOR]_HE",
                               dataset_names = "NSCLC",
-                              cor_method = "spearman")
+                              cor_method = "spearman",
+                              pancancer.hif.mfp.cols=pancancer.hif.mfp.cols)
 
 saveRDS(feat_cor_hifs, file = file.path(params$artifact_dir,
                                         paste0(regulon_net, "_TCGA_NSCLC_cor_features_HIF_Fib_tumor.rds")))
@@ -314,21 +318,21 @@ lapply(models, function(model){
                           regulon_net = regulon_net)
 
   if (model != "NSCLC") iHet_df$model <- model
-  saveRDS(iHet_df, file = file.path(params$artifact_dir, 
+  saveRDS(iHet_df, file = file.path(params$artifact_dir,
                                      paste0(regulon_net, "_TCGA_", model, "_boot_iHet_scores.rds")))
 
 })
 
 # Re-format iHet data.frame
 tcga_iHet_scores <- do.call(rbind, lapply(models[!models %in% c("NSCLC")], function(model){
-  tmp <- readRDS(file = file.path(params$artifact_dir, paste0("TCGA_", model, "_boot_iHet_scores.rds")))
+  tmp <- readRDS(file = file.path(params$artifact_dir, paste0(regulon_net, "_TCGA_", model, "_boot_iHet_scores.rds")))
   return(tmp)
 }))
 
 colnames(tcga_iHet_scores)[1] <- "pat_id"
 tcga_iHet_scores$pat_id <- gsub(".", "-", tcga_iHet_scores$pat_id, fixed = TRUE)
 tcga_iHet_scores$pat_id <- substr(tcga_iHet_scores$pat_id, 1, 12)
-saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir, 
+saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
                                             paste0(regulon_net,
                                             "_TCGA_boot_iHet_scores.rds")))
 
@@ -360,9 +364,9 @@ IR_df <- IR_df %>%
 
 ## Compute iHet for TRACERx patients
 
-```{r}
+```{r, fig.width=3.12, fig.height=3.5}
 
-## Immune Response 
+## Immune Response
 TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
   tibble::rownames_to_column(var = "patient") %>%
   dplyr::mutate(method = "IR") %>%
@@ -370,7 +374,7 @@ TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
   as.data.frame() %>%
   dplyr::select(patient, IR)
 
-## TMB 
+## TMB
 TRACERx_TMB <- data.table::fread(params$tracerx_tmb_data)
 
 TRACERx_TMB <- TRACERx_TMB %>%
@@ -421,12 +425,12 @@ iHet_median_TRACERx %>%
   theme(axis.title = element_text(size = 22, colour = "black"),
         axis.text = element_text(size=  22), strip.text = element_text(size = 18))
 
-ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_immune_response.svg"), 
-       width = 5, height = 5, device = svg)
+ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_immune_response.svg"),
+       device = svg)
 
 ## PLOT (TMB vs iHet) ---
 
-iHet_median_TRACERx <- iHet_median_TRACERx %>% 
+iHet_median_TRACERx <- iHet_median_TRACERx %>%
   dplyr::rename("sample" = "patient")
 
 TRACERx_TMB %>%
@@ -444,8 +448,8 @@ TRACERx_TMB %>%
   theme(axis.title = element_text(size = 22, colour = "black"),
         axis.text = element_text(size=  22), strip.text = element_text(size = 18))
 
-ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"), 
-       width = 5, height = 5, device = svg)
+ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"),
+       device = svg)
 ```
 
 
@@ -470,7 +474,7 @@ iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
 iHet_df$model <- "NSCLC"
 tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
 
-saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir, 
+saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
 
 # Compute median iHet (one value per patient)
@@ -622,7 +626,7 @@ facet_features[significant_features] <- "bold"
 
 features_df_mfp_main_median <- features_df_mfp_main_median %>%
   dplyr::filter(variable %in% names(facet_features[facet_features == "bold"]))
-  
+
 features_df_mfp_main_median$variable <- factor(features_df_mfp_main_median$variable,
                                                levels = rev(sort_features))
 features_df_mfp_main_median$MFP <- factor(features_df_mfp_main_median$MFP,
@@ -647,7 +651,7 @@ gg_all <- features_df_mfp_main_median %>%
     scale_y_discrete(expand=c(0,0))
 
 gg_all
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3A.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3A.svg"),
                 width = 5, height = 40, device = "svg")
 
 gg_all
@@ -719,7 +723,7 @@ volcano_plot_IEFvsIE <- volcano_plot_IEFvsIE +
   show.legend = NA, inherit.aes = FALSE, max.overlaps = 20)
 
 # Combine volcano plots in one page
-volcano_plots <- ggarrange(volcano_plot_FvsIE, volcano_plot_IEFvsIE, 
+volcano_plots <- ggarrange(volcano_plot_FvsIE, volcano_plot_IEFvsIE,
                            nrow = 1, ncol= 2, common.legend = FALSE, align = "h")
 volcano_plots
 ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS10.svg"),
@@ -837,12 +841,12 @@ PRcurve <- assess_predictive_performance(iHet=iHet_df_norm,
                                          plot_roc=TRUE,
                                          metric="precision_recall")
 
-svglite(filename = file.path(params$artifact_dir, "plots", "Figure3B.svg"), 
+svglite(filename = file.path(params$artifact_dir, "plots", "Figure3B.svg"),
         width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 ROCcurve
 dev.off()
 
-svglite(filename = file.path(params$artifact_dir, "plots", "Figure3C.svg"), 
+svglite(filename = file.path(params$artifact_dir, "plots", "Figure3C.svg"),
         width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6, bac)
 PRcurve
 dev.off()
@@ -912,7 +916,7 @@ scatterplot_IR_vs_iHet <- tcga_df %>%
   labs(x = "iHet signature (MOFA F1)", y = "immune response")
 
 scatterplot_IR_vs_iHet
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS11.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS11.svg"),
                 width = 14, height = 10, device = "svg")
 
 ## Conservation ----------------------------------------------------------------
@@ -977,7 +981,7 @@ barplot_double_PeCorr <- cor_df %>%
   ggplot2::labs(y = "Pearson correlation")
 
 barplot_double_PeCorr
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3D.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3D.svg"),
                 width = 10, height = 6, device = "svg")
 
 barplot_double_PeCorr
@@ -1019,7 +1023,7 @@ plot <- ComplexHeatmap::Heatmap(tcga_median_weights_mat[as.character(mean_featur
                                 height = 20,
                                 raster_quality = 20)
 
-svglite(filename =  file.path(params$artifact_dir, "plots", "FigureS12.svg"), 
+svglite(filename =  file.path(params$artifact_dir, "plots", "FigureS12.svg"),
         width = 4, height = 40, fix_text_size = FALSE, scaling = 0.6)
 ComplexHeatmap::draw(plot)
 dev.off()
@@ -1095,7 +1099,7 @@ auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
           dplyr::mutate(scaled_score = linear_func(score, "11")) %>%
           dplyr::group_by(patient, method, run, dataset) %>%
           dplyr::summarise(score = mean(scaled_score))
-        
+
         # Remove model variable
         iHet_df$model <- NULL
       }
@@ -1164,7 +1168,7 @@ roc_perf_boxplot <- roc_perf_boxplot +
             aes(x = x, y=y, label = stat.test$p.signif))
 
 roc_perf_boxplot
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3E.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3E.svg"),
                 width = 7, height = 8, device = "svg")
 
 roc_perf_boxplot
@@ -1187,7 +1191,7 @@ auc_df <- do.call(rbind, lapply(names(datasets_bulk), function(dataset){
           dplyr::mutate(scaled_score = linear_func(score, "11")) %>%
           dplyr::group_by(patient, method, run, dataset) %>%
           dplyr::summarise(score = mean(scaled_score))
-        
+
         # Remove model variable
         iHet_df$model <- NULL
       }
@@ -1256,7 +1260,7 @@ pr_perf_boxplot <- pr_perf_boxplot +
             aes(x = x, y=y, label = stat.test$p.signif))
 
 pr_perf_boxplot
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3F.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure3F.svg"),
                 width = 7, height = 8, device = "svg")
 
 pr_perf_boxplot
@@ -1325,7 +1329,7 @@ frac_pat_response$response <- factor(frac_pat_response$response, levels = c("R",
 frac_pat_response$MFP <- factor(frac_pat_response$MFP, levels = c("inflamed", "excluded", "desert"))
 
 gg_mariathasan_response <- frac_pat_response %>%
-  dplyr::filter(is.na(MFP) == FALSE) %>% 
+  dplyr::filter(is.na(MFP) == FALSE) %>%
   dplyr::group_by(dataset, method, response, category) %>%
   dplyr::summarise(counts = sum(counts)) %>%
   ggplot2::ggplot(aes(x = category, y = counts, fill = response, label = counts)) +
@@ -1343,7 +1347,7 @@ gg_mariathasan_response <- frac_pat_response %>%
   labs(y = "Number of patients", fill = "ICB Response")
 
 gg_mariathasan_MFP <- frac_pat_response %>%
-  dplyr::filter(is.na(MFP) == FALSE) %>% 
+  dplyr::filter(is.na(MFP) == FALSE) %>%
   dplyr::group_by(dataset, method, MFP, category) %>%
   dplyr::summarise(counts = sum(counts)) %>%
   ggplot2::ggplot(aes(x = category, y = counts, fill = MFP, label = counts)) +
@@ -1360,10 +1364,10 @@ gg_mariathasan_MFP <- frac_pat_response %>%
         legend.position = "top", legend.text = element_text(size = 14), legend.title = element_text(size = 14)) +
   labs(y = "Number of patients", fill = "Cancer-immune phenotype")
 
-gg_mariathasan <- ggarrange(gg_mariathasan_response, gg_mariathasan_MFP, 
+gg_mariathasan <- ggarrange(gg_mariathasan_response, gg_mariathasan_MFP,
                             nrow = 1, ncol= 2, common.legend = FALSE, align = "h")
 
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS13A.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS13A.svg"),
                 width = 14, height = 6, device = "svg")
 
 gg_mariathasan
@@ -1423,7 +1427,7 @@ frac_pat_response$response <- factor(frac_pat_response$response, levels = c("R",
 frac_pat_response$MFP <- factor(frac_pat_response$MFP, levels = c("IE", "IE/F", "D", "F"))
 
 gg_gideauslanderpd1_response <- frac_pat_response %>%
-  dplyr::filter(is.na(MFP) == FALSE) %>% 
+  dplyr::filter(is.na(MFP) == FALSE) %>%
   dplyr::group_by(dataset, method, response, category) %>%
   dplyr::summarise(counts = sum(counts)) %>%
   ggplot2::ggplot(aes(x = category, y = counts, fill = response, label = counts)) +
@@ -1441,7 +1445,7 @@ gg_gideauslanderpd1_response <- frac_pat_response %>%
   labs(y = "Number of patients", fill = "ICB Response")
 
 gg_gideauslanderpd1_MFP <- frac_pat_response %>%
-  dplyr::filter(is.na(MFP) == FALSE) %>% 
+  dplyr::filter(is.na(MFP) == FALSE) %>%
   dplyr::group_by(dataset, method, MFP, category) %>%
   dplyr::summarise(counts = sum(counts)) %>%
   ggplot2::ggplot(aes(x = category, y = counts, fill = MFP, label = counts)) +
@@ -1458,10 +1462,10 @@ gg_gideauslanderpd1_MFP <- frac_pat_response %>%
         legend.position = "top", legend.text = element_text(size = 14), legend.title = element_text(size = 14)) +
   labs(y = "Number of patients", fill = "Cancer-immune phenotype")
 
-gg_gideauslanderpd1 <- ggarrange(gg_gideauslanderpd1_response, gg_gideauslanderpd1_MFP, 
+gg_gideauslanderpd1 <- ggarrange(gg_gideauslanderpd1_response, gg_gideauslanderpd1_MFP,
                                  nrow = 1, ncol= 2, common.legend = FALSE, align = "h")
 
-ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS13B.svg"), 
+ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS13B.svg"),
                 width = 14, height = 6, device = "svg")
 
 gg_gideauslanderpd1
@@ -1497,7 +1501,7 @@ plots <- lapply(names(datasets_bulk), function(dataset){
       dplyr::mutate(scaled_score = linear_func(score, "11")) %>%
       dplyr::group_by(patient, method, run, dataset) %>%
       dplyr::summarise(score = mean(scaled_score))
-    
+
     # Immune Exclusion --
     ## all runs
     iHet_excl_df <- iHet_df %>%
@@ -1598,15 +1602,15 @@ E <- plots$kim$bootstrap
 G <- plots$jung$bootstrap
 
 D
-ggtern::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure4A.svg"), 
+ggtern::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure4A.svg"),
                width = 6, height = 6, device = "svg")
 
 E
-ggtern::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure4B.svg"), 
+ggtern::ggsave(filename = file.path(params$artifact_dir, "plots", "Figure4B.svg"),
                width = 6, height = 6, device = "svg")
 
 G
-ggtern::ggsave(filename =  file.path(params$artifact_dir, "plots", "Figure4C.svg"), 
+ggtern::ggsave(filename =  file.path(params$artifact_dir, "plots", "Figure4C.svg"),
                width = 6, height = 6, device = "svg")
 
 ```

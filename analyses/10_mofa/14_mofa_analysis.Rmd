@@ -387,7 +387,7 @@ factors_all %>%
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg, width=5.8, height=6)
 ```
 
-```{r, fig.width=2.95, fig.height=2.8, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=3.12, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 # same for tracerx (as derived by MOFA)
 if (INCLUDE_TRACERX) {
     selected_datasets <- c("TRACERx")
