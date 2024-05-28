@@ -19,6 +19,9 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+INCLUDE_TRACERX <- (params$include_tracerx == "true")
+options(bitmapType = "cairo")
+
 # utils #
 source("./helper_iHet_predictions.R")
 
@@ -365,91 +368,93 @@ IR_df <- IR_df %>%
 ## Compute iHet for TRACERx patients
 
 ```{r, fig.width=3.12, fig.height=3.5}
+if(INCLUDE_TRACERX) {
+    ## Immune Response
+    TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
+    tibble::rownames_to_column(var = "patient") %>%
+    dplyr::mutate(method = "IR") %>%
+    dplyr::rename("IR" = "response") %>%
+    as.data.frame() %>%
+    dplyr::select(patient, IR)
 
-## Immune Response
-TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
-  tibble::rownames_to_column(var = "patient") %>%
-  dplyr::mutate(method = "IR") %>%
-  dplyr::rename("IR" = "response") %>%
-  as.data.frame() %>%
-  dplyr::select(patient, IR)
+    ## TMB
+    TRACERx_TMB <- data.table::fread(params$tracerx_tmb_data)
 
-## TMB
-TRACERx_TMB <- data.table::fread(params$tracerx_tmb_data)
+    TRACERx_TMB <- TRACERx_TMB %>%
+    dplyr::mutate(sample = str_replace(str_replace(str_replace(CRUK_RegionID, fixed("SU_"), ""), fixed(":"), "_"), "T\\d\\.", "")) %>%
+    dplyr::mutate(metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
+    dplyr::select(sample, metric, tmb_value)
 
-TRACERx_TMB <- TRACERx_TMB %>%
-  dplyr::mutate(sample = str_replace(str_replace(str_replace(CRUK_RegionID, fixed("SU_"), ""), fixed(":"), "_"), "T\\d\\.", "")) %>%
-  dplyr::mutate(metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
-  dplyr::select(sample, metric, tmb_value)
+    ## iHet
 
-## iHet
+    ## gene expression - TRACERx
+    TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
 
-## gene expression - TRACERx
-TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
+    counts <- solve_annotation_issues(gene_expr = TRACERx_features$count$TRACERx)
+    tpm <- solve_annotation_issues(gene_expr = TRACERx_features$tpm$TRACERx)
 
-counts <- solve_annotation_issues(gene_expr = TRACERx_features$count$TRACERx)
-tpm <- solve_annotation_issues(gene_expr = TRACERx_features$tpm$TRACERx)
+    all_dataset <- list(counts = counts, tpm = tpm)
 
-all_dataset <- list(counts = counts, tpm = tpm)
+    iHet_TRACERx <- compute_iHet(dataset = all_dataset,
+                                model = "NSCLC",
+                                use_bootstrap_weights = TRUE,
+                                method = c("iHet"),
+                                scale_mofa_weights = TRUE,
+                                regulon_net = regulon_net)
 
-iHet_TRACERx <- compute_iHet(dataset = all_dataset,
-                             model = "NSCLC",
-                             use_bootstrap_weights = TRUE,
-                             method = c("iHet"),
-                             scale_mofa_weights = TRUE,
-                             regulon_net = regulon_net)
+    ## Median iHet
 
-## Median iHet
+    iHet_median_TRACERx <- iHet_TRACERx %>%
+    dplyr::group_by(patient, method, run) %>%
+    dplyr::summarise(iHet = median(score)) %>%
+    dplyr::group_by(patient, method) %>%
+    dplyr::summarise(iHet = median(iHet)) %>%
+    as.data.frame() %>%
+    dplyr::select(patient, iHet)
 
-iHet_median_TRACERx <- iHet_TRACERx %>%
-  dplyr::group_by(patient, method, run) %>%
-  dplyr::summarise(iHet = median(score)) %>%
-  dplyr::group_by(patient, method) %>%
-  dplyr::summarise(iHet = median(iHet)) %>%
-  as.data.frame() %>%
-  dplyr::select(patient, iHet)
+    ## PLOT (IR vs iHet) ---
 
-## PLOT (IR vs iHet) ---
+    iHet_median_TRACERx %>%
+    inner_join(TRACERx_IR_df, by = c("patient")) %>%
+    dplyr::mutate(dataset = "TRACERx") %>%
+    ggplot(aes(x = iHet, y = IR)) +
+    geom_point(size = 0.8, color = "#333333") +
+    ggplot2::theme_bw(base_size = 15) +
+    stat_cor(size = 3) +
+    geom_smooth(method = "lm") +
+    ylim(c(-2, 3)) +
+    facet_wrap(. ~ dataset, scales = "free_x") +
+    labs(y = "immune response") +
+    theme(axis.title = element_text(size = 22, colour = "black"),
+            axis.text = element_text(size=  22), strip.text = element_text(size = 18))
 
-iHet_median_TRACERx %>%
-  inner_join(TRACERx_IR_df, by = c("patient")) %>%
-  dplyr::mutate(dataset = "TRACERx") %>%
-  ggplot(aes(x = iHet, y = IR)) +
-  geom_point(size = 0.8, color = "#333333") +
-  ggplot2::theme_bw(base_size = 15) +
-  stat_cor(size = 3) +
-  geom_smooth(method = "lm") +
-  ylim(c(-2, 3)) +
-  facet_wrap(. ~ dataset, scales = "free_x") +
-  labs(y = "immune response") +
-  theme(axis.title = element_text(size = 22, colour = "black"),
-        axis.text = element_text(size=  22), strip.text = element_text(size = 18))
+    ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_immune_response.svg"),
+        device = svg)
 
-ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_immune_response.svg"),
-       device = svg)
+    ## PLOT (TMB vs iHet) ---
 
-## PLOT (TMB vs iHet) ---
+    iHet_median_TRACERx <- iHet_median_TRACERx %>%
+    dplyr::rename("sample" = "patient")
 
-iHet_median_TRACERx <- iHet_median_TRACERx %>%
-  dplyr::rename("sample" = "patient")
+    TRACERx_TMB %>%
+    inner_join(iHet_median_TRACERx, by = c("sample")) %>%
+    dplyr::mutate(dataset = "TRACERx") %>%
+    ggplot(aes(x = iHet, y = tmb_value)) +
+    geom_point(size = 0.8, color = "#333333") +
+    ggplot2::theme_bw(base_size = 15) +
+    stat_cor(size = 3) +
+    geom_smooth(method = "lm") +
+    facet_wrap(. ~ dataset, scales = "free_x") +
+    scale_y_log10() +
+    xlab("iHet") +
+    ylab("TMB") +
+    theme(axis.title = element_text(size = 22, colour = "black"),
+            axis.text = element_text(size=  22), strip.text = element_text(size = 18))
 
-TRACERx_TMB %>%
-  inner_join(iHet_median_TRACERx, by = c("sample")) %>%
-  dplyr::mutate(dataset = "TRACERx") %>%
-  ggplot(aes(x = iHet, y = tmb_value)) +
-  geom_point(size = 0.8, color = "#333333") +
-  ggplot2::theme_bw(base_size = 15) +
-  stat_cor(size = 3) +
-  geom_smooth(method = "lm") +
-  facet_wrap(. ~ dataset, scales = "free_x") +
-  scale_y_log10() +
-  xlab("iHet") +
-  ylab("TMB") +
-  theme(axis.title = element_text(size = 22, colour = "black"),
-        axis.text = element_text(size=  22), strip.text = element_text(size = 18))
+    ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"),
+        device = svg)
+}
 
-ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"),
-       device = svg)
 ```
 
 
