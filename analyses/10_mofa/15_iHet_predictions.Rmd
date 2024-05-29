@@ -357,10 +357,10 @@ IR_df <- subset(data_all_tidy,
 IR_df <- IR_df %>%
   dplyr::select(view, patient, value, dataset) %>%
   dplyr::rename("method" = "view",
-                # "pat_id" = "patient",
+                "pat_id" = "patient",
                 "score" = "value",
                 "model" = "dataset") %>%
-  dplyr::mutate(pat_id = substr(gsub(".", "-", patient, fixed = TRUE), 1, 12),
+  dplyr::mutate(pat_id = substr(gsub(".", "-", pat_id, fixed = TRUE), 1, 12),
                 method = "IR")
 
 ```
@@ -389,8 +389,7 @@ if(INCLUDE_TRACERX) {
     dplyr::mutate(metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
     dplyr::select(sample, metric, tmb_value)
 
-    ## iHet
-
+    ## Compute iHet
 
     counts <- solve_annotation_issues(gene_expr = TRACERx_features$count$TRACERx)
     tpm <- solve_annotation_issues(gene_expr = TRACERx_features$tpm$TRACERx)
@@ -465,18 +464,18 @@ if(INCLUDE_TRACERX) {
 ```{r, include = FALSE}
 
 # Retrieve iHet score TCGA-NSCLC patients
-# luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
-# lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
-luad_patients <- colnames(tcga_features$tpm$LUAD)
-lusc_patients <- colnames(tcga_features$tpm$LUSC)
+luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
+lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+# luad_patients <- colnames(tcga_features$tpm$LUAD)
+# lusc_patients <- colnames(tcga_features$tpm$LUSC)
 
 ## LUAD
 iHet_df_luad <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUAD" & patient %in% luad_patients)
+  dplyr::filter(model == "LUAD" & pat_id %in% luad_patients)
 
 ## LUSC
 iHet_df_lusc <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
+  dplyr::filter(model == "LUSC" & pat_id %in% lusc_patients)
 
 ## NSCLC
 iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
@@ -487,28 +486,7 @@ saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
 
 # Compute median iHet (one value per patient)
-tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, patient) |> summarize(score = median(score)) |> ungroup()
-
-# ## LUAD
-# iHet_df_luad <- tcga_iHet_scores %>%
-#   dplyr::filter(model == "LUAD" & patient %in% luad_patients)
-
-# ## LUSC
-# iHet_df_lusc <- tcga_iHet_scores %>%
-#   dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
-
-# ## NSCLC
-# iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
-# iHet_df$model <- "NSCLC"
-# tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
-
-# saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
-#                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
-
-# # Compute median iHet (one value per patient)
-# tcga_iHet_scores_median <- aggregate(tcga_iHet_scores,
-#                                      score ~ method + model + pat_id,
-#                                      FUN = "median")
+tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, pat_id) |> summarize(score = median(score)) |> ungroup()
 
 # Save iHet scores matrix
 tcga_iHet_mat <- tcga_iHet_scores_median %>%
@@ -520,7 +498,8 @@ colnames(tcga_iHet_mat)[5] <- "iHet_rev"
 ## get weights
 TCGA_NSCLC_iHet_median_weights <- get_iHet_associated_weights(use_bootstrap_weights = FALSE,
                                                               model = "NSCLC",
-                                                              scale_mofa_weights = TRUE)
+                                                              scale_mofa_weights = TRUE,
+                                                              feat_cor_hifs=feat_cor_hifs)
 
 ## write into .csv file
 data.table::fwrite(TCGA_NSCLC_iHet_median_weights,
@@ -836,7 +815,6 @@ tmb_df <- tmb_df %>%
 
 ## ESTIMATE - Tumor purity
 estimate <- immunedeconv::deconvolute(all_dataset$tpm, method = "estimate")
-
 tumor_purity <- estimate[4, , drop=FALSE]
 tumor_purity_df <- reshape2::melt(tumor_purity)
 tumor_purity_df <- tumor_purity_df %>%
@@ -868,6 +846,7 @@ PRcurve <- assess_predictive_performance(iHet=iHet_df_norm,
                                          method = c("iHet", "iHet_rev", "PDL1"),
                                          plot_roc=TRUE,
                                          metric="precision_recall")
+file.path(params$artifact_dir, "plots", "Figure3B.svg")
 
 svglite(filename = file.path(params$artifact_dir, "plots", "Figure3B.svg"),
         width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)

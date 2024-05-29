@@ -349,7 +349,8 @@ get_bootstrap_samples <- function(dir, model){
 
 get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE,
                                         model="NSCLC",
-                                        scale_mofa_weights = FALSE){
+                                        scale_mofa_weights = FALSE,
+                                        feat_cor_hifs){
 
   # Load knowledge of features correlated with information about the density of fibroblasts in tumor region
   feat_cor_tmp <- feat_cor_hifs
@@ -642,14 +643,6 @@ compute_iHet <- function(dataset,
     })
 
   }
-
-  # norm_boot_features <- lapply(1:100, function(run){
-  #
-  #   tmp <- list(path = as.matrix(path),
-  #                              cellfrac = as.matrix(cellfrac),
-  #                              tf = as.matrix(tf))
-  #   return(tmp)
-  # })
 
   feat_cor_hifs <- readRDS(file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_NSCLC_cor_features_HIF_Fib_tumor.rds")))
@@ -1062,9 +1055,9 @@ assess_predictive_performance <- function(iHet,
 
         # using ROCR package
         if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", lty = 3, type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
           # bootstrap ROC curves
           plot(ROC_data[[xx]]$roc_perf, col=col[xx], lty = 2, lwd = 0.25, add = TRUE)
         }
@@ -1105,9 +1098,9 @@ assess_predictive_performance <- function(iHet,
 
         # using ROCR package
         if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", lty = 3, type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
         }
 
         if(metric=="precision_recall"){
