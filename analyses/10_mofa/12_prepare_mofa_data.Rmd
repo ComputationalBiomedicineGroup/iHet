@@ -3,16 +3,12 @@ params:
     cpus: 1
     meta: NULL
     input_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/11_easier"
-    gtex_healthy_samples: "/home/olapuente/iHet_original/iHet/data/01_processed/bulk_rna_seq/GTEx_healthy_samples.tsv" # bgee samples
-    gtex_accession_numbers: "/home/olapuente/iHet_original/iHet/data/01_processed/bulk_rna_seq/GTEx_accession_numbers.csv" # mapping gtex <-> bgee
     artifact_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/12_prepare_mofa_data/artifacts"
     include_tracerx: "true"
-    filter_gtex: "false"
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
 INCLUDE_TRACERX <- (params$include_tracerx == "true")
-FILTER_GTEX <- (params$filter_gtex == "true")
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 dir.create(params$artifact_dir, showWarnings = FALSE)
 
@@ -34,19 +30,6 @@ library(stringr)
 library(ggbeeswarm)
 library(BayesFactor)
 library(ggrepel)
-```
-
-```{r}
-if(FILTER_GTEX) {
-    gtex_healthy_samples <- readr::read_tsv(params$gtex_healthy_samples)
-    gtex_accession_numbers <- readr::read_csv(params$gtex_accession_numbers)
-    gtex_accession_numbers <- gtex_accession_numbers %>%
-        select(`Library ID` = Experiment, gtex_id = biospecimen_repository_sample_id) %>%
-        distinct()
-    gtex_healthy_sample_ids <- gtex_accession_numbers %>%
-        semi_join(gtex_healthy_samples) %>%
-        pull(gtex_id)
-}
 ```
 
 ```{r}
@@ -103,17 +86,6 @@ if (INCLUDE_TRACERX) {
 }
 tcga_data <- readRDS(file.path(params$input_dir, "TCGA_expr_data.features.rds"))
 data_all <- tcga_data
-
-if(FILTER_GTEX) {
-    # subset gtex to 'truly healthy' samples
-    selected_gtex_idx <- intersect(colnames(gtex_data[["tpm"]]$Lung), gtex_healthy_sample_ids)
-    gtex_data[["tpm"]][["Lung"]] <- gtex_data[["tpm"]][["Lung"]][, selected_gtex_idx]
-    gtex_data[["count"]][["Lung"]] <- gtex_data[["count"]][["Lung"]][, selected_gtex_idx]
-    gtex_data[["pathway"]][["Lung"]] <- gtex_data[["pathway"]][["Lung"]][selected_gtex_idx, ]
-    gtex_data[["tf"]][["Lung"]] <- gtex_data[["tf"]][["Lung"]][selected_gtex_idx, ]
-    gtex_data[["cellfrac"]][["Lung"]] <- gtex_data[["cellfrac"]][["Lung"]][selected_gtex_idx, ]
-    gtex_data[["immresp"]][["Lung"]] <- gtex_data[["immresp"]][["Lung"]][selected_gtex_idx, ]
-}
 
 # Merge and rename datasets
 # LUAD and LUSC are contained in both tcga and nsclc. They are identical
