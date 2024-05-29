@@ -373,7 +373,6 @@ if(INCLUDE_TRACERX) {
     ## gene expression - TRACERx
     TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
 
-<<<<<<< Updated upstream
     ## Immune Response
     TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
     tibble::rownames_to_column(var = "patient") %>%
@@ -381,18 +380,6 @@ if(INCLUDE_TRACERX) {
     dplyr::rename("IR" = "response") %>%
     as.data.frame() %>%
     dplyr::select(patient, IR)
-=======
-## gene expression - TRACERx
-TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
-
-## Immune Response 
-TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
-  tibble::rownames_to_column(var = "patient") %>%
-  dplyr::mutate(method = "IR") %>%
-  dplyr::rename("IR" = "response") %>%
-  as.data.frame() %>%
-  dplyr::select(patient, IR)
->>>>>>> Stashed changes
 
     ## TMB
     TRACERx_TMB <- data.table::fread(params$tracerx_tmb_data)
@@ -402,12 +389,7 @@ TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
     dplyr::mutate(metric="Mut_per_Mb", tmb_value=TMBperMb) %>%
     dplyr::select(sample, metric, tmb_value)
 
-<<<<<<< Updated upstream
-    ## iHet
-
-=======
-## Compute iHet
->>>>>>> Stashed changes
+    ## Compute iHet
 
     counts <- solve_annotation_issues(gene_expr = TRACERx_features$count$TRACERx)
     tpm <- solve_annotation_issues(gene_expr = TRACERx_features$tpm$TRACERx)
@@ -505,27 +487,6 @@ saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
 
 # Compute median iHet (one value per patient)
 tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, pat_id) |> summarize(score = median(score)) |> ungroup()
-
-# ## LUAD
-# iHet_df_luad <- tcga_iHet_scores %>%
-#   dplyr::filter(model == "LUAD" & patient %in% luad_patients)
-
-# ## LUSC
-# iHet_df_lusc <- tcga_iHet_scores %>%
-#   dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
-
-# ## NSCLC
-# iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
-# iHet_df$model <- "NSCLC"
-# tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
-
-# saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
-#                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
-
-# # Compute median iHet (one value per patient)
-# tcga_iHet_scores_median <- aggregate(tcga_iHet_scores,
-#                                      score ~ method + model + pat_id,
-#                                      FUN = "median")
 
 # Save iHet scores matrix
 tcga_iHet_mat <- tcga_iHet_scores_median %>%
@@ -886,11 +847,7 @@ PRcurve <- assess_predictive_performance(iHet=iHet_df_norm,
                                          metric="precision_recall")
 file.path(params$artifact_dir, "plots", "Figure3B.svg")
 
-<<<<<<< Updated upstream
 svglite(filename = file.path(params$artifact_dir, "plots", "Figure3B.svg"),
-=======
-svglite(filename = "../../figures/Figure3B.svg", 
->>>>>>> Stashed changes
         width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 ROCcurve
 dev.off()

@@ -643,14 +643,6 @@ compute_iHet <- function(dataset,
 
   }
 
-  # norm_boot_features <- lapply(1:100, function(run){
-  #
-  #   tmp <- list(path = as.matrix(path),
-  #                              cellfrac = as.matrix(cellfrac),
-  #                              tf = as.matrix(tf))
-  #   return(tmp)
-  # })
-
   feat_cor_hifs <- readRDS(file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_NSCLC_cor_features_HIF_Fib_tumor.rds")))
 
