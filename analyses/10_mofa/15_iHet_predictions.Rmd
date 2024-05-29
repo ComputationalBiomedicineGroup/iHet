@@ -21,9 +21,10 @@ output: html_document
 ```{r setup, include=FALSE}
 INCLUDE_TRACERX <- (params$include_tracerx == "true")
 options(bitmapType = "cairo")
-
+dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 # utils #
 source("./helper_iHet_predictions.R")
+conflicts_prefer(dplyr::summarize)
 
 # turn off messages
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
@@ -350,16 +351,16 @@ data_all_tidy <- readRDS(file = file.path(params$features_dir, "data_all_tidy.rd
 
 ## Ensemble immune response
 IR_df <- subset(data_all_tidy,
-                view == "immune response" & feature == "response" & dataset != c("Jia", "Sharma", "JiaSharma"))
+                view == "immune response" & feature == "response" & !(dataset %in% c("Jia", "Sharma", "JiaSharma")))
 
 # to data.frame
 IR_df <- IR_df %>%
   dplyr::select(view, patient, value, dataset) %>%
   dplyr::rename("method" = "view",
-                "pat_id" = "patient",
+                # "pat_id" = "patient",
                 "score" = "value",
                 "model" = "dataset") %>%
-  dplyr::mutate(pat_id = substr(gsub(".", "-", pat_id, fixed = TRUE), 1, 12),
+  dplyr::mutate(pat_id = substr(gsub(".", "-", patient, fixed = TRUE), 1, 12),
                 method = "IR")
 
 ```
@@ -369,6 +370,9 @@ IR_df <- IR_df %>%
 
 ```{r, fig.width=3.12, fig.height=3.5}
 if(INCLUDE_TRACERX) {
+    ## gene expression - TRACERx
+    TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
+
     ## Immune Response
     TRACERx_IR_df <- TRACERx_features[["immresp"]]$TRACERx[, 10, drop = FALSE] %>%
     tibble::rownames_to_column(var = "patient") %>%
@@ -387,8 +391,6 @@ if(INCLUDE_TRACERX) {
 
     ## iHet
 
-    ## gene expression - TRACERx
-    TRACERx_features <- readRDS(file.path(params$easier_dir, "TRACERx_expr_data.features.rds"))
 
     counts <- solve_annotation_issues(gene_expr = TRACERx_features$count$TRACERx)
     tpm <- solve_annotation_issues(gene_expr = TRACERx_features$tpm$TRACERx)
@@ -463,16 +465,18 @@ if(INCLUDE_TRACERX) {
 ```{r, include = FALSE}
 
 # Retrieve iHet score TCGA-NSCLC patients
-luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
-lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+# luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
+# lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+luad_patients <- colnames(tcga_features$tpm$LUAD)
+lusc_patients <- colnames(tcga_features$tpm$LUSC)
 
 ## LUAD
 iHet_df_luad <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUAD" & pat_id %in% luad_patients)
+  dplyr::filter(model == "LUAD" & patient %in% luad_patients)
 
 ## LUSC
 iHet_df_lusc <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUSC" & pat_id %in% lusc_patients)
+  dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
 
 ## NSCLC
 iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
@@ -483,9 +487,28 @@ saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
 
 # Compute median iHet (one value per patient)
-tcga_iHet_scores_median <- aggregate(tcga_iHet_scores,
-                                     score ~ method + model + pat_id,
-                                     FUN = "median")
+tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, patient) |> summarize(score = median(score)) |> ungroup()
+
+# ## LUAD
+# iHet_df_luad <- tcga_iHet_scores %>%
+#   dplyr::filter(model == "LUAD" & patient %in% luad_patients)
+
+# ## LUSC
+# iHet_df_lusc <- tcga_iHet_scores %>%
+#   dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
+
+# ## NSCLC
+# iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
+# iHet_df$model <- "NSCLC"
+# tcga_iHet_scores <- rbind(tcga_iHet_scores, iHet_df)
+
+# saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
+#                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
+
+# # Compute median iHet (one value per patient)
+# tcga_iHet_scores_median <- aggregate(tcga_iHet_scores,
+#                                      score ~ method + model + pat_id,
+#                                      FUN = "median")
 
 # Save iHet scores matrix
 tcga_iHet_mat <- tcga_iHet_scores_median %>%
@@ -852,7 +875,7 @@ ROCcurve
 dev.off()
 
 svglite(filename = file.path(params$artifact_dir, "plots", "Figure3C.svg"),
-        width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6, bac)
+        width = 8, height = 8, fix_text_size = FALSE, scaling = 0.6)
 PRcurve
 dev.off()
 
