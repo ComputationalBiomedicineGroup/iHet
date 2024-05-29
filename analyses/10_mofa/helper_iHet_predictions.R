@@ -1062,9 +1062,9 @@ assess_predictive_performance <- function(iHet,
 
         # using ROCR package
         if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", lty = 3, type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
           # bootstrap ROC curves
           plot(ROC_data[[xx]]$roc_perf, col=col[xx], lty = 2, lwd = 0.25, add = TRUE)
         }
@@ -1105,9 +1105,9 @@ assess_predictive_performance <- function(iHet,
 
         # using ROCR package
         if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", lty = 3, type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "S", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
         }
 
         if(metric=="precision_recall"){
