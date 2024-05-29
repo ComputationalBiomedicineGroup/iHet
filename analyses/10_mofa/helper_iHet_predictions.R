@@ -349,7 +349,8 @@ get_bootstrap_samples <- function(dir, model){
 
 get_iHet_associated_weights <- function(use_bootstrap_weights=FALSE,
                                         model="NSCLC",
-                                        scale_mofa_weights = FALSE){
+                                        scale_mofa_weights = FALSE,
+                                        feat_cor_hifs){
 
   # Load knowledge of features correlated with information about the density of fibroblasts in tumor region
   feat_cor_tmp <- feat_cor_hifs

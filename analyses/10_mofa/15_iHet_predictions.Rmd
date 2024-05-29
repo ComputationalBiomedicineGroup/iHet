@@ -498,7 +498,8 @@ colnames(tcga_iHet_mat)[5] <- "iHet_rev"
 ## get weights
 TCGA_NSCLC_iHet_median_weights <- get_iHet_associated_weights(use_bootstrap_weights = FALSE,
                                                               model = "NSCLC",
-                                                              scale_mofa_weights = TRUE)
+                                                              scale_mofa_weights = TRUE,
+                                                              feat_cor_hifs=feat_cor_hifs)
 
 ## write into .csv file
 data.table::fwrite(TCGA_NSCLC_iHet_median_weights,
