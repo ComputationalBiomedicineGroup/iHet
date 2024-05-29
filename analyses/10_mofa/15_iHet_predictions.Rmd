@@ -357,10 +357,10 @@ IR_df <- subset(data_all_tidy,
 IR_df <- IR_df %>%
   dplyr::select(view, patient, value, dataset) %>%
   dplyr::rename("method" = "view",
-                # "pat_id" = "patient",
+                "pat_id" = "patient",
                 "score" = "value",
                 "model" = "dataset") %>%
-  dplyr::mutate(pat_id = substr(gsub(".", "-", patient, fixed = TRUE), 1, 12),
+  dplyr::mutate(pat_id = substr(gsub(".", "-", pat_id, fixed = TRUE), 1, 12),
                 method = "IR")
 
 ```
@@ -465,18 +465,18 @@ if(INCLUDE_TRACERX) {
 ```{r, include = FALSE}
 
 # Retrieve iHet score TCGA-NSCLC patients
-# luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
-# lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
-luad_patients <- colnames(tcga_features$tpm$LUAD)
-lusc_patients <- colnames(tcga_features$tpm$LUSC)
+luad_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUAD), fixed = TRUE), 1, 12)
+lusc_patients <- substr(gsub(".", "-", colnames(tcga_features$tpm$LUSC), fixed = TRUE), 1, 12)
+# luad_patients <- colnames(tcga_features$tpm$LUAD)
+# lusc_patients <- colnames(tcga_features$tpm$LUSC)
 
 ## LUAD
 iHet_df_luad <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUAD" & patient %in% luad_patients)
+  dplyr::filter(model == "LUAD" & pat_id %in% luad_patients)
 
 ## LUSC
 iHet_df_lusc <- tcga_iHet_scores %>%
-  dplyr::filter(model == "LUSC" & patient %in% lusc_patients)
+  dplyr::filter(model == "LUSC" & pat_id %in% lusc_patients)
 
 ## NSCLC
 iHet_df <- rbind(iHet_df_luad, iHet_df_lusc)
@@ -487,7 +487,7 @@ saveRDS(tcga_iHet_scores,  file = file.path(params$artifact_dir,
                                             paste0(regulon_net, "_TCGA_boot_iHet_scores.rds")))
 
 # Compute median iHet (one value per patient)
-tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, patient) |> summarize(score = median(score)) |> ungroup()
+tcga_iHet_scores_median <- tcga_iHet_scores |> group_by(method, model, pat_id) |> summarize(score = median(score)) |> ungroup()
 
 # ## LUAD
 # iHet_df_luad <- tcga_iHet_scores %>%
