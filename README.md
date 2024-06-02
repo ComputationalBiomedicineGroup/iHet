@@ -36,11 +36,13 @@ Then, within the repository, download the data archives and extract then to the 
 curl -L "https://figshare.com/ndownloader/files/43761759" | tar xvJ
 
 # input data
+mkdir data && cd data
 curl -L "https://figshare.com/ndownloader/files/43761567" | tar xvJ
 ```
 
 Additionally, you can obtain the pre-computed results without running the workflow using
 ```bash
+# also run this inside the "data" directory
 curl -L "https://figshare.com/ndownloader/files/43762119" | tar xvJ
 ```
 
