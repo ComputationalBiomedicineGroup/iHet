@@ -966,9 +966,12 @@ assess_predictive_performance <- function(iHet,
   }
 
   # set colors
-  col <- c("#7570B3","#D95F02", "#72a659", "#ca568b", "gray85")
-  names(col) <- c("iHet", "iHet_rev", "PDL1", "TMB", "ESTIMATE")
-  col <- col[c("iHet", "iHet_rev", "PDL1", "TMB", "ESTIMATE")]
+  col <- c("#7570B3","#D95F02", "#72a659", "#ca568b")
+  names(col) <- c("iHet", "iHet_rev", "PDL1", "TMB")
+  col <- col[c("iHet", "iHet_rev", "PDL1", "TMB")]
+  
+  col_boot <- c("#d5d4e8", "#f7dfcc")
+  names(col_boot) <- c("iHet", "iHet_rev")
 
   #col=colorRampPalette(brewer.pal(8, "Set2"))(6)
   #names(col) <- c("IR", "iHet", "iHet_inverted", "iHet_removed", "iHet_exclusion")
@@ -977,12 +980,11 @@ assess_predictive_performance <- function(iHet,
   rp_df <- list()
 
   ## categorize gold standards
-  if(any(method %in% c("PDL1", "TMB", "ESTIMATE"))){
+  if(any(method %in% c("PDL1", "TMB"))){
     iHet <- iHet %>%
       dplyr::group_by(method) %>%
       dplyr::mutate(score = ifelse(method == "TMB", categorize(score), score)) %>%
-      dplyr::mutate(score = ifelse(method == "PDL1", categorize(score), score)) %>%
-      dplyr::mutate(score = ifelse(method == "ESTIMATE", categorize(score), score))
+      dplyr::mutate(score = ifelse(method == "PDL1", categorize(score), score))
   }
 
   ## sort iHet (for correct transformation into matrix, prior to predict response) ##
@@ -1023,7 +1025,7 @@ assess_predictive_performance <- function(iHet,
     rownames(iHet_mat) <- unique(iHet_sel$patient)
     colnames(iHet_mat) <- unique(iHet_sel$run)
 
-    if(yy %in% c("PDL1", "TMB", "ESTIMATE")){
+    if(yy %in% c("PDL1", "TMB")){
       pred <- ROCR::prediction(iHet_mat[,1], rp_df$response[,1], label.ordering = c("NR", "R"))
     }else{
       pred <- ROCR::prediction(iHet_mat, rp_df$response, label.ordering = c("NR", "R"))
@@ -1031,7 +1033,7 @@ assess_predictive_performance <- function(iHet,
     roc_perf <- ROCR::performance(pred, measure = yaxis, x.measure = xaxis)
     auc_perf <- unlist(ROCR::performance(pred, auc_metric)@y.values)
     auc_perf <- matrix(auc_perf)
-    if(yy %in% c("PDL1", "TMB", "ESTIMATE")) {
+    if(yy %in% c("PDL1", "TMB")) {
       rownames(auc_perf) <- 1
     }else{
       rownames(auc_perf) <- 1:100
@@ -1053,17 +1055,21 @@ assess_predictive_performance <- function(iHet,
         ciw   <- qt(0.975, n) * stdev / sqrt(n) # 95% CI
 
         # using ROCR package
-        if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
+        if (xx %in% c("PDL1", "TMB")){
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=5, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=3, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
+        
           # bootstrap ROC curves
-          plot(ROC_data[[xx]]$roc_perf, col=col[xx], lty = 2, lwd = 0.25, add = TRUE)
+          plot(ROC_data[[xx]]$roc_perf, col=col_boot[xx], type = "s", add = TRUE)
+          
+          # average ROC curve
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=5, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
+          
         }
 
         if(metric=="precision_recall"){
 
-          if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
+          if (xx %in% c("PDL1", "TMB")){
 
             legend_text <- paste0(xx,", AUCPR=", round(mean, 2))
 
@@ -1076,7 +1082,7 @@ assess_predictive_performance <- function(iHet,
 
         }else{
 
-          if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
+          if (xx %in% c("PDL1", "TMB")){
 
           legend_text <- paste0(xx,", AUC=", round(mean, 2))
 
@@ -1096,10 +1102,10 @@ assess_predictive_performance <- function(iHet,
         tmp <- ROC_data[[xx]]$auc_perf
 
         # using ROCR package
-        if (xx %in% c("PDL1", "TMB", "ESTIMATE")){
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], type = "s", add = TRUE)
+        if (xx %in% c("PDL1", "TMB")){
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=5, cex.lab = 1.3, col=col[xx], add = TRUE)
         }else{
-          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=2, cex.lab = 1.3, col=col[xx], avg = "threshold", type = "s", add = TRUE)
+          ROCR::plot(ROC_data[[xx]]$roc_perf, lwd=5, cex.lab = 1.3, col=col[xx], avg = "threshold", add = TRUE)
         }
 
         if(metric=="precision_recall"){
