@@ -176,6 +176,13 @@ for name, tmp_ad in sc_datasets.items():
         # sc.pp.scale(tmp_ad, layer="batch_corrected")
         tmp_pb_res[method] = tmp_ad_decoupler
 
+    tmp_dfs = []
+    for method, tmp_pb in tmp_pb_res.items():
+        tmp_df = sc.get.aggregate(tmp_pb, layer="scaled", by=["cell_type"], func="mean").T.to_df(layer="mean")
+        tmp_df.insert(0, "method", method)
+        tmp_dfs.append(tmp_df)
+    pd.concat(tmp_dfs).to_csv(f"{artifact_dir}/aggregated_scores_{name}.csv")
+
     display(Markdown("### Progeny"))
 
     fig = sc.pl.matrixplot(
