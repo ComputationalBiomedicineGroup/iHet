@@ -2,8 +2,8 @@
 params:
     cpus: 1
     meta: NULL
-    input_dir: "../../results/10_mofa/11_easier"
-    artifact_dir: "/local/scratch/sturm/mofa"
+    input_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/11_easier"
+    artifact_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/12_prepare_mofa_data/artifacts"
     include_tracerx: "true"
 ---
 
@@ -64,7 +64,6 @@ processFeatures <- function(data, dataset_id) {
         rename(`CD8 T` = `CD8+ T`) %>%
         # summarise Tregs and CD4, but keep treg estimate.
         # quanTIseq tends to over-estimate Tregs and under-estimate non-reg. CD4 Ts.
-        mutate(`CD4 T` = `CD4 T` + `Treg`) %>%
         do_pivot("Immune cells quantification") %>%
         # DCs and Monocytes show unstable results in the different bootstraps -> exclude them.
         filter(!(feature %in% c("Other", "DC", "Monocyte")))
@@ -179,5 +178,3 @@ lapply(names(bootstrap_datasets), function(dataset_id) {
     })
 })
 ```
-
-

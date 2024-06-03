@@ -5,9 +5,13 @@ library(dplyr)
 library(stringr)
 library(MOFA2)
 
+RhpcBLASctl::blas_set_num_threads(1)
+RhpcBLASctl::omp_set_num_threads(1)
+
 args <- commandArgs(trailingOnly = TRUE)
 data_file <- args[1]
 
+reticulate::use_python("/home/sturm/apps/micromamba/envs/2021-nsclc_heterogeneity_r/bin/python")
 
 #' train the MOFA model
 runMOFA <- function(MOFAdata, out_file) {

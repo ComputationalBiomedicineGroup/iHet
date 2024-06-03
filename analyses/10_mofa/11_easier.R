@@ -3,7 +3,7 @@
 Prepare Feature data with EASIER.
 
 Usage:
-  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds>
+  11_easier.R <INPUT_FILE.rds> <immscore_file.rds> <OUTPUT_FILE.rds> <regulon_net>
 
 " -> doc
 
@@ -14,6 +14,7 @@ args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 immscore_file <- args[2]
 output_file <- args[3]
+regulon_net = args[4]
 
 getFeat <- function(dataobj,
                     cancertype = "LUAD",
@@ -33,9 +34,11 @@ getFeat <- function(dataobj,
     "IFNy",
     "Ayers_expIS",
     "Tcell_inflamed",
-    "RIR",
+    "resF_down",
     "TLS"
   )
+  immscoreZ$score <- selscores
+  rownames(immscoreZ) <- immscoreZ$score
 
   # List of datasets in the input object
   datasets <- names(dataobj[[1]])
@@ -49,7 +52,7 @@ getFeat <- function(dataobj,
 
     # Quantification of immune cell fractions with quanTIseq
     cellfrac <- compute_cell_fractions(
-      RNA.tpm = dataobj$tpm[[dataset]]
+      RNA_tpm = dataobj$tpm[[dataset]]
     )
 
     # Optional quantification of CAFs and endothelial cells qith EPIC
@@ -65,37 +68,33 @@ getFeat <- function(dataobj,
       )
     }
 
+    # Tumor purity ESTIMATE
+    estimate <- immunedeconv::deconvolute(dataobj$tpm[[dataset]], method = "estimate")
+
     # Quantification of pathway activity scores with RPOGENy
-    pathway <- compute_pathways_scores(
-      RNA.counts = dataobj$count[[dataset]],
-      remove.genes.ICB_proxies = remove.genes.ICB_proxies
+    pathway <- compute_pathway_activity(
+      RNA_counts = dataobj$count[[dataset]],
+      remove_sig_genes_immune_response = remove.genes.ICB_proxies
     )
 
     # Quantification of TF activity scores with DoRothEA
     TF <- compute_TF_activity(
-      RNA.tpm = dataobj$tpm[[dataset]],
-      remove.genes.ICB_proxies = remove.genes.ICB_proxies
+      RNA_tpm = dataobj$tpm[[dataset]],
+      regulon_net = regulon_net
     )
 
     # Storing of the computed features in the output object
     dataobj$cellfrac[[dataset]] <- cellfrac
-    dataobj$pathway[[dataset]] <- pathway$scores
-    dataobj$tf[[dataset]] <- TF$scores
+    dataobj$pathway[[dataset]] <- pathway
+    dataobj$tf[[dataset]] <- TF
+    dataobj$estimate[[dataset]] <- estimate
 
     # Computation of immune response scores (proxies)
-    proxies <- compute_gold_standards(
-      RNA.tpm =
-        as.data.frame(dataobj$tpm[[dataset]]),
-      list_gold_standards = selscores,
-      cancertype = cancertype
+    proxies.mat <- compute_scores_immune_response(
+      RNA_tpm = as.data.frame(dataobj$tpm[[dataset]])
     )
-    proxies.mat <- as.data.frame(matrix(unlist(proxies),
-      nrow = length(proxies),
-      byrow = T
-    ))
-    rownames(proxies.mat) <- names(proxies)
-    colnames(proxies.mat) <- colnames(proxies[[1]])
-    proxies.mat <- t(proxies.mat)
+
+    proxies.mat <- proxies.mat[, selscores]
 
     # Rotation of the "Chemokines" score to agree with "CYT" direction
     chemosign <- sign(cor(proxies.mat[, "CYT"], proxies.mat[, "chemokines"]))
@@ -114,7 +113,7 @@ getFeat <- function(dataobj,
 
   # Removal of gene expression data
   if (onlyEasier == TRUE) {
-    dataobj <- dataobj[c("cellfrac", "pathway", "tf", "immresp")]
+    dataobj <- dataobj[c("cellfrac", "pathway", "tf", "immresp", "estimate")]
   }
 
   return(dataobj)

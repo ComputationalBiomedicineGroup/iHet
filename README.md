@@ -7,10 +7,10 @@ This repository holds the code for all analyses related to
 All analyses are integrated into a nextflow pipeline and all dependencies are packaged as singularity containers.
 The pipeline consists of the following subworkflows
 
- * **MOFA**. Run unsupervised multi-omics factorial analysis (MOFA) of bulk RNA-seq data from Jia, Sharma, TRACERx and 
+ * **MOFA**. Run unsupervised multi-omics factorial analysis (MOFA) of bulk RNA-seq data from Jia, Sharma, TRACERx and
    pan-cancer datasets from TCGA
- * **single-cell**. Create a custom subset of the [Lung Cancer Atlas](https://doi.org/10.1016/j.ccell.2022.10.008), 
-   re-annotate myeloid subtypes and perform transcription factor and pathway analysis. 
+ * **single-cell**. Create a custom subset of the [Lung Cancer Atlas](https://doi.org/10.1016/j.ccell.2022.10.008),
+   re-annotate myeloid subtypes and perform transcription factor and pathway analysis.
 
 ## Launching the workflow
 
@@ -33,16 +33,20 @@ Then, within the repository, download the data archives and extract then to the 
 
 ```bash
 # singularity containers
-curl -L "https://figshare.com/ndownloader/files/43761759" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46764697" | tar xvJ
 
 # input data
-curl -L "https://figshare.com/ndownloader/files/43761567" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46777024" | tar xvJ
 ```
 
 Additionally, you can obtain the pre-computed results without running the workflow using
 ```bash
-curl -L "https://figshare.com/ndownloader/files/43762119" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46777027" | tar xvJ
 ```
+
+By default, the workflow is configured to use the pre-computed single-cell
+annotations, since graph-based clustering is not guaranteed to be 100% reproducible
+on other systems.
 
 Note that some results depend on the [TRACERx data](https://pubmed.ncbi.nlm.nih.gov/31591602/) (EGAS00001003458, EGAD00001003206)
 which is not publicly available. The workflow is configured, by default, to run without these data.
@@ -98,11 +102,11 @@ In this section, we describe the directories and their contents in more detail.
 Results of the [easier](https://github.com/olapuentesantana/easier) package to obtain
 cell-type fraction, pathway- and transcription factor estimates. Contains one
 `.rds` file per dataset group, which contains a list of lists of data frames.
-There is one data frame for each dataset and each modality. 
-Contained modalities: 
+There is one data frame for each dataset and each modality.
+Contained modalities:
 
 ```
-"count"    "tpm"      "response" "pathway"  "tf"       "cellfrac" "immresp"  
+"count"    "tpm"      "response" "pathway"  "tf"       "cellfrac" "immresp"
 ```
 
 ### 12_prepare_mofa_data
@@ -110,28 +114,28 @@ Contained modalities:
 Result of an Rmarkdown notebook preparing the input data into a format compatible
 with MOFA. Splits up the data into all individual dataset and creates bootstrap datasets
 for each dataset. A rendered version of the notebook is in the main directory, all
-generated files are in the `artifacts` directory:  
+generated files are in the `artifacts` directory:
 
-* `data_all_tidy.rds`: All modalities and datasets from 11_easier merged into a single, "tidy" data frame. Some features are renamed, some are removed and some are merged.  
-* `mofa_*.rds`: The tidy data from above split up by dataset, with some additional scaling. 
-* `mofa_boot_*.rds`: Same structure as `mofa_*.rds`, but with datasets resampled by bootstrapping. Each file represents a different boostrap. 
+* `data_all_tidy.rds`: All modalities and datasets from 11_easier merged into a single, "tidy" data frame. Some features are renamed, some are removed and some are merged.
+* `mofa_*.rds`: The tidy data from above split up by dataset, with some additional scaling.
+* `mofa_boot_*.rds`: Same structure as `mofa_*.rds`, but with datasets resampled by bootstrapping. Each file represents a different boostrap.
 
 ### 13_run_mofa
 
-Results of MOFA after applying it to the datasets generated in the previous step. 
-Contains `hdf5` datasets for each dataset holding the mofa models. 
+Results of MOFA after applying it to the datasets generated in the previous step.
+Contains `hdf5` datasets for each dataset holding the mofa models.
 
 ### 14_mofa_analysis
 
-Results of an Rmarkdown notebook with the analysis of the MOFA results. A rendered version of the 
-notebook is in the main directory, all generated files are in the `artifacts` directory: 
+Results of an Rmarkdown notebook with the analysis of the MOFA results. A rendered version of the
+notebook is in the main directory, all generated files are in the `artifacts` directory:
 
 * `median_factors.rds`: Median factors across all boostraps for each dataset.
-  Contains a list of dataframes (one for each dataset). 
-* `median_weights.rds`: Median weights (for each feature) across all bootstraps for each dataset. Contains a 
+  Contains a list of dataframes (one for each dataset).
+* `median_weights.rds`: Median weights (for each feature) across all bootstraps for each dataset. Contains a
   list of data frames (one for each dataset)
 * `*_factor_correlations{,_pvalues}.tsv`: Pearson correlations between F1 and F1-F3 between the
-  different datasets and the associated p-values. 
+  different datasets and the associated p-values.
 * `plots/`: Various plots
 
 ### 15_iHet_predictions
@@ -139,14 +143,14 @@ notebook is in the main directory, all generated files are in the `artifacts` di
 Results of an Rmarkdown notebook with the analysis of iHet predictions. A rendered version of the notebook is in the main directory, all
 generated files are in the `artifacts` directory:
 
-* `*_bootstrap_iHet_scores.rds`: Computed boostraped iHet scores for the four ICB-cohorts:  1. Non-small cell lung cancer (NSCLC, Jung cohort), 2. Melanoma (SKCM, combined Gide and Auslander), 3. Bladder 
-urothelial carcinoma (BLCA, Mariathasan cohort) and 4. Stomach adenocarcinoma (STAD, Kim cohort). 
+* `*_bootstrap_iHet_scores.rds`: Computed boostraped iHet scores for the four ICB-cohorts:  1. Non-small cell lung cancer (NSCLC, Jung cohort), 2. Melanoma (SKCM, combined Gide and Auslander), 3. Bladder
+urothelial carcinoma (BLCA, Mariathasan cohort) and 4. Stomach adenocarcinoma (STAD, Kim cohort).
 
-### 21_subset_atlas 
+### 21_subset_atlas
 
 Subset the full LuCA atlas to only contain primary tumor samples from either LUAD or LUSC. Creates two h5ad files:
  * `adata_m.h5ad`: Subset of myeloid cell-types
- * `adata_nsclc.h5ad`: The full custom subset of the atlas. 
+ * `adata_nsclc.h5ad`: The full custom subset of the atlas.
 
 ### 22_annotate_myeloid
 
@@ -156,11 +160,11 @@ Re-annotate myeloid cell-types at a better resolution than LuCA. Generates updat
 
 ### 23_tf_pw
 
-Execute Dorothea and Progeny on the single-cell data. Generates heatmaps and summary tables. 
+Execute Dorothea and Progeny on the single-cell data. Generates heatmaps and summary tables.
 
 ### 29_overview_plots
 
-Generate single-cell related figures for the manuscript. 
+Generate single-cell related figures for the manuscript.
 
 ## Contact
 

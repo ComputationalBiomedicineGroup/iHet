@@ -1,5 +1,6 @@
 Data
 data
+01_processed
 Models
 report
 .ipynb_checkpoints
@@ -16,6 +17,9 @@ containers
 analyses/**/figures
 analyses/**/MOFA_out
 analyses/.r_console_wrapper.sh
+analyses/.DS_Store
 .Rhistory
 data_iHet_predictions
-analyses/10_mofa/15_iHet_predictions.html
+omnipathr-log
+figures
+.DS_Store

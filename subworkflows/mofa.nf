@@ -13,10 +13,14 @@ include { RMARKDOWNNOTEBOOK as P12_prepare_mofa_data } from "../modules/local/rm
 include { RMARKDOWNNOTEBOOK as P14_mofa_analysis } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
     options: modules["P14_mofa_analysis"]
 )
+include { RMARKDOWNNOTEBOOK as P15_iHet_predictions } from "../modules/local/rmarkdownnotebook/main.nf" addParams(
+    options: modules["P15_iHet_predictions"]
+)
 
 process P11_easier {
     input:
         tuple val(meta), path(script)
+        path(zscore_data)
         path(expr_data)
 
     output:
@@ -26,8 +30,9 @@ process P11_easier {
     """
     Rscript ${script} \\
         ${expr_data} \\
-        ${baseDir}/tables/easier_Zscores/immscoreZ.rds \\
-        ${expr_data.baseName}.features.rds
+        ${zscore_data} \\
+        ${expr_data.baseName}.features.rds \\
+        ${params.regulon_net}
     """
 }
 
@@ -49,11 +54,14 @@ workflow W10_mofa {
     def dir = "analyses/10_mofa"
     P11_easier(
         file_tuple("$dir/11_easier.R"),
+        file("${baseDir}/tables/easier_Zscores/immscoreZ.rds"),
         Channel.fromPath("${ params.bulk_input_dir }/*_expr_data*.rds")
     )
     P12_prepare_mofa_data(
         file_tuple("$dir/12_prepare_mofa_data.Rmd"),
-        ["include_tracerx": String.valueOf(params.include_tracerx)],
+        [
+            "include_tracerx": String.valueOf(params.include_tracerx)
+        ],
         P11_easier.out.collect()
     )
     P13_run_mofa(
@@ -70,6 +78,32 @@ workflow W10_mofa {
             P11_easier.out.collect(),
             Channel.fromPath("${ params.bulk_input_dir }/*.{txt,tsv}").collect(),
             P13_run_mofa.out.models.collect()
+        ).collect()
+    )
+
+    P15_iHet_predictions(
+        file_tuple("$dir/15_iHet_predictions.Rmd"),
+        [
+            regulon_net: params.regulon_net,
+            mofa_dir: "./",
+            easier_dir: "./",
+            features_dir: "./",
+            F1_dir: "./",
+            include_tracerx: String.valueOf(params.include_tracerx),
+            bagaev_subtypes: "bagaev_mfp_tcga.xlsx",
+            validation_data: "validation_data",
+            fibroblast_spatial_data: "pancancer.hif.mfp.cols.RData",
+            tracerx_tmb_data: "TRACERx100_Mut_per_Mb.tsv"
+        ],
+        Channel.of(file("$dir/helper_iHet_predictions.R")).mix(
+            P11_easier.out.collect(),
+            P12_prepare_mofa_data.out.artifacts.map{ meta, it -> it },
+            P13_run_mofa.out.models.collect(),
+            P14_mofa_analysis.out.artifacts.map{ meta, it -> it},
+            Channel.fromPath("${ params.bulk_input_dir }/bagaev_mfp_tcga.xlsx", checkIfExists: true),
+            Channel.fromPath("${ params.bulk_input_dir }/validation_data", checkIfExists: true),
+            Channel.fromPath("${ params.bulk_input_dir }/pancancer.hif.mfp.cols.RData", checkIfExists: true),
+            params.include_tracerx ? Channel.fromPath("${ params.bulk_input_dir }/TRACERx100_Mut_per_Mb.tsv", checkIfExists: true) : Channel.empty()
         ).collect()
     )
 }

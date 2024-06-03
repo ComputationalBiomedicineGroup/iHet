@@ -3,11 +3,11 @@ title: MOFA analysis results
 params:
     cpus: 1
     meta: NULL
-    input_dir: "../../results/10_mofa/13_run_mofa"
-    features_dir: "../../results/10_mofa/12_prepare_mofa_data/artifacts"
-    easier_dir: "../../results/10_mofa/11_easier"
+    input_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/13_run_mofa"
+    features_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/12_prepare_mofa_data/artifacts"
+    easier_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/11_easier"
     tmb_dir: "../../data/01_processed/bulk_rna_seq"
-    artifact_dir: "/home/sturm/Downloads/ihet"
+    artifact_dir: "/storage/scratch01/users/olapuente/iHet/results_dorothea_filtered_gtex/10_mofa/14_mofa_analysis/artifacts"
     include_tracerx: "true"
 ---
 
@@ -19,8 +19,6 @@ message(capture.output(str(params)))
 dir.create(file.path(params$artifact_dir, "plots"), showWarnings = FALSE)
 knitr::opts_chunk$set(echo = TRUE, dpi = 300, dev = "png", fig.path = "figures/")
 source("helper_functions.R")
-PATHWAYS_OF_INTEREST <- c("JAK-STAT", "VEGF", "PI3K", "NFkB", "Trail", "TNFa")
-TFS_OF_INTEREST <- c("SPI1", "NFKB1", "STAT1", "MYC", "E2F4", "E2F2", "ZNF263")
 feature_data <- readRDS(file.path(params$features_dir, "data_all_tidy.rds"))
 DATASETS <- feature_data$dataset %>% unique()
 SELECTED_DATASETS <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
@@ -83,15 +81,36 @@ median_factors <- sapply(names(bootstrap_models), function(dataset_id) {
         rename_with(~ gsub("_median", "", .x), ends_with("_median"))
 }, USE.NAMES = TRUE, simplify = FALSE)
 
+
+# rename NSCLC to TCGA-NSCLC
 median_weights$`TCGA-NSCLC` <- median_weights$NSCLC
 median_weights$NSCLC <- NULL
 median_factors$`TCGA-NSCLC` <- median_factors$NSCLC
 median_factors$NSCLC <- NULL
-# rename NSCLC to TCGA-NSCLC
-feature_data <- feature_data %>% mutate(group = if_else(group == "NSCLC", "TCGA-NSCLC", group), dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset))
+feature_data <- feature_data %>% mutate(
+    group = if_else(group == "NSCLC", "TCGA-NSCLC", group),
+    dataset = if_else(dataset == "NSCLC", "TCGA-NSCLC", dataset)
+)
+
+# GTEx has one extra TF, compared to the rest
+tmp_features <- intersect(median_weights$GTEx$feature, median_weights$LUAD$feature)
+median_weights$GTEx <- median_weights$GTEx[which(median_weights$GTEx$feature %in% tmp_features), , drop = FALSE]
+
 
 saveRDS(median_weights, file = file.path(params$artifact_dir, "median_weights.rds"))
 saveRDS(median_factors, file = file.path(params$artifact_dir, "median_factors.rds"))
+```
+
+## Immune cell fractions per dataset
+```{r, fig.width=10, fig.height=6}
+feature_data |>
+    filter(view == "Immune cells quantification") |>
+    filter(dataset %in% SELECTED_DATASETS) |>
+    ggplot(aes(x = feature, color = dataset, y = value)) +
+    geom_boxplot() +
+    scale_color_brewer(palette = "Dark2")
+
+ggsave(file.path(params$artifact_dir, "immune_cell_fractions_per_dataset.svg"), width = 10, height = 6)
 ```
 
 ## Summary stats
@@ -134,6 +153,7 @@ selected_datasets <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC
 
 p <- variance_explained_bootstrap %>%
     filter(factor %in% c("Factor1", "Factor2", "Factor3")) %>%
+    mutate(view = if_else(view == "Immune cells quantification", "Cell type fractions", view)) %>%
     filter(dataset %in% selected_datasets) %>%
     mutate(dataset = factor(dataset, levels = selected_datasets)) %>%
     ggplot(aes(x = factor, y = value, color = view)) +
@@ -150,11 +170,56 @@ add_summary(p, error.plot = "crossbar", fun = "mean") +
 ggsave(file.path(params$artifact_dir, "plots", "variance_explained.svg"), device = svg)
 ```
 
+## Weight scatter TCGA-NSCLC / JiaSharma
+
+```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
+scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
+    median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
+}))
+
+tmp_scatter_data <- scatter_data %>%
+    filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
+    select(view, dataset, feature, `factor 1`) %>%
+    pivot_wider(names_from = "dataset", values_from = "factor 1") %>%
+    mutate(rank = pmax(abs(JiaSharma), abs(`TCGA-NSCLC`)))
+
+# selected_features <- tmp_scatter_data %>%
+#     filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
+#     pull(feature)
+
+selected_features <- bind_rows(
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` > 0.2 | `JiaSharma` > 0.2) |>
+        slice_max(order_by = rank, n = 7),
+    tmp_scatter_data |> group_by(view) |>
+        filter(`TCGA-NSCLC` < -0.2 | `JiaSharma` < -0.2) |>
+        slice_max(order_by = rank, n = 5)
+) |> select(view, feature) |> distinct() |> arrange(view, feature)
+
+tmp_scatter_data %>%
+    ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
+    geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
+    geom_point(aes(color = view)) +
+    geom_label_repel(
+        size = 3.5, force = 3, max.time = 10, max.overlaps = 300,
+        data = tmp_scatter_data %>% filter(feature %in% selected_features$feature), aes(label = feature)
+    ) +
+    scale_color_brewer(type = "qual", palette = "Dark2") +
+    xlim(c(-1, 1)) +
+    ylim(c(-1, 1)) +
+    theme_cowplot() +
+    background_grid() +
+    stat_cor()
+
+ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg, width = 10, height = 7)
+write_csv(selected_features, file.path(params$artifact_dir, "selected_features.csv"))
+```
+
 
 ## Heatmap of bootstrapped factors
 
 ```{r, fig.width=15, fig.height=20, echo=FALSE, message=FALSE, warning=FALSE}
-svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 20)
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped.svg"), width = 15, height = 104)
 
 all <- buildHeatmap(median_weights$Jia, "Jia") +
     buildHeatmap(median_weights$Sharma, "Sharma") +
@@ -167,16 +232,15 @@ all <- buildHeatmap(median_weights$Jia, "Jia") +
 draw(all)
 
 dev.off()
-draw(all)
 ```
 
 
 ```{r, fig.width=15, fig.height=8, echo=FALSE, message=FALSE, warning=FALSE}
 get_filtered_weight <- function(model) {
-    model %>%
-        filter((feature %in% PATHWAYS_OF_INTEREST) | (feature %in% TFS_OF_INTEREST) | (view == "Immune cells quantification"))
+    model %>% filter(feature %in% selected_features$feature)
 }
 
+svg(file.path(params$artifact_dir, "plots", "heatmap_bootstrapped_selected_features.svg"), width = 7, height = 7)
 all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
     buildHeatmap(get_filtered_weight(median_weights$Sharma), "Sharma") +
     buildHeatmap(get_filtered_weight(median_weights$JiaSharma), "JS") +
@@ -186,12 +250,13 @@ all <- buildHeatmap(get_filtered_weight(median_weights$Jia), "Jia") +
     buildHeatmap(get_filtered_weight(median_weights$GTEx), "GTEx")
 
 draw(all)
+dev.off()
+draw(all)
 ```
 
 
 ## Correlation heatmaps
-```{r correlation_features, echo = FALSE,  fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
-
+```{r correlation_features, echo = FALSE, fig.width=6, fig.height=6, fig.align="center", out.width="80%", fig.cap = "Heatmap depicting the correlation of all factors of all models based on feature data. Only significant relations (FDR < 0.01) are shown."}
 dataset_list <- c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "GTEx")
 factor_list <- list("F1-3" = c("factor 1", "factor 2", "factor 3"), "F1" = c("factor 1"))
 plots <- lapply(names(factor_list), function(factors_name) {
@@ -228,7 +293,10 @@ plots <- lapply(names(factor_list), function(factors_name) {
         p.mat = cor_pmat,
         sig.level = 0.01,
         insig = "blank", tl.col = "black",
-        col = colorRampPalette(rev(rdbu10_palette))(1000),
+        col = rev(COL2("RdYlBu")),
+        type="lower",
+        number.cex=0.6,
+        addCoef.col = 'black'
     )
     dev.off()
 
@@ -241,10 +309,12 @@ plots <- lapply(names(factor_list), function(factors_name) {
         is.corr = TRUE,
         p.mat = cor_pmat,
         sig.level = 0.01,
-        insig = "blank",
-        tl.col = "black",
-        order = "hclust",
-        col = colorRampPalette(rev(rdbu10_palette))(1000),
+        insig = "blank", tl.col = "black",
+        col = rev(COL2("RdYlBu")),
+        type="lower",
+        number.cex=0.6,
+        addCoef.col = 'black',
+        order="hclust"
     )
     dev.off()
 
@@ -299,7 +369,7 @@ factors_all %>%
 
 ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response.svg"), width = 12, height = 7, device = svg)
 ```
-```{r, fig.width=10, fig.height=3, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=5.8, fig.height=6, echo=FALSE, message=FALSE, warning=FALSE}
 selected_datasets <- c("Jia", "Sharma", "LUAD", "LUSC")
 factors_all %>%
     inner_join(immresp_all) %>%
@@ -310,14 +380,14 @@ factors_all %>%
     theme_bw(base_size = 17) +
     stat_cor() +
     geom_smooth(method = "lm") +
-    facet_wrap(~dataset_label, scales = "free_x", ncol = 7) +
+    facet_wrap(~dataset_label, scales = "free_x", ncol = 2) +
     ylim(c(-2, 3)) +
     xlab("factor 1")
 
-ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg)
+ggsave(file.path(params$artifact_dir, "plots", "correlation_factors_immune_response_subset.svg"), device = svg, width=5.8, height=6)
 ```
 
-```{r, fig.width=2.95, fig.height=2.8, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.width=3.12, fig.height=3.5, echo=FALSE, message=FALSE, warning=FALSE}
 # same for tracerx (as derived by MOFA)
 if (INCLUDE_TRACERX) {
     selected_datasets <- c("TRACERx")
@@ -389,36 +459,7 @@ if (INCLUDE_TRACERX) {
 }
 ```
 
-### Weight scatter TCGA-NSCLC / JiaSharma
 
-```{r, fig.width=10, fig.height=7, echo=FALSE, message=FALSE, warning=FALSE}
-scatter_data <- bind_rows(lapply(names(median_weights), function(dataset_id) {
-    median_weights[[dataset_id]] %>% mutate(dataset = dataset_id)
-}))
-
-tmp_scatter_data <- scatter_data %>%
-    filter(dataset %in% c("JiaSharma", "TCGA-NSCLC")) %>%
-    select(view, dataset, feature, `factor 1`) %>%
-    pivot_wider(names_from = "dataset", values_from = "factor 1")
-
-selected_features <- tmp_scatter_data %>%
-    filter(JiaSharma > 0.5 | `TCGA-NSCLC` > 0.5 | `TCGA-NSCLC` < -0.3 | JiaSharma < -0.3) %>%
-    pull(feature)
-
-tmp_scatter_data %>%
-    ggplot(aes(x = JiaSharma, y = `TCGA-NSCLC`)) +
-    geom_smooth(method = lm, color = "black", lty = "dashed", fullrange = TRUE) +
-    geom_point(aes(color = view)) +
-    geom_label_repel(size = 3.5, force = 3, max.time = 10, max.overlaps = 300, data = tmp_scatter_data %>% filter(feature %in% selected_features), aes(label = feature)) +
-    scale_color_brewer(type = "qual", palette = "Dark2") +
-    xlim(c(-1, 1)) +
-    ylim(c(-1, 1)) +
-    theme_cowplot() +
-    background_grid() +
-    stat_cor()
-
-ggsave(file.path(params$artifact_dir, "plots", "weight_scatter.svg"), device = svg)
-```
 
 
 ### Variability of weights between bootstrap samples
@@ -433,10 +474,10 @@ all_weights <- lapply(SELECTED_DATASETS, function(dataset_id) {
     filter(factor %in% c("factor 1", "factor 2", "factor 3"))
 ```
 
-```{r, fig.height=8, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, fig.height=9, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
 all_weights %>%
     filter(
-        feature %in% selected_features,
+        feature %in% selected_features$feature,
         factor == "factor 1",
         dataset %in% c("Jia", "Sharma", "JiaSharma", "LUAD", "LUSC", "TCGA-NSCLC", "TRACERx")
     ) %>%
@@ -444,7 +485,7 @@ all_weights %>%
     geom_boxplot(aes(fill = dataset), outlier.size = .5) +
     facet_wrap(~factor, ncol = 3) +
     scale_fill_brewer(type = "qual", palette = "Set2") +
-    facet_wrap(~feature, scale = "free_x", ncol = 10) +
+    facet_wrap(~feature, scale = "free_x", ncol = 8) +
     theme_bw() +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
@@ -493,7 +534,11 @@ lapply(tmp_datasets, function(dataset_id) {
         ggplot(aes(x = `factor 1`, y = `patient`)) +
         geom_boxplot(width = 0.5, color = "grey") +
         geom_point() +
-        ggtitle(dataset_id)
+        ggtitle(dataset_id) +
+        theme_cowplot() +
+        background_grid() +
+        theme(axis.text.y = element_text(size=10))
+    ggsave(file.path(params$artifact_dir, "plots", glue::glue("variability_mofa_f1_multi_biopsy_data_{dataset_id}.svg")), device="svg", width=5, height=8)
 })
 ```
 
@@ -548,7 +593,7 @@ variability_df %>%
     scale_y_log10() +
     scale_x_log10() +
     geom_abline(slope = 1, intercept = 0, color = "red") +
-    geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features)) +
+    geom_text_repel(aes(label = feature), data = variability_df %>% filter(feature %in% selected_features$feature)) +
     facet_wrap(~dataset)
 ```
 
@@ -557,7 +602,7 @@ tmp_datasets <- c("Jia", "Sharma", "JiaSharma")
 if (INCLUDE_TRACERX) tmp_datasets <- c(tmp_datasets, "TRACERx")
 lapply(tmp_datasets, function(dataset) {
     variability_df %>%
-        filter(feature %in% selected_features, dataset == !!dataset) %>%
+        filter(feature %in% selected_features$feature, dataset == !!dataset) %>%
         mutate(feature = reorder(feature, ratio)) %>%
         ggplot(aes(x = feature, y = ratio, fill = view)) +
         geom_bar(stat = "identity") +
@@ -599,7 +644,7 @@ tmp_datasets <- c("Jia", "Sharma", "JiaSharma")
 if (INCLUDE_TRACERX) tmp_datasets <- c(tmp_datasets, "TRACERx")
 lapply(tmp_datasets, function(dataset) {
     feature_stability_df %>%
-        filter(dataset == !!dataset, feature %in% selected_features) %>%
+        filter(dataset == !!dataset, feature %in% selected_features$feature) %>%
         ggplot(aes(x = reorder(feature, -feature_stability), y = feature_stability, fill = view)) +
         geom_bar(stat = "identity") +
         scale_fill_brewer(palette = "Dark2") +
@@ -625,7 +670,7 @@ corr_df %>%
     theme_cowplot() +
     background_grid() +
     scale_color_brewer(palette = "Dark2") +
-    geom_text_repel(aes(label = feature), data = corr_df %>% filter(feature %in% selected_features)) +
+    geom_text_repel(aes(label = feature), data = corr_df %>% filter(feature %in% selected_features$feature)) +
     facet_wrap(~dataset) +
     stat_cor()
 ```

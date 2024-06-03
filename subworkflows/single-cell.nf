@@ -32,7 +32,7 @@ workflow W20_single_cell {
                 Channel.fromPath("$projectDir/tables/gene_annotations/hlca_cell_type_signatures.csv", checkIfExists: true)
             ).collect()
         )
-        ch_adata_annotated =JUPYTER_ANNOTATE_MYELOID.out.artifacts
+        ch_adata_annotated = JUPYTER_ANNOTATE_MYELOID.out.artifacts
     } else {
         ch_adata_annotated = Channel.fromPath("${ params.precomputed_adata_annotated }/*", checkIfExists: true).collect()
     }
@@ -52,8 +52,7 @@ workflow W20_single_cell {
             "adata_m": "adata_myeloid_reannotated.h5ad",
             "adata_nsclc": "adata_nsclc_reannotated.h5ad"
         ]),
-        // hack: include injection to make centos7 container work
-        // see `lib/inject/README.md`
-        ch_adata_annotated.concat(Channel.fromPath("$baseDir/lib/inject/inject.so")).collect()
+        ch_adata_annotated.collect()
     )
+
 }
