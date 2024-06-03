@@ -33,15 +33,15 @@ Then, within the repository, download the data archives and extract then to the 
 
 ```bash
 # singularity containers
-curl -L "https://figshare.com/ndownloader/files/43761759" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46764697" | tar xvJ
 
 # input data
-curl -L "https://figshare.com/ndownloader/files/43761567" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46777024" | tar xvJ
 ```
 
 Additionally, you can obtain the pre-computed results without running the workflow using
 ```bash
-curl -L "https://figshare.com/ndownloader/files/43762119" | tar xvJ
+curl -L "https://figshare.com/ndownloader/files/46777027" | tar xvJ
 ```
 
 By default, the workflow is configured to use the pre-computed single-cell
