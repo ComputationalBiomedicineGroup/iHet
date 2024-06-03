@@ -90,7 +90,7 @@ all_bootstrap_samples <- lapply(models, function(XX){
 })
 names(all_bootstrap_samples) <- models
 
-saveRDS(object = all_bootstrap_samples, 
+saveRDS(object = all_bootstrap_samples,
         file = file.path(params$artifact_dir, paste0(regulon_net, "_TCGA_boot_samples.rds")))
 
 mofa_boot_feature_stats <- lapply(models, function(model){
@@ -193,7 +193,7 @@ df_tcga_weights <- do.call(rbind, lapply(models, function(model){
   return(weights_df)
 }))
 
-saveRDS(object = df_tcga_weights, 
+saveRDS(object = df_tcga_weights,
         file = file.path(params$artifact_dir, paste0(regulon_net,"_TCGA_boot_iHet_scaled_weights.rds")))
 
 # Median weights across bootstrap samples
@@ -283,7 +283,7 @@ df_features <- df_features %>%
 
 df_features[,3:ncol(df_features)] <- apply(df_features[,3:ncol(df_features)], 2, as.numeric)
 
-## compute correlation 
+## compute correlation
 
 a <- df_features %>%
   dplyr::filter(model %in% c("JiaSharma", "NSCLC")) %>%
@@ -295,7 +295,7 @@ a <- df_features %>%
 
 features <- rownames(a$corr[[1]])
 
-b <- a %>% 
+b <- a %>%
   dplyr::select(-data) %>%
   tidyr::unnest(cols = "corr") %>%
   as.data.frame()
@@ -372,7 +372,7 @@ if(INCLUDE_TRACERX) {
       dplyr::summarise(iHet = median(iHet)) %>%
       as.data.frame() %>%
       dplyr::select(patient, iHet)
-    
+
     ## PLOT (IR vs iHet) ---
 
     ir_tracerx <- iHet_median_TRACERx %>%
@@ -414,11 +414,11 @@ if(INCLUDE_TRACERX) {
             axis.text = element_text(size=  22), strip.text = element_text(size = 18))
 
     tmb_tracerx
-    ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"), 
+    ggsave(file.path(params$artifact_dir, "plots", "TRACERx_correlation_iHet_TMB.svg"),
            width = 6, height = 6, device = "svg")
-}
 
-ggarrange(ir_tracerx, tmb_tracerx)
+    ggarrange(ir_tracerx, tmb_tracerx)
+}
 ```
 
 
@@ -541,7 +541,7 @@ tmp2 <- test_w_df %>%
 
 top100_features <- unique(tmp2$variable)[1:100]
 
-cor_top100_features <- feat_cor_hifs %>% 
+cor_top100_features <- feat_cor_hifs %>%
   filter(feature %in% top100_features) %>%
   dplyr::arrange(desc(abs(cor)))
 
@@ -806,42 +806,42 @@ ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS11.sv
 #     mutate(sample = if_else(str_detect(sample, "P\\d{3}_"), paste0("Jia-", sample), paste0("Sharma-", sample))) %>%
 #     pivot_longer(-sample, names_to = "metric", values_to = "tmb_value") %>%
 #     mutate(model = sapply(strsplit(sample, "-"), head, 1))
-# 
+#
 # tmb_tcga <- readr::read_tsv(file.path(params$tcga_tmb_data)) %>%
 #     mutate(tmb = `Silent per Mb` + `Non-silent per Mb`, tmb_non_silent = `Silent per Mb`) %>%
 #     select(sample = Tumor_Sample_ID, tmb, tmb_non_silent, Cohort) %>%
 #     mutate(sample = str_replace_all(sample, "-", ".")) %>%
 #     pivot_longer(-c(sample, Cohort), names_to = "metric", values_to = "tmb_value") %>%
 #     dplyr::rename(model = "Cohort")
-# 
+#
 # tmb_tcga$sample <- gsub(".", "-", tmb_tcga$sample, fixed = TRUE)
 # tmb_tcga$sample <- substr(tmb_tcga$sample, 1, 12)
-# 
+#
 # tmb_all <- bind_rows(tmb_jia_sharma, tmb_tcga)
 # tmb_all <- tmb_all %>%
 #   dplyr::filter(metric %in% c("tmb", "TMB")) %>%
 #   dplyr::rename("TMB" = "tmb_value",
 #                 "pat_id" = "sample")
-# 
+#
 # ### MOFA F1
 # median_factors <- readRDS(file = file.path(params$F1_dir, "artifacts/median_factors.rds"))
 # median_factors <- median_factors[!names(median_factors) %in% c("JiaSharma", "TCGA-NSCLC", "GTEx", "TRACERx")]
-# 
+#
 # median_factors_df <- reshape2::melt(median_factors)
 # F1_df <- subset(median_factors_df, variable == "factor 1") %>%
 #   dplyr::select(sample, L1, value)
 # names(F1_df) <- c("pat_id", "model", "F1")
-# 
+#
 # F1_df$pat_id <- gsub(".", "-", F1_df$pat_id, fixed = TRUE)
 # F1_df$pat_id <- substr(F1_df$pat_id, 1, 12)
-# 
+#
 # data <- inner_join(F1_df, tmb_all, by = c("pat_id", "model"))
-# 
-# data$model <- factor(data$model, levels = c("Jia", "Sharma", 
-#                                             "LUAD", "LUSC", "BLCA", "BRCA", "CESC", "CRC", 
+#
+# data$model <- factor(data$model, levels = c("Jia", "Sharma",
+#                                             "LUAD", "LUSC", "BLCA", "BRCA", "CESC", "CRC",
 #                                             "GBM", "HNSC", "KIRC", "KIRP", "LIHC", "OV", "PAAD", "PRAD",
 #                                             "SKCM", "STAD", "THCA", "UCEC"))
-# 
+#
 # scatterplot_TMB_vs_iHet <- data %>%
 #   ggplot2::ggplot(aes(x = F1, y = TMB)) +
 #   geom_point(size = 0.8, color = "#333333") +
@@ -850,7 +850,7 @@ ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS11.sv
 #   theme_bw(base_size = 15) +
 #   stat_cor(method="pearson", size = 3) +
 #   labs(x = "iHet signature (MOFA F1)", y = "immune response")
-# 
+#
 # scatterplot_TMB_vs_iHet
 # ggplot2::ggsave(filename = file.path(params$artifact_dir, "plots", "FigureS14A.svg"),
 #                 width = 14, height = 10, device = "svg")
